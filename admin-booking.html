@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จัดการคิวรับงาน - Karshine Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 p-4 pb-20">
+  <div class="max-w-2xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold text-gray-800">📋 แผงควบคุมคิวรับงาน</h1>
+      <button onclick="loadBookings()" class="bg-blue-100 text-blue-600 p-2 rounded-full shadow-sm hover:bg-blue-200">
+        <i class="fa-solid fa-rotate-right"></i> รีเฟรช
+      </button>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2 mb-6 text-center text-sm font-bold">
+      <div class="bg-yellow-100 text-yellow-700 py-2 rounded-lg shadow-sm">รอยืนยัน <span id="count-pending" class="block text-xl">0</span></div>
+      <div class="bg-blue-100 text-blue-700 py-2 rounded-lg shadow-sm">กำลังล้าง <span id="count-confirmed" class="block text-xl">0</span></div>
+      <div class="bg-green-100 text-green-700 py-2 rounded-lg shadow-sm">เสร็จสิ้น <span id="count-completed" class="block text-xl">0</span></div>
+    </div>
+
+    <div id="loading" class="text-center text-gray-500 py-10">กำลังโหลดข้อมูลคิว...</div>
+    
+    <div id="bookingList" class="space-y-4"></div>
+
+  </div>
+
+  <script>
+    // ⚠️ แก้ไข URL เป็นของ Google Apps Script ของคุณโอม
+    const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
+
+    async function loadBookings() {
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('bookingList').innerHTML = '';
+
+      try {
+        const res = await fetch(`${API_URL}?action=getAdminBookings`);
+        const resData = await res.json();
+        
+        if (resData.status === 'success') {
+          renderBookings(resData.data);
+        } else {
+          throw new Error(resData.message);
+        }
+      } catch (e) {
+        Swal.fire('ข้อผิดพลาด', 'ไม่สามารถดึงข้อมูลคิวได้: ' + e.message, 'error');
+      } finally {
+        document.getElementById('loading').classList.add('hidden');
+      }
+    }
+
+    function renderBookings(bookings) {
+      const container = document.getElementById('bookingList');
+      let countP = 0, countC = 0, countD = 0; // P=Pending, C=Confirmed, D=Done(Completed)
+
+      if (bookings.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-400 py-10 bg-white rounded-xl shadow">ไม่มีคิวรับบริการในขณะนี้</div>';
+        return;
+      }
+
+      const html = bookings.map(b => {
+        // นับจำนวนสถานะ
+        if (b.status === 'pending') countP++;
+        if (b.status === 'confirmed') countC++;
+        if (b.status === 'completed') countD++;
+
+        // กำหนดสีและปุ่มตามสถานะ
+        let statusBadge = '', actionButtons = '';
+        
+        if (b.status === 'pending') {
+          statusBadge = '<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-bold border border-yellow-200">🟡 รอยืนยัน</span>';
+          actionButtons = `
+            <button onclick="updateStatus('${b.bookingId}', 'confirmed')" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold shadow hover:bg-blue-700">รับรถเข้าล้าง</button>
+            <button onclick="updateStatus('${b.bookingId}', 'cancelled')" class="flex-1 bg-red-100 text-red-600 py-2 rounded font-bold hover:bg-red-200">ยกเลิก</button>
+          `;
+        } else if (b.status === 'confirmed') {
+          statusBadge = '<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold border border-blue-200">🔵 กำลังดำเนินการ</span>';
+          actionButtons = `
+            <button onclick="updateStatus('${b.bookingId}', 'completed')" class="w-full bg-green-500 text-white py-2 rounded font-bold shadow hover:bg-green-600">งานเสร็จสิ้น (แจ้งลูกค้า)</button>
+          `;
+        } else if (b.status === 'completed') {
+          statusBadge = '<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-bold border border-green-200">🟢 เสร็จสิ้นแล้ว</span>';
+          actionButtons = `<div class="w-full text-center text-sm font-bold text-green-600 bg-green-50 py-2 rounded border border-green-100">ลูกค้าได้รับแต้มแล้ว</div>`;
+        } else {
+          statusBadge = '<span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-bold border border-gray-200">⚫ ยกเลิก</span>';
+        }
+
+        // แปลงชื่อบริการให้เป็นภาษาไทย (เบื้องต้น)
+        let sTypeTh = b.serviceType;
+        if(sTypeTh === 'wash_vacuum') sTypeTh = 'ล้างสีดูดฝุ่น';
+        if(sTypeTh === 'wash_wax') sTypeTh = 'ล้างอัดฉีด + เคลือบสี';
+        if(sTypeTh === 'glass_coating') sTypeTh = 'เคลือบแก้ว';
+
+        // วาดการ์ด
+        return `
+        <div class="bg-white rounded-xl shadow-md p-4 border-l-4 ${b.status === 'pending' ? 'border-yellow-400' : (b.status === 'confirmed' ? 'border-blue-500' : (b.status === 'completed' ? 'border-green-500' : 'border-gray-400'))}">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <p class="text-xs text-gray-400 font-mono">${b.bookingId}</p>
+              <h3 class="font-bold text-gray-800 text-lg">${b.customerName}</h3>
+            </div>
+            ${statusBadge}
+          </div>
+          
+          <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-3 bg-gray-50 p-2 rounded">
+            <div><i class="fa-solid fa-car text-gray-400"></i> ${b.vehicleText}</div>
+            <div><i class="fa-solid fa-phone text-gray-400"></i> ${b.phone}</div>
+            <div class="col-span-2 font-bold text-blue-600"><i class="fa-solid fa-spray-can-sparkles"></i> บริการ: ${sTypeTh}</div>
+            <div class="col-span-2 text-xs"><i class="fa-regular fa-clock"></i> นัดเวลา: ${b.bookingDate.replace('T', ' ')}</div>
+          </div>
+          
+          <div class="flex gap-2 mt-4">
+            ${actionButtons}
+          </div>
+        </div>
+        `;
+      }).join('');
+
+      container.innerHTML = html;
+      
+      // อัปเดตตัวเลขสรุป
+      document.getElementById('count-pending').textContent = countP;
+      document.getElementById('count-confirmed').textContent = countC;
+      document.getElementById('count-completed').textContent = countD;
+    }
+
+    async function updateStatus(bookingId, newStatus) {
+      let confirmMsg = '';
+      if (newStatus === 'confirmed') confirmMsg = 'ยืนยันรับรถเข้าสู่ระบบ? (ระบบจะแจ้งเตือนลูกค้า)';
+      if (newStatus === 'completed') confirmMsg = 'ยืนยันงานเสร็จสิ้น? (ระบบจะแจกแต้มและแจ้งลูกค้ามารับรถ)';
+      if (newStatus === 'cancelled') confirmMsg = 'ต้องการยกเลิกคิวนี้ใช่หรือไม่?';
+
+      const result = await Swal.fire({
+        title: 'ยืนยันการดำเนินการ',
+        text: confirmMsg,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'ใช่, ดำเนินการ',
+        cancelButtonText: 'ปิด'
+      });
+
+      if (result.isConfirmed) {
+        Swal.fire({ title: 'กำลังอัปเดตสถานะ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        
+        try {
+          const url = `${API_URL}?action=updateBookingStatus&bookingId=${bookingId}&status=${newStatus}`;
+          const res = await fetch(url);
+          const data = await res.json();
+          
+          if (data.status === 'success') {
+            Swal.fire('สำเร็จ!', data.message, 'success');
+            loadBookings(); // โหลดข้อมูลใหม่เพื่ออัปเดตหน้าจอ
+          } else {
+            throw new Error(data.message);
+          }
+        } catch (e) {
+          Swal.fire('เกิดข้อผิดพลาด', e.message, 'error');
+        }
+      }
+    }
+
+    // โหลดข้อมูลทันทีที่เปิดหน้าเว็บ
+    document.addEventListener('DOMContentLoaded', loadBookings);
+  </script>
+</body>
+</html>
