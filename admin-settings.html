@@ -15,94 +15,133 @@
     <div class="bg-white rounded-xl shadow p-5 mb-6 border-t-4 border-orange-500">
       <h2 class="font-bold text-lg mb-4 border-b pb-2 text-orange-600 flex justify-between items-center">
         <span><i class="fa-solid fa-car-wash"></i> เมนูบริการ</span>
-        <button onclick="addService()" class="bg-orange-500 text-white px-3 py-1 rounded text-sm shadow">+ เพิ่ม</button>
+        <button onclick="addService()" class="bg-orange-500 text-white px-3 py-1 rounded text-sm shadow hover:bg-orange-600">+ เพิ่ม</button>
       </h2>
-      <div id="serviceList" class="space-y-3 mb-4"></div>
+      <div id="serviceList" class="space-y-3 mb-4">กำลังโหลด...</div>
     </div>
 
     <div class="bg-white rounded-xl shadow p-5 mb-6 border-t-4 border-blue-500">
       <h2 class="font-bold text-lg mb-4 border-b pb-2 text-blue-600 flex justify-between items-center">
         <span><i class="fa-solid fa-map-location-dot"></i> รายชื่อสาขา</span>
-        <button onclick="addBranch()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm shadow">+ เพิ่ม</button>
+        <button onclick="addBranch()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm shadow hover:bg-blue-600">+ เพิ่ม</button>
       </h2>
-      <div id="branchList" class="space-y-3 mb-4"></div>
+      <div id="branchList" class="space-y-3 mb-4">กำลังโหลด...</div>
     </div>
 
     <div class="bg-white rounded-xl shadow p-5 mb-6 border-t-4 border-green-500">
       <h2 class="font-bold text-lg mb-4 border-b pb-2 text-green-600 flex justify-between items-center">
         <span><i class="fa-solid fa-gift"></i> โปรโมชั่นแพ็กเกจ</span>
-        <button onclick="addMasterPkg()" class="bg-green-500 text-white px-3 py-1 rounded text-sm shadow">+ สร้าง</button>
+        <button onclick="addMasterPkg()" class="bg-green-500 text-white px-3 py-1 rounded text-sm shadow hover:bg-green-600">+ สร้าง</button>
       </h2>
-      <div id="pkgList" class="space-y-3 mb-4"></div>
+      <div id="pkgList" class="space-y-3 mb-4">กำลังโหลด...</div>
     </div>
 
     <div class="bg-white rounded-xl shadow p-5 mb-6 border-t-4 border-purple-500">
       <h2 class="font-bold text-lg mb-4 border-b pb-2 text-purple-600 flex justify-between items-center">
         <span><i class="fa-solid fa-wallet"></i> วิธีชำระเงิน</span>
-        <button onclick="addPayment()" class="bg-purple-500 text-white px-3 py-1 rounded text-sm shadow">+ เพิ่ม</button>
+        <button onclick="addPayment()" class="bg-purple-500 text-white px-3 py-1 rounded text-sm shadow hover:bg-purple-600">+ เพิ่ม</button>
       </h2>
-      <div id="payList" class="space-y-3 mb-4"></div>
+      <div id="payList" class="space-y-3 mb-4">กำลังโหลด...</div>
     </div>
   </div>
 
   <script>
+    // ⚠️ แก้ไข URL เป็นของ Google Apps Script ของคุณโอม
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
-    let storeData = {};
+    
+    // ตัวแปรเก็บข้อมูลทั้งหมดเพื่อใช้ตอนกดแก้ไข
+    let storeData = {
+        services: [], branches: [], masterPkgs: [], payments: []
+    };
 
+    // ==========================================
+    // ฟังก์ชันโหลดข้อมูลและวาดหน้าจอ (Render)
+    // ==========================================
     async function loadData() {
       try {
         const res = await fetch(`${API_URL}?action=getAdminSettings`);
-        storeData = await res.json();
+        const data = await res.json();
+        if (data.status === 'error') throw new Error(data.message);
         
-        // 1. Render Services
-        renderList('serviceList', storeData.services, s => `
-          <div class="font-bold text-orange-700">${s.service_name}</div>
-          <div class="text-xs text-gray-500">${s.detail || '-'}</div>
-          <div class="text-xs font-bold mt-1">M: ${s.price_m} | L: ${s.price_l} | XL: ${s.price_xl}</div>
-        `, 'Services', 'service_id', editService);
+        storeData = data;
 
-        // 2. Render Branches
-        renderList('branchList', storeData.branches, b => `
-          <div class="font-bold text-blue-700">${b.branch_name}</div>
-          <div class="text-xs text-gray-500">ฟรี ${b.free_km} กม. / กม.ละ ${b.fee_per_km} บ.</div>
-        `, 'Branches', 'branch_id', editBranch);
+        // 0. Render Services (แยกหมวดหมู่)
+        const sList = document.getElementById('serviceList');
+        if(data.services.length > 0) {
+            const grouped = data.services.reduce((acc, obj) => {
+              const key = obj.category;
+              if (!acc[key]) acc[key] = [];
+              acc[key].push(obj); return acc;
+            }, {});
 
-        // 3. Render Packages
-        renderList('pkgList', storeData.masterPkgs, p => `
-          <div class="font-bold text-green-700">${p.pkg_name}</div>
-          <div class="text-xs text-gray-500">${p.amount} ${p.pkg_type==='count'?'ครั้ง':'วัน'} | ${p.price}.-</div>
-        `, 'Master_Packages', 'master_id', editMasterPkg);
+            let html = '';
+            for (const category in grouped) {
+                html += `<div class="font-bold text-gray-800 bg-gray-200 px-2 py-1 rounded mt-3 mb-2 text-sm">${category}</div>`;
+                grouped[category].forEach(s => {
+                    html += `
+                    <div class="p-3 bg-gray-50 border rounded-lg mb-2 relative shadow-sm">
+                        <div class="font-bold text-orange-700 w-5/6">${s.service_name}</div>
+                        <div class="text-xs text-gray-500 italic mt-1">${s.detail || 'ไม่มีคำอธิบาย'}</div>
+                        <div class="text-xs font-bold mt-1 text-gray-600">M: ${s.price_m} | L: ${s.price_l} | XL: ${s.price_xl}</div>
+                        <div class="text-xs text-blue-600 mt-1"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</div>
+                        
+                        <div class="absolute top-2 right-2 flex gap-3">
+                            <button onclick="editService('${s.service_id}')" class="text-blue-500"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="confirmDelete('Services', '${s.service_id}')" class="text-red-400"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>`;
+                });
+            }
+            sList.innerHTML = html;
+        } else {
+            sList.innerHTML = '<p class="text-gray-400 text-center py-2 text-sm">ยังไม่มีบริการ</p>';
+        }
 
-        // 4. Render Payments
-        renderList('payList', storeData.payments, p => `
-          <div class="font-bold text-purple-700">${p.pay_name}</div>
-          <div class="text-xs text-gray-500">${p.details}</div>
-        `, 'Payment_Methods', 'pay_id', editPayment);
+        // 1. Render Branches
+        renderList('branchList', data.branches, b => `
+          <div class="font-bold text-blue-700 w-5/6">${b.branch_name}</div>
+          <div class="text-xs text-gray-500 mt-1">ฟรี ${b.free_km} กม. / กม.ละ ${b.fee_per_km} บ.</div>
+        `, 'Branches', 'branch_id', 'editBranch');
+
+        // 2. Render Packages
+        renderList('pkgList', data.masterPkgs, p => `
+          <div class="font-bold text-green-700 w-5/6">${p.pkg_name}</div>
+          <div class="text-xs text-gray-500 mt-1">${p.amount} ${p.pkg_type==='count'?'ครั้ง':'วัน'} | <span class="font-bold text-green-600">${p.price}.-</span></div>
+        `, 'Master_Packages', 'master_id', 'editMasterPkg');
+
+        // 3. Render Payments
+        renderList('payList', data.payments, p => `
+          <div class="font-bold text-purple-700 w-5/6">${p.pay_name}</div>
+          <div class="text-xs text-gray-500 mt-1">${p.details}</div>
+        `, 'Payment_Methods', 'pay_id', 'editPayment');
 
       } catch (e) { Swal.fire('Error', e.message, 'error'); }
     }
 
-    function renderList(elementId, items, templateFn, target, idKey, editFn) {
+    function renderList(elementId, items, templateFn, target, idKey, editFnName) {
       const container = document.getElementById(elementId);
       container.innerHTML = items.length ? items.map(item => `
         <div class="p-3 bg-gray-50 border rounded-lg relative shadow-sm">
           ${templateFn(item)}
           <div class="absolute top-2 right-2 flex gap-3">
-            <button onclick="${editFn.name}('${item[idKey]}')" class="text-blue-500"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="${editFnName}('${item[idKey]}')" class="text-blue-500"><i class="fa-solid fa-pen"></i></button>
             <button onclick="confirmDelete('${target}', '${item[idKey]}')" class="text-red-400"><i class="fa-solid fa-trash"></i></button>
           </div>
         </div>
-      `).join('') : '<p class="text-gray-400 text-center py-2">ยังไม่มีข้อมูล</p>';
+      `).join('') : '<p class="text-gray-400 text-center py-2 text-sm">ยังไม่มีข้อมูล</p>';
     }
 
-    // --- ฟังก์ชันจัดการลบ (พิมพ์ ยืนยัน) ---
+    // ==========================================
+    // ฟังก์ชันลบข้อมูล (ต้องพิมพ์ยืนยัน)
+    // ==========================================
     async function confirmDelete(target, id) {
       const { value: confirmText } = await Swal.fire({
         title: 'ยืนยันการลบ?',
-        html: 'โปรดพิมพ์คำว่า <b>ยืนยัน</b> เพื่อลบรายการนี้',
+        html: 'โปรดพิมพ์คำว่า <b>ยืนยัน</b> เพื่อลบรายการนี้<br><span class="text-xs text-red-500">(ข้อมูลจะไม่ถูกลบถาวร แต่จะถูกซ่อนไว้)</span>',
         input: 'text',
         icon: 'warning',
         showCancelButton: true,
+        confirmButtonColor: '#d33',
         inputValidator: (v) => v !== 'ยืนยัน' && 'โปรดพิมพ์ให้ถูกต้อง'
       });
       if (confirmText === 'ยืนยัน') {
@@ -111,41 +150,151 @@
       }
     }
 
-    // --- ตัวอย่างฟังก์ชันแก้ไขสาขา (ทำครบทุกหมวดหมู่) ---
-    async function addBranch() { showBranchForm('add', {}); }
+    // ==========================================
+    // ฟังก์ชันจัดการ บริการ (Services)
+    // ==========================================
+    function addService() { showServiceForm('add', {}); }
+    function editService(id) { showServiceForm('edit', storeData.services.find(s => s.service_id === id)); }
+    async function showServiceForm(action, data) {
+      const { value: v } = await Swal.fire({
+        title: action==='add'?'เพิ่มบริการ':'แก้ไขบริการ',
+        html: `
+          <select id="s-cat" class="swal2-input">
+            <option value="BASIC" ${data.category==='BASIC'?'selected':''}>BASIC</option>
+            <option value="ADD-ON" ${data.category==='ADD-ON'?'selected':''}>ADD-ON</option>
+            <option value="PREMIUM" ${data.category==='PREMIUM'?'selected':''}>PREMIUM</option>
+            <option value="TOP WRAP" ${data.category==='TOP WRAP'?'selected':''}>TOP WRAP</option>
+          </select>
+          <input id="s-name" class="swal2-input" placeholder="ชื่อบริการ" value="${data.service_name||''}">
+          <textarea id="s-detail" class="swal2-textarea" placeholder="รายละเอียดบริการ" rows="2" style="margin: 10px auto; width: 80%;">${data.detail||''}</textarea>
+          <div class="flex gap-2 px-4 mt-2">
+            <input id="s-pm" type="number" class="swal2-input !w-1/3 !m-0" placeholder="ราคา M" value="${data.price_m||''}">
+            <input id="s-pl" type="number" class="swal2-input !w-1/3 !m-0" placeholder="ราคา L" value="${data.price_l||''}">
+            <input id="s-pxl" type="number" class="swal2-input !w-1/3 !m-0" placeholder="ราคา XL" value="${data.price_xl||''}">
+          </div>
+          <input id="s-time" type="number" class="swal2-input" placeholder="เวลามาตรฐาน (นาที)" value="${data.std_time_mins||''}">
+        `,
+        preConfirm: () => ({
+          id: action==='add'?'SRV-'+Date.now():data.service_id,
+          category: document.getElementById('s-cat').value,
+          name: document.getElementById('s-name').value,
+          detail: document.getElementById('s-detail').value,
+          priceM: document.getElementById('s-pm').value || 0,
+          priceL: document.getElementById('s-pl').value || 0,
+          priceXL: document.getElementById('s-pxl').value || 0,
+          stdTime: document.getElementById('s-time').value || 30
+        })
+      });
+      if (v && v.name) {
+        const url = `${API_URL}?action=manageData&target=Services&actionType=${action}&id=${v.id}&category=${encodeURIComponent(v.category)}&name=${encodeURIComponent(v.name)}&detail=${encodeURIComponent(v.detail)}&priceM=${v.priceM}&priceL=${v.priceL}&priceXL=${v.priceXL}&stdTime=${v.stdTime}`;
+        await callApi(url, 'บันทึกบริการเรียบร้อย');
+      }
+    }
+
+    // ==========================================
+    // ฟังก์ชันจัดการ สาขา (Branches)
+    // ==========================================
+    function addBranch() { showBranchForm('add', {}); }
     function editBranch(id) { showBranchForm('edit', storeData.branches.find(b => b.branch_id === id)); }
     async function showBranchForm(action, data) {
       const { value: v } = await Swal.fire({
         title: action==='add'?'เพิ่มสาขา':'แก้ไขสาขา',
-        html: `<input id="b-name" class="swal2-input" placeholder="ชื่อสาขา" value="${data.branch_name||''}">
-               <input id="b-lat" class="swal2-input" placeholder="Lat" value="${data.lat||''}">
-               <input id="b-lng" class="swal2-input" placeholder="Lng" value="${data.lng||''}">
-               <input id="b-free" type="number" class="swal2-input" placeholder="ส่งฟรี (กม.)" value="${data.free_km||''}">
-               <input id="b-fee" type="number" class="swal2-input" placeholder="บาท/กม." value="${data.fee_per_km||''}">`,
+        html: `
+          <input id="b-name" class="swal2-input" placeholder="ชื่อสาขา" value="${data.branch_name||''}">
+          <input id="b-lat" class="swal2-input" placeholder="Latitude" value="${data.lat||''}">
+          <input id="b-lng" class="swal2-input" placeholder="Longitude" value="${data.lng||''}">
+          <input id="b-free" type="number" class="swal2-input" placeholder="ส่งฟรี (กม.)" value="${data.free_km||''}">
+          <input id="b-fee" type="number" class="swal2-input" placeholder="บาท/กม. (ส่วนเกิน)" value="${data.fee_per_km||''}">
+        `,
         preConfirm: () => ({
           id: action==='add'?'BR-'+Date.now():data.branch_id,
           name: document.getElementById('b-name').value,
-          lat: document.getElementById('b-lat').value, lng: document.getElementById('b-lng').value,
-          free: document.getElementById('b-free').value, fee: document.getElementById('b-fee').value
+          lat: document.getElementById('b-lat').value || 0, 
+          lng: document.getElementById('b-lng').value || 0,
+          free: document.getElementById('b-free').value || 0, 
+          fee: document.getElementById('b-fee').value || 0
         })
       });
       if (v && v.name) {
         const url = `${API_URL}?action=manageData&target=Branches&actionType=${action}&id=${v.id}&name=${encodeURIComponent(v.name)}&lat=${v.lat}&lng=${v.lng}&free=${v.free}&fee=${v.fee}`;
-        await callApi(url, 'บันทึกเรียบร้อย');
+        await callApi(url, 'บันทึกสาขาเรียบร้อย');
       }
     }
 
-    // (หมายเหตุ: ฟังก์ชัน addService, editService, addMasterPkg, editPayment ทำงานในลักษณะเดียวกัน โดยเปลี่ยนฟิลด์ตามตาราง)
-    // ผมรวบรวมฟังก์ชัน callApi เดิมไว้ให้ข้างล่างครับ
-    async function callApi(url, msg) {
-      Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.status === 'success') {
-        setTimeout(() => { Swal.fire('สำเร็จ', msg, 'success'); loadData(); }, 1000);
-      } else { Swal.fire('Error', data.message, 'error'); }
+    // ==========================================
+    // ฟังก์ชันจัดการ แพ็กเกจ (Master_Packages)
+    // ==========================================
+    function addMasterPkg() { showMasterPkgForm('add', {}); }
+    function editMasterPkg(id) { showMasterPkgForm('edit', storeData.masterPkgs.find(p => p.master_id === id)); }
+    async function showMasterPkgForm(action, data) {
+      const { value: v } = await Swal.fire({
+        title: action==='add'?'สร้างโปรโมชั่น':'แก้ไขโปรโมชั่น',
+        html: `
+          <input id="p-name" class="swal2-input" placeholder="ชื่อแพ็กเกจ" value="${data.pkg_name||''}">
+          <select id="p-type" class="swal2-input">
+            <option value="count" ${data.pkg_type==='count'?'selected':''}>นับจำนวนครั้ง (ล้าง X ครั้ง)</option>
+            <option value="buffet" ${data.pkg_type==='buffet'?'selected':''}>บุฟเฟต์ (ใช้งาน X วัน)</option>
+          </select>
+          <input id="p-amount" type="number" class="swal2-input" placeholder="จำนวนครั้ง หรือ จำนวนวัน" value="${data.amount||''}">
+          <input id="p-price" type="number" class="swal2-input" placeholder="ราคา (บาท)" value="${data.price||''}">
+        `,
+        preConfirm: () => ({
+          id: action==='add'?'MP-'+Date.now():data.master_id,
+          name: document.getElementById('p-name').value,
+          type: document.getElementById('p-type').value,
+          amount: document.getElementById('p-amount').value || 0,
+          price: document.getElementById('p-price').value || 0
+        })
+      });
+      if (v && v.name) {
+        const url = `${API_URL}?action=manageData&target=Master_Packages&actionType=${action}&id=${v.id}&name=${encodeURIComponent(v.name)}&type=${v.type}&amount=${v.amount}&price=${v.price}`;
+        await callApi(url, 'บันทึกโปรโมชั่นเรียบร้อย');
+      }
     }
 
+    // ==========================================
+    // ฟังก์ชันจัดการ วิธีชำระเงิน (Payment_Methods)
+    // ==========================================
+    function addPayment() { showPaymentForm('add', {}); }
+    function editPayment(id) { showPaymentForm('edit', storeData.payments.find(p => p.pay_id === id)); }
+    async function showPaymentForm(action, data) {
+      const { value: v } = await Swal.fire({
+        title: action==='add'?'เพิ่มวิธีชำระเงิน':'แก้ไขวิธีชำระเงิน',
+        html: `
+          <input id="pay-name" class="swal2-input" placeholder="ชื่อช่องทาง (เช่น กสิกรไทย)" value="${data.pay_name||''}">
+          <textarea id="pay-info" class="swal2-textarea" placeholder="รายละเอียด (เช่น เลขบัญชี/ชื่อบัญชี)" rows="2" style="margin: 10px auto; width: 80%;">${data.details||''}</textarea>
+        `,
+        preConfirm: () => ({
+          id: action==='add'?'PAY-'+Date.now():data.pay_id,
+          name: document.getElementById('pay-name').value,
+          details: document.getElementById('pay-info').value
+        })
+      });
+      if (v && v.name) {
+        const url = `${API_URL}?action=manageData&target=Payment_Methods&actionType=${action}&id=${v.id}&name=${encodeURIComponent(v.name)}&details=${encodeURIComponent(v.details)}`;
+        await callApi(url, 'บันทึกวิธีชำระเงินเรียบร้อย');
+      }
+    }
+
+    // ==========================================
+    // ฟังก์ชันช่วยเหลือ (Helper)
+    // ==========================================
+    async function callApi(url, msg) {
+      Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.status === 'success') {
+          setTimeout(() => { Swal.fire('สำเร็จ', msg, 'success'); loadData(); }, 1000);
+        } else {
+          throw new Error(data.message);
+        }
+      } catch (e) {
+        Swal.fire('ข้อผิดพลาด', e.message, 'error');
+      }
+    }
+
+    // เริ่มทำงานเมื่อเปิดหน้าเว็บ
     document.addEventListener('DOMContentLoaded', loadData);
   </script>
 </body>
