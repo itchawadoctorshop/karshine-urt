@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แพ็กเกจของฉัน - Karshine URT</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body class="bg-gray-50 p-4">
+
+  <div class="max-w-md mx-auto">
+    <div id="debugStatus" class="text-sm text-center font-bold text-blue-800 mb-4 p-2 bg-blue-100 rounded-lg shadow-sm">
+      กำลังเชื่อมต่อระบบ...
+    </div>
+
+    <div id="profileBox" class="hidden bg-white rounded-xl shadow-md p-4 mb-6 border border-gray-100 flex items-center">
+      <img id="profileImage" src="" class="w-14 h-14 rounded-full mr-4 border-2 border-blue-500 shadow-sm">
+      <div>
+        <p class="text-xs text-gray-500 mb-0.5">ผู้ใช้งานระบบ</p>
+        <p id="displayName" class="font-bold text-gray-800 text-base"></p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md overflow-hidden p-6 mb-6">
+      <h2 class="text-xl font-bold text-gray-800 border-b pb-2 mb-4">🎁 แพ็กเกจของฉัน</h2>
+      
+      <div id="loading" class="text-center text-gray-500 py-4">กำลังดึงข้อมูลแพ็กเกจ...</div>
+      
+      <div id="packageList" class="space-y-4 hidden"></div>
+      
+      <div id="emptyState" class="text-center text-gray-400 py-6 hidden">
+        <p class="text-4xl mb-2">🏷️</p>
+        คุณยังไม่มีแพ็กเกจในระบบ
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ⚠️⚠️ แก้ไขข้อมูลของคุณตรงนี้ ⚠️⚠️
+    const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec"; 
+    const LIFF_ID = "2009981892-LVgjNXqu"; 
+
+    let lineUid = '';
+    const debugText = document.getElementById('debugStatus');
+
+    async function main() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          lineUid = profile.userId;
+          debugText.style.display = 'none'; 
+          
+          // โชว์กล่องโปรไฟล์
+          document.getElementById('profileBox').classList.remove('hidden');
+          document.getElementById('profileImage').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+          document.getElementById('displayName').textContent = profile.displayName;
+
+          // ดึงข้อมูลแพ็กเกจ
+          fetchPackages(); 
+        } else {
+          liff.login();
+        }
+      } catch (err) {
+        debugText.textContent = "สถานะ: ติดปัญหา (" + err.message + ")";
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", main);
+
+    // ฟังก์ชันยิง API ดึงข้อมูลแพ็กเกจ (ใช้ GET ป้องกัน CORS)
+    async function fetchPackages() {
+      try {
+        const url = `${API_URL}?action=getUserPackages&lineUid=${lineUid}`;
+        const response = await fetch(url);
+        const resData = await response.json();
+        
+        document.getElementById('loading').classList.add('hidden');
+
+        if(resData.status === 'success' && resData.data.length > 0) {
+          const listContainer = document.getElementById('packageList');
+          listContainer.innerHTML = '';
+          
+          resData.data.forEach(pkg => {
+            // คำนวณเปอร์เซ็นต์การใช้งาน
+            const percentUsed = (pkg.used / pkg.total) * 100;
+            let statusBadge = '';
+            
+            if(pkg.status === 'active') {
+              statusBadge = `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-bold">พร้อมใช้งาน</span>`;
+            } else if(pkg.status === 'empty') {
+              statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full font-bold">หมดแล้ว</span>`;
+            } else {
+              statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-bold">หมดอายุ</span>`;
+            }
+
+            const item = document.createElement('div');
+            item.className = 'p-4 border border-blue-100 rounded-lg bg-blue-50 shadow-sm';
+            item.innerHTML = `
+              <div class="flex justify-between items-start mb-2">
+                <h3 class="font-bold text-blue-900 text-lg">${pkg.packageName}</h3>
+                ${statusBadge}
+              </div>
+              <p class="text-sm text-gray-600 mb-3">หมดอายุ: ${pkg.expireDate.split('T')[0]}</p>
+              
+              <div class="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${percentUsed}%"></div>
+              </div>
+              <div class="flex justify-between text-xs text-gray-600 font-bold">
+                <span>ใช้ไปแล้ว: ${pkg.used}</span>
+                <span class="text-blue-700">คงเหลือ: ${pkg.remaining} / ${pkg.total}</span>
+              </div>
+            `;
+            listContainer.appendChild(item);
+          });
+          
+          listContainer.classList.remove('hidden');
+        } else {
+          document.getElementById('emptyState').classList.remove('hidden');
+        }
+      } catch(e) {
+        document.getElementById('loading').innerHTML = '<span class="text-red-500">เกิดข้อผิดพลาดในการดึงข้อมูลแพ็กเกจ</span>';
+      }
+    }
+  </script>
+</body>
+</html>
