@@ -3,254 +3,237 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>จองคิวรับบริการ - Karshine URT</title>
+  <title>จองคิวล้างรถ - Karshine</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body class="bg-gray-50 p-4 pb-20">
+<body class="bg-gray-100 pb-20 font-sans selection:bg-blue-200">
+  <div class="bg-blue-600 text-white p-5 rounded-b-3xl shadow-md mb-6">
+    <h1 class="text-2xl font-bold text-center">จองคิวเข้ารับบริการ</h1>
+    <p class="text-center text-blue-100 text-sm mt-1">สะดวกรวดเร็ว ไม่ต้องรอคิวหน้าร้าน</p>
+  </div>
 
-  <div class="max-w-md mx-auto">
-    <div id="debugStatus" class="text-sm text-center font-bold text-blue-800 mb-4 p-2 bg-blue-100 rounded-lg shadow-sm">
-      กำลังเชื่อมต่อระบบจองคิว...
+  <div class="max-w-md mx-auto px-4" id="app-container">
+    <div id="loading" class="text-center py-10 text-gray-500">
+      <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-blue-500"></i><p>กำลังเตรียมข้อมูล...</p>
     </div>
 
-    <div id="profileBox" class="hidden bg-white rounded-xl shadow-md p-4 mb-6 border border-gray-100">
-      <div class="flex items-center mb-3">
-        <img id="profileImage" src="" class="w-14 h-14 rounded-full mr-4 border-2 border-blue-500 shadow-sm">
-        <div>
-          <p class="text-xs text-gray-500 mb-0.5">ยินดีต้อนรับ</p>
-          <p id="displayName" class="font-bold text-gray-800 text-base"></p>
-        </div>
-      </div>
-      <div class="flex justify-between items-center bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-        <span class="text-sm font-bold text-yellow-700">⭐ แต้มสะสมของฉัน</span>
-        <span class="text-lg font-bold text-yellow-800" id="memberPoints">กำลังโหลด...</span>
-      </div>
-    </div>
-
-    <div id="bookingForm" class="hidden bg-white rounded-xl shadow-md overflow-hidden p-6">
-      <h2 class="text-xl font-bold text-gray-800 border-b pb-2 mb-4">📅 นัดหมายเข้ารับบริการ</h2>
+    <form id="bookingForm" class="hidden space-y-6">
       
-      <form>
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-bold mb-2">🚗 เลือกรถยนต์</label>
-          <select id="vehicle" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 bg-gray-50">
-            <option value="">กำลังโหลดข้อมูลรถ...</option>
-          </select>
-        </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500">
+        <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-car"></i> 1. เลือกรถของคุณ</h2>
+        <select id="vehicleSelect" class="w-full p-3 border rounded-lg bg-gray-50 text-sm" required></select>
+      </div>
 
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-bold mb-2">✨ เลือกบริการ</label>
-          <select id="serviceType" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 bg-gray-50">
-            <option value="wash_vacuum">ล้างสีดูดฝุ่น</option>
-            <option value="wash_wax">ล้างอัดฉีด + เคลือบสี</option>
-            <option value="glass_coating">โปรแกรมเคลือบแก้ว</option>
-          </select>
-        </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500">
+        <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-location-dot"></i> 2. เลือกสาขา</h2>
+        <select id="branchSelect" class="w-full p-3 border rounded-lg bg-gray-50 text-sm" onchange="generateTimeSlots()" required></select>
+      </div>
 
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-bold mb-2">⏰ วันที่และเวลา</label>
-          <input type="datetime-local" id="bookingDate" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 bg-gray-50">
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500">
+        <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-spray-can-sparkles"></i> 3. รูปแบบการล้าง</h2>
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <label class="border p-3 rounded-lg text-center cursor-pointer hover:bg-blue-50 transition" id="lbl-line1">
+            <input type="radio" name="lineType" value="LINE1" class="hidden" onchange="toggleServiceLine()">
+            <i class="fa-solid fa-robot text-2xl text-gray-400 mb-1 block"></i>
+            <span class="text-sm font-bold text-gray-700">ล้างด่วน (เครื่อง)</span>
+          </label>
+          <label class="border p-3 rounded-lg text-center cursor-pointer hover:bg-blue-50 transition" id="lbl-line2">
+            <input type="radio" name="lineType" value="LINE2" class="hidden" onchange="toggleServiceLine()" checked>
+            <i class="fa-solid fa-hands-bubbles text-2xl text-gray-400 mb-1 block"></i>
+            <span class="text-sm font-bold text-gray-700">ล้างปกติ (พนักงาน)</span>
+          </label>
         </div>
+        <select id="serviceSelect" class="w-full p-3 border rounded-lg bg-gray-50 text-sm" onchange="generateTimeSlots()" required></select>
+      </div>
 
-        <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-          <label class="block text-blue-800 text-sm font-bold mb-2">📍 พิกัดรับ-ส่งรถ (ถ้ามี)</label>
-          <div id="map" class="w-full h-32 bg-gray-200 rounded-lg mb-3 flex items-center justify-center text-gray-500 text-sm">
-            แผนที่จำลอง (รอเชื่อมต่อ)
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500">
+        <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-calendar-days"></i> 4. วันและเวลา</h2>
+        <input type="date" id="bookDate" class="w-full p-3 border rounded-lg bg-gray-50 mb-3" onchange="generateTimeSlots()" required>
+        <div id="timeSlots" class="grid grid-cols-3 gap-2 mt-3 max-h-48 overflow-y-auto p-1">
+          <p class="col-span-3 text-center text-sm text-gray-400">กรุณาเลือกสาขาและบริการ</p>
+        </div>
+        <input type="hidden" id="selectedTime" required>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500">
+        <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-truck-fast"></i> 5. บริการรับ-ส่งรถ (Valet)</h2>
+        <select id="deliverySelect" class="w-full p-3 border rounded-lg bg-gray-50 text-sm mb-3" onchange="toggleDeliveryInputs()">
+          <option value="none">ขับมาเอง (ไม่ใช้บริการรับ-ส่ง)</option>
+          <option value="pickup">ให้ร้านไปรับ (ส่งเอง)</option>
+          <option value="dropoff">ให้ร้านไปส่ง (ขับมาเอง)</option>
+          <option value="roundtrip">รับ-ส่ง ทั้งสองขา</option>
+        </select>
+        
+        <div id="deliveryInputs" class="hidden space-y-3 p-3 bg-blue-50 rounded-lg">
+          <div id="pickupBox" class="hidden">
+            <label class="text-xs font-bold text-blue-700">พิกัดจุดรับรถ (Google Maps Link)</label>
+            <input type="text" id="pickupLink" class="w-full p-2 border rounded text-sm mt-1" placeholder="วางลิงก์พิกัดจุดรับ">
           </div>
-          <button type="button" onclick="getCurrentLocation()" class="w-full bg-blue-600 text-white text-sm font-bold py-2 px-4 rounded hover:bg-blue-700 mb-2">
-            📍 กดดึงพิกัดปัจจุบัน
-          </button>
-          
-          <input type="hidden" id="lat">
-          <input type="hidden" id="lng">
-
-          <div id="distanceInfo" class="hidden text-sm text-gray-700 mt-2 p-2 bg-white rounded border border-gray-200">
-            ระยะทาง: <span id="distText" class="font-bold text-blue-600">0</span> กม.<br>
-            ค่าบริการรับ-ส่ง: <span id="feeText" class="font-bold text-red-600">0</span> บาท
+          <div id="dropoffBox" class="hidden">
+            <label class="text-xs font-bold text-blue-700">พิกัดจุดส่งรถ (Google Maps Link)</label>
+            <input type="text" id="dropoffLink" class="w-full p-2 border rounded text-sm mt-1" placeholder="วางลิงก์พิกัดจุดส่ง">
           </div>
+          <p class="text-[10px] text-gray-500 italic">*ระบบจะคำนวณค่าส่งจากระยะทางจริงหลังจากท่านส่งลิงก์พิกัดเรียบร้อยแล้ว</p>
         </div>
+      </div>
 
-        <div class="mb-6">
-          <label class="block text-gray-700 text-sm font-bold mb-2">💳 ช่องทางการชำระเงิน</label>
-          <select id="packageSelect" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 bg-gray-50 font-bold text-blue-700">
-            <option value="">ชำระเงินรายครั้งที่ร้าน</option>
-          </select>
-        </div>
-
-        <button type="button" id="submitBtn" onclick="handleBookingSubmit(event)" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition duration-300 shadow-md">
-          ยืนยันการจองคิว
-        </button>
-      </form>
-    </div>
+      <button type="submit" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition text-lg">
+        ยืนยันการจองคิว
+      </button>
+    </form>
   </div>
 
   <script>
-    // ⚠️⚠️ แก้ไขข้อมูลของคุณตรงนี้ ⚠️⚠️
-    const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec"; 
-    const LIFF_ID = "2009981892-1HxmA42h"; 
+    // ⚠️ แก้ไข API_URL เป็นของ Google Apps Script ของคุณโอม
+    const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
+    const LIFF_ID = "ใส่_LIFF_ID_ของคุณโอม_ที่นี่"; 
+    
+    let masterData = {};
+    let userUid = "U825fa531ed42d452068d034671e8c2e2"; // Mock UID สำหรับทดสอบในคอม
 
-    let lineUid = '';
-    let storeLat = 9.1333; // ค่าเริ่มต้น (จะถูกอัปเดตจาก Settings)
-    let storeLng = 99.3167;
-    let freeKm = 5;
-    let feePerKm = 15;
+    // เริ่มต้นระบบ
+    async function init() {
+      // (ละ Liff Init ไว้เพื่อให้รันทดสอบในคอมได้ก่อน)
+      document.getElementById('bookDate').min = new Date().toISOString().split('T')[0];
+      await loadInitialData();
+    }
 
-    const debugText = document.getElementById('debugStatus');
-
-    async function main() {
+    async function loadInitialData() {
       try {
-        await liff.init({ liffId: LIFF_ID });
+        const res = await fetch(`${API_URL}?action=getInitialBookingData&lineUid=${userUid}`);
+        const data = await res.json();
+        masterData = data.data;
+
+        // ดึงรถยนต์
+        const vSel = document.getElementById('vehicleSelect');
+        vSel.innerHTML = masterData.vehicles.length ? 
+          masterData.vehicles.map(v => `<option value="${v.id}">${v.plate} (${v.model})</option>`).join('') :
+          `<option value="">ยังไม่มีข้อมูลรถ (โปรดเพิ่มรถก่อน)</option>`;
+
+        // ดึงสาขา
+        const bSel = document.getElementById('branchSelect');
+        bSel.innerHTML = masterData.branches.map(b => `<option value="${b.branch_id}">${b.branch_name}</option>`).join('');
+
+        toggleServiceLine(); // โหลดบริการครั้งแรก
         
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          lineUid = profile.userId;
-          debugText.style.display = 'none'; 
-          
-          // โชว์กล่องโปรไฟล์
-          document.getElementById('profileBox').classList.remove('hidden');
-          document.getElementById('profileImage').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-          document.getElementById('displayName').textContent = profile.displayName;
-
-          // เปิดฟอร์มและโหลดข้อมูล
-          document.getElementById('bookingForm').classList.remove('hidden');
-          fetchInitialData(); 
-        } else {
-          liff.login();
-        }
-      } catch (err) {
-        debugText.textContent = "สถานะ: ติดปัญหา (" + err.message + ")";
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('bookingForm').classList.remove('hidden');
+      } catch (e) {
+        Swal.fire('Error', 'ไม่สามารถเชื่อมต่อระบบได้: ' + e.message, 'error');
       }
     }
 
-    document.addEventListener("DOMContentLoaded", main);
-
-    // ฟังก์ชันยิง API ดึงข้อมูล (รถ, แพ็กเกจ, แต้ม)
-    async function fetchInitialData() {
-      try {
-        const url = `${API_URL}?action=getInitialBookingData&lineUid=${lineUid}`;
-        const response = await fetch(url);
-        const resData = await response.json();
-        
-        if(resData.status === 'success') {
-          const data = resData.data;
-
-          // 1. อัปเดตแต้ม
-          document.getElementById('memberPoints').textContent = data.points || 0;
-
-          // 2. อัปเดตตั้งค่าร้าน
-          if(data.settings) {
-            storeLat = parseFloat(data.settings.STORE_LAT) || storeLat;
-            storeLng = parseFloat(data.settings.STORE_LNG) || storeLng;
-            freeKm = parseFloat(data.settings.FREE_DELIVERY_KM) || 5;
-            feePerKm = parseFloat(data.settings.FEE_PER_KM) || 15;
-          }
-
-          // 3. โหลดรถเข้า Dropdown
-          const vehicleSelect = document.getElementById('vehicle');
-          vehicleSelect.innerHTML = '';
-          if(!data.vehicles || data.vehicles.length === 0) {
-            vehicleSelect.innerHTML = '<option value="">ไม่มีข้อมูลรถ (โปรดเพิ่มรถก่อน)</option>';
-            document.getElementById('submitBtn').disabled = true;
-            document.getElementById('submitBtn').classList.replace('bg-green-600', 'bg-gray-400');
-          } else {
-            data.vehicles.forEach(v => {
-              const opt = document.createElement('option');
-              opt.value = v.id;
-              opt.text = `${v.plate} - ${v.model}`;
-              vehicleSelect.appendChild(opt);
-            });
-          }
-
-          // 4. โหลดแพ็กเกจเข้า Dropdown
-          const packageSelect = document.getElementById('packageSelect');
-          packageSelect.innerHTML = '<option value="">ชำระเงินรายครั้งที่ร้าน</option>';
-          if(data.packages && data.packages.length > 0) {
-            data.packages.forEach(pkg => {
-              const opt = document.createElement('option');
-              opt.value = pkg.packageId;
-              opt.text = `ใช้แพ็กเกจ: ${pkg.packageName} (เหลือ ${pkg.remaining} ครั้ง)`;
-              packageSelect.appendChild(opt);
-            });
-          }
-        }
-      } catch(e) {
-        Swal.fire('ข้อผิดพลาด', 'ดึงข้อมูลไม่สำเร็จ โปรดลองใหม่', 'error');
-      }
-    }
-
-    // ฟังก์ชันจำลองแผนที่
-    function calculateDistance(userLat, userLng) {
-      let dist = 10; // สมมติ 10 กม.
-      let extraFee = 0;
-      if(dist > freeKm) {
-        extraFee = (dist - freeKm) * feePerKm;
-      }
-      document.getElementById('distanceInfo').classList.remove('hidden');
-      document.getElementById('distText').textContent = dist.toFixed(1);
-      document.getElementById('feeText').textContent = extraFee;
-    }
-
-    function getCurrentLocation() {
-      Swal.fire('ดึงพิกัด', 'กำลังจำลองพิกัดพิกัด GPS', 'info');
-      calculateDistance(9.1400, 99.3200);
-      document.getElementById('lat').value = 9.1400;
-      document.getElementById('lng').value = 99.3200;
-    }
-
-    // ฟังก์ชันบันทึกการจองคิว
-    async function handleBookingSubmit(e) {
-      e.preventDefault();
+    // สลับ Line 1 / Line 2
+    function toggleServiceLine() {
+      const type = document.querySelector('input[name="lineType"]:checked').value;
       
-      const vehicleId = document.getElementById('vehicle').value;
-      const bookingDate = document.getElementById('bookingDate').value;
+      // เปลี่ยนสีปุ่มที่เลือก
+      document.getElementById('lbl-line1').classList.replace(type==='LINE1'?'border-gray-200':'border-blue-500', type==='LINE1'?'border-blue-500':'border-gray-200');
+      document.getElementById('lbl-line2').classList.replace(type==='LINE2'?'border-gray-200':'border-blue-500', type==='LINE2'?'border-blue-500':'border-gray-200');
 
-      if(!vehicleId) {
-        Swal.fire('แจ้งเตือน', 'กรุณาเพิ่มข้อมูลรถยนต์ก่อนจองคิว', 'warning'); return;
-      }
-      if(!bookingDate) {
-        Swal.fire('แจ้งเตือน', 'กรุณาระบุวันและเวลานัดหมาย', 'warning'); return;
-      }
+      // กรองบริการ (ตัวอย่าง: สมมติว่า Line 1 คือล้างด่วน, Line 2 คือทั้งหมด)
+      // *สามารถปรับลอจิกกรองหมวดหมู่ที่นี่ได้ครับ
+      const sSel = document.getElementById('serviceSelect');
+      let filteredSvc = masterData.services;
+      
+      sSel.innerHTML = filteredSvc.map(s => `<option value="${s.service_id}" data-time="${s.std_time_mins}">${s.service_name} (${s.std_time_mins} นาที)</option>`).join('');
+      generateTimeSlots();
+    }
 
-      const btn = document.getElementById('submitBtn');
-      btn.innerHTML = 'กำลังบันทึก...';
-      btn.disabled = true;
-      btn.classList.replace('bg-green-600', 'bg-gray-400');
+    // 🕒 ลอจิกการสร้าง Slot เวลาอัจฉริยะ (Dynamic Slots)
+    function generateTimeSlots() {
+      const branchId = document.getElementById('branchSelect').value;
+      const svcSelect = document.getElementById('serviceSelect');
+      const bookDate = document.getElementById('bookDate').value;
+      const type = document.querySelector('input[name="lineType"]:checked').value;
+      const slotContainer = document.getElementById('timeSlots');
+      
+      if(!branchId || !svcSelect.value || !bookDate) return;
 
-      try {
-        // เตรียมข้อมูลและเข้ารหัสเพื่อส่งผ่าน URL (GET Request ป้องกัน CORS)
-        const serviceType = encodeURIComponent(document.getElementById('serviceType').value);
-        const lat = encodeURIComponent(document.getElementById('lat').value);
-        const lng = encodeURIComponent(document.getElementById('lng').value);
-        const distance = encodeURIComponent(document.getElementById('distText').textContent || 0);
-        const extraFee = encodeURIComponent(document.getElementById('feeText').textContent || 0);
-        const usePackageId = encodeURIComponent(document.getElementById('packageSelect').value);
-        const bDate = encodeURIComponent(bookingDate);
-        const vId = encodeURIComponent(vehicleId);
-
-        const url = `${API_URL}?action=submitBooking&lineUid=${lineUid}&vehicleId=${vId}&serviceType=${serviceType}&bookingDate=${bDate}&lat=${lat}&lng=${lng}&distance=${distance}&extraFee=${extraFee}&usePackageId=${usePackageId}`;
+      const branch = masterData.branches.find(b => b.branch_id === branchId);
+      const svcTime = parseInt(svcSelect.options[svcSelect.selectedIndex].dataset.time) || 30;
+      
+      // ดึงเวลาเปิด-ปิดสาขา
+      const openT = branch.open_time.split(':');
+      const closeT = branch.close_time.split(':');
+      let currentMin = parseInt(openT[0]) * 60 + parseInt(openT[1]);
+      const endMin = parseInt(closeT[0]) * 60 + parseInt(closeT[1]);
+      
+      let html = '';
+      
+      while (currentMin < endMin) {
+        const h = Math.floor(currentMin / 60).toString().padStart(2, '0');
+        const m = (currentMin % 60).toString().padStart(2, '0');
+        const timeStr = `${h}:${m}`;
         
-        const response = await fetch(url);
-        const resData = await response.json();
+        html += `<div onclick="selectSlot(this, '${timeStr}')" class="time-slot border border-blue-200 text-blue-600 text-center py-2 rounded-lg cursor-pointer hover:bg-blue-100 transition text-sm font-bold">${timeStr}</div>`;
+        
+        // ถ้าเป็น Line 1 = ตัดทีละ 10 นาทีตายตัว
+        if (type === 'LINE1') { currentMin += 10; } 
+        // ถ้าเป็น Line 2 = เวลาบริการ + เวลาพัก (Buffer)
+        else { currentMin += (svcTime + (parseInt(branch.buffer_time) || 10)); }
+      }
+      
+      slotContainer.innerHTML = html;
+      document.getElementById('selectedTime').value = '';
+    }
 
-        if(resData.status === 'success') {
-          Swal.fire({ title: 'สำเร็จ!', text: 'จองคิวเรียบร้อยแล้ว', icon: 'success' }).then(() => {
-            liff.closeWindow(); // ปิดแอปกลับไปที่แชท
-          });
-        } else {
-          Swal.fire('เกิดข้อผิดพลาด', resData.message, 'error');
-          btn.innerHTML = 'ยืนยันการจองคิว';
-          btn.disabled = false;
-          btn.classList.replace('bg-gray-400', 'bg-green-600');
-        }
-      } catch(e) {
-        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้', 'error');
-        btn.innerHTML = 'ยืนยันการจองคิว';
-        btn.disabled = false;
-        btn.classList.replace('bg-gray-400', 'bg-green-600');
+    // เลือกเวลา
+    function selectSlot(el, timeStr) {
+      document.querySelectorAll('.time-slot').forEach(div => {
+        div.classList.remove('bg-blue-600', 'text-white');
+        div.classList.add('text-blue-600');
+      });
+      el.classList.remove('text-blue-600');
+      el.classList.add('bg-blue-600', 'text-white');
+      document.getElementById('selectedTime').value = timeStr;
+    }
+
+    // เปิดปิดกล่องรับส่ง
+    function toggleDeliveryInputs() {
+      const val = document.getElementById('deliverySelect').value;
+      const container = document.getElementById('deliveryInputs');
+      const pk = document.getElementById('pickupBox');
+      const dp = document.getElementById('dropoffBox');
+      
+      if (val === 'none') { container.classList.add('hidden'); } 
+      else {
+        container.classList.remove('hidden');
+        pk.classList.toggle('hidden', val === 'dropoff');
+        dp.classList.toggle('hidden', val === 'pickup');
       }
     }
+
+    // ส่งข้อมูลจองคิว
+    document.getElementById('bookingForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const time = document.getElementById('selectedTime').value;
+      if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาที่ต้องการจอง', 'warning');
+
+      Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      
+      // จำลองการส่งข้อมูล (ส่วนคำนวณราคาค่าส่ง จะทำในฝั่ง Backend รอบถัดไป)
+      const payload = {
+        lineUid: userUid,
+        vehicleId: document.getElementById('vehicleSelect').value,
+        serviceType: document.getElementById('serviceSelect').value,
+        bookingDate: document.getElementById('bookDate').value + 'T' + time,
+        deliveryType: document.getElementById('deliverySelect').value
+      };
+
+      try {
+        const res = await fetch(`${API_URL}?action=submitBooking`, { method: 'POST', body: JSON.stringify(payload) });
+        const result = await res.json();
+        if(result.status === 'success') {
+          Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success').then(()=>liff.closeWindow());
+        } else throw new Error(result.message);
+      } catch (err) { Swal.fire('เกิดข้อผิดพลาด', err.message, 'error'); }
+    });
+
+    document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
