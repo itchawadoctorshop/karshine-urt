@@ -7,70 +7,162 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
-<body class="bg-gray-100 p-4">
+<body class="bg-gray-100 p-4 pb-10">
   <div class="max-w-md mx-auto">
-    <h1 class="text-2xl font-bold text-gray-800 mb-6">⚙️ ตั้งค่าระบบหลังบ้าน</h1>
+    <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">⚙️ ตั้งค่าระบบหลังบ้าน</h1>
 
     <div class="bg-white rounded-xl shadow p-5 mb-6">
-      <h2 class="font-bold text-lg mb-4 border-b pb-2 text-blue-600">📍 จัดการสาขา</h2>
-      <div id="branchList" class="space-y-2 mb-4"></div>
-      <button onclick="addBranch()" class="w-full bg-blue-600 text-white py-2 rounded-lg text-sm">+ เพิ่มสาขาใหม่</button>
+      <h2 class="font-bold text-lg mb-4 border-b pb-2 text-blue-600 flex justify-between items-center">
+        📍 รายชื่อสาขา
+      </h2>
+      <div id="branchList" class="space-y-2 mb-4 text-sm text-gray-600 italic">กำลังโหลด...</div>
+      <button onclick="addBranch()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow-sm">+ เพิ่มสาขาใหม่</button>
     </div>
 
     <div class="bg-white rounded-xl shadow p-5 mb-6">
-      <h2 class="font-bold text-lg mb-4 border-b pb-2 text-green-600">🎁 ตั้งค่าแพ็กเกจแม่แบบ</h2>
-      <div id="pkgList" class="space-y-2 mb-4"></div>
-      <button onclick="addMasterPkg()" class="w-full bg-green-600 text-white py-2 rounded-lg text-sm">+ สร้างโปรโมชั่นใหม่</button>
+      <h2 class="font-bold text-lg mb-4 border-b pb-2 text-green-600">🎁 แพ็กเกจโปรโมชั่น</h2>
+      <div id="pkgList" class="space-y-2 mb-4 text-sm text-gray-600 italic">กำลังโหลด...</div>
+      <button onclick="addMasterPkg()" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-sm">+ สร้างโปรโมชั่นใหม่</button>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-5 mb-6">
+      <h2 class="font-bold text-lg mb-4 border-b pb-2 text-purple-600">💳 วิธีการชำระเงิน</h2>
+      <div id="payList" class="space-y-2 mb-4 text-sm text-gray-600 italic">กำลังโหลด...</div>
+      <button onclick="addPayment()" class="w-full bg-purple-600 text-white py-3 rounded-lg font-bold shadow-sm">+ เพิ่มวิธีชำระเงิน</button>
     </div>
   </div>
 
   <script>
-    const API_URL = "ใส่_URL_WEB_APP_ของคุณ_ที่นี่";
+    // ⚠️ แก้ไข URL เป็นของ Google Apps Script ของคุณ
+    const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
 
     async function loadData() {
-      const res = await fetch(`${API_URL}?action=getAdminSettings`);
-      const data = await res.json();
-      
-      // แสดงรายการสาขา
-      const bList = document.getElementById('branchList');
-      bList.innerHTML = data.branches.map(b => `
-        <div class="p-2 bg-gray-50 border rounded text-sm">
-          <b>${b.branch_name}</b> (ฟรี ${b.free_km} กม.)
-        </div>
-      `).join('');
+      try {
+        const res = await fetch(`${API_URL}?action=getAdminSettings`);
+        const data = await res.json();
+        
+        // แสดงสาขา
+        const bList = document.getElementById('branchList');
+        bList.innerHTML = data.branches.length ? data.branches.map(b => `
+          <div class="p-3 bg-gray-50 border rounded-lg">
+            <div class="font-bold text-gray-800">${b.branch_name}</div>
+            <div class="text-xs text-gray-500">ฟรี ${b.free_km} กม. / กม.ละ ${b.fee_per_km} บ.</div>
+          </div>
+        `).join('') : 'ยังไม่มีข้อมูลสาขา';
 
-      // แสดงรายการแพ็กเกจ
-      const pList = document.getElementById('pkgList');
-      pList.innerHTML = data.masterPkgs.map(p => `
-        <div class="p-2 bg-gray-50 border rounded text-sm">
-          <b>${p.pkg_name}</b> - ${p.price}.- (${p.amount} ${p.pkg_type === 'count' ? 'ครั้ง' : 'วัน'})
-        </div>
-      `).join('');
+        // แสดงแพ็กเกจ
+        const pList = document.getElementById('pkgList');
+        pList.innerHTML = data.masterPkgs.length ? data.masterPkgs.map(p => `
+          <div class="p-3 bg-gray-50 border rounded-lg flex justify-between items-center">
+            <div>
+              <div class="font-bold text-gray-800">${p.pkg_name}</div>
+              <div class="text-xs text-gray-500">${p.amount} ${p.pkg_type === 'count' ? 'ครั้ง' : 'วัน'}</div>
+            </div>
+            <div class="font-bold text-green-600">${p.price}.-</div>
+          </div>
+        `).join('') : 'ยังไม่มีโปรโมชั่น';
+
+        // แสดงวิธีชำระเงิน
+        const payList = document.getElementById('payList');
+        payList.innerHTML = data.payments.length ? data.payments.map(p => `
+          <div class="p-3 bg-gray-50 border rounded-lg text-sm">
+            <div class="font-bold text-purple-700">${p.pay_name}</div>
+            <div class="text-xs text-gray-500">${p.details}</div>
+          </div>
+        `).join('') : 'ยังไม่มีวิธีชำระเงิน';
+
+      } catch (e) {
+        Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้', 'error');
+      }
     }
 
-    async function addMasterPkg() {
-      const { value: formValues } = await Swal.fire({
-        title: 'สร้างโปรโมชั่นใหม่',
-        html:
-          '<input id="swal-name" class="swal2-input" placeholder="ชื่อแพ็กเกจ">' +
-          '<select id="swal-type" class="swal2-input"><option value="count">นับจำนวนครั้ง</option><option value="buffet">บุฟเฟต์ (รายวัน)</option></select>' +
-          '<input id="swal-amount" type="number" class="swal2-input" placeholder="จำนวนครั้ง/วัน">' +
-          '<input id="swal-price" type="number" class="swal2-input" placeholder="ราคา">',
-        focusConfirm: false,
+    // ฟังก์ชันเพิ่มสาขา
+    async function addBranch() {
+      const { value: v } = await Swal.fire({
+        title: 'เพิ่มสาขาใหม่',
+        html: `
+          <input id="b-name" class="swal2-input" placeholder="ชื่อสาขา">
+          <input id="b-lat" class="swal2-input" placeholder="Latitude (เช่น 9.123)">
+          <input id="b-lng" class="swal2-input" placeholder="Longitude (เช่น 99.123)">
+          <input id="b-free" type="number" class="swal2-input" placeholder="ระยะส่งฟรี (กม.)">
+          <input id="b-fee" type="number" class="swal2-input" placeholder="ค่าส่งส่วนเกิน (บาท/กม.)">
+        `,
         preConfirm: () => [
-          document.getElementById('swal-name').value,
-          document.getElementById('swal-type').value,
-          document.getElementById('swal-amount').value,
-          document.getElementById('swal-price').value
+          document.getElementById('b-name').value,
+          document.getElementById('b-lat').value,
+          document.getElementById('b-lng').value,
+          document.getElementById('b-free').value,
+          document.getElementById('b-fee').value
         ]
       });
 
-      if (formValues) {
-        const [name, type, amount, price] = formValues;
-        const id = 'MP-' + Date.now();
-        await fetch(`${API_URL}?action=saveMasterPkg&id=${id}&name=${encodeURIComponent(name)}&type=${type}&amount=${amount}&price=${price}`);
-        Swal.fire('สำเร็จ', 'บันทึกโปรโมชั่นแล้ว', 'success');
-        loadData();
+      if (v && v[0]) {
+        const url = `${API_URL}?action=saveBranch&id=BR-${Date.now()}&name=${encodeURIComponent(v[0])}&lat=${v[1]}&lng=${v[2]}&free=${v[3]}&fee=${v[4]}`;
+        await callApi(url, 'บันทึกสาขาเรียบร้อย');
+      }
+    }
+
+    // ฟังก์ชันเพิ่มแพ็กเกจแม่แบบ
+    async function addMasterPkg() {
+      const { value: v } = await Swal.fire({
+        title: 'สร้างโปรโมชั่นใหม่',
+        html: `
+          <input id="p-name" class="swal2-input" placeholder="ชื่อแพ็กเกจ (เช่น ล้าง 10 ฟรี 2)">
+          <select id="p-type" class="swal2-input">
+            <option value="count">นับจำนวนครั้ง</option>
+            <option value="buffet">บุฟเฟต์ (รายวัน)</option>
+          </select>
+          <input id="p-amount" type="number" class="swal2-input" placeholder="จำนวนครั้งหรือจำนวนวัน">
+          <input id="p-price" type="number" class="swal2-input" placeholder="ราคา">
+        `,
+        preConfirm: () => [
+          document.getElementById('p-name').value,
+          document.getElementById('p-type').value,
+          document.getElementById('p-amount').value,
+          document.getElementById('p-price').value
+        ]
+      });
+
+      if (v && v[0]) {
+        const url = `${API_URL}?action=saveMasterPkg&id=MP-${Date.now()}&name=${encodeURIComponent(v[0])}&type=${v[1]}&amount=${v[2]}&price=${v[3]}`;
+        await callApi(url, 'บันทึกโปรโมชั่นเรียบร้อย');
+      }
+    }
+
+    // ฟังก์ชันเพิ่มวิธีชำระเงิน
+    async function addPayment() {
+      const { value: v } = await Swal.fire({
+        title: 'เพิ่มวิธีชำระเงิน',
+        html: `
+          <input id="pay-name" class="swal2-input" placeholder="ชื่อช่องทาง (เช่น กสิกรไทย)">
+          <input id="pay-info" class="swal2-input" placeholder="รายละเอียด (เช่น เลขบัญชี/ชื่อบัญชี)">
+        `,
+        preConfirm: () => [
+          document.getElementById('pay-name').value,
+          document.getElementById('pay-info').value
+        ]
+      });
+
+      if (v && v[0]) {
+        const url = `${API_URL}?action=savePayment&id=PAY-${Date.now()}&name=${encodeURIComponent(v[0])}&details=${encodeURIComponent(v[1])}`;
+        await callApi(url, 'บันทึกวิธีชำระเงินเรียบร้อย');
+      }
+    }
+
+    // ฟังก์ชันกลางในการยิง API
+    async function callApi(url, successMsg) {
+      Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.status === 'success') {
+          Swal.fire('สำเร็จ', successMsg, 'success');
+          loadData();
+        } else {
+          throw new Error(data.message);
+        }
+      } catch (e) {
+        Swal.fire('ข้อผิดพลาด', e.message, 'error');
       }
     }
 
