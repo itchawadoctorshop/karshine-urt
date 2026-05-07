@@ -63,11 +63,13 @@
         <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-calendar-days text-blue-500"></i> 3. เลือกวันและเวลา</h2>
         <div class="mb-4 flex justify-center"><input type="text" id="inlineCalendar" class="hidden"></div>
         <input type="hidden" id="bookDate" required>
-        
-        <div id="timeSlots" class="grid grid-cols-3 gap-2 mt-2 max-h-56 overflow-y-auto">
-          <p class="col-span-3 text-center text-sm font-bold text-orange-500 bg-orange-50 py-3 rounded-lg"><i class="fa-solid fa-circle-exclamation"></i> กรุณาเลือกบริการในข้อ 2 ก่อน</p>
-        </div>
         <input type="hidden" id="selectedTime" required>
+        
+        <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center cursor-pointer hover:bg-blue-100 transition" onclick="openTimeSlotModal()">
+          <p class="text-sm text-gray-500 mb-1">เวลาที่เลือกจอง</p>
+          <p id="displaySelectedTime" class="text-3xl font-bold text-blue-600 tracking-wider">- - : - -</p>
+          <p class="text-xs text-blue-500 mt-2"><i class="fa-solid fa-clock"></i> กดเพื่อเปลี่ยนเวลา</p>
+        </div>
       </div>
 
       <div class="bg-white p-5 rounded-2xl shadow-sm">
@@ -85,13 +87,10 @@
             <button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-lg text-sm font-bold bg-green-500 text-white border-2 border-green-600">📍 หมุดรับรถ</button>
             <button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-lg text-sm font-bold bg-gray-200 text-gray-600 border-2 border-transparent">📍 หมุดส่งรถ</button>
           </div>
-
           <div id="map" class="shadow-inner border border-gray-200"></div>
-          
           <button type="button" onclick="getCurrentGPS()" class="w-full bg-blue-100 text-blue-700 py-2 rounded-xl text-sm font-bold shadow-sm">
             <i class="fa-solid fa-location-crosshairs"></i> ดึงพิกัดปัจจุบัน
           </button>
-          
           <input type="hidden" id="pickupLat"><input type="hidden" id="pickupLng">
           <input type="hidden" id="dropoffLat"><input type="hidden" id="dropoffLng">
         </div>
@@ -135,9 +134,10 @@
       await loadInitialData();
       flatpickr("#inlineCalendar", { 
         inline: true, locale: "th", minDate: "today", 
-        onChange: function(d, dateStr) { 
+        onChange: function(selectedDates, dateStr) { 
           document.getElementById('bookDate').value = dateStr; 
-          generateTimeSlots(); 
+          resetSelectedTime(); // ล้างเวลาที่เลือกไว้เมื่อเปลี่ยนวัน
+          openTimeSlotModal(); // เปิด Popup เลือกเวลาทันที
         } 
       });
       document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
@@ -222,38 +222,58 @@
       const deliveryFee = calculateDeliveryFee();
       document.getElementById('sumDelivery').textContent = deliveryFee > 0 ? `${deliveryFee}.-` : '0.-';
       document.getElementById('sumTotal').textContent = `${totalSvcPrice + deliveryFee}.-`;
-      document.getElementById('bookingForm').dataset.totalTime = totalSvcTime;
       
-      generateTimeSlots(); // สั่งรีเฟรชเวลา
+      // อัปเดต Total Time
+      document.getElementById('bookingForm').dataset.totalTime = totalSvcTime;
+      // ล้างเวลาที่เลือกไว้ หากมีการเพิ่ม/ลดบริการ (เพราะระยะเวลา Slot เปลี่ยน)
+      resetSelectedTime();
     }
 
     // ==========================================
-    // 🛠️ แก้ไขบั๊กการคำนวณเวลา (Time Slot Logic)
+    // ⏰ ระบบ Popup เลือกเวลา (Modal)
     // ==========================================
+    function resetSelectedTime() {
+      document.getElementById('selectedTime').value = '';
+      document.getElementById('displaySelectedTime').innerHTML = '- - : - -';
+    }
+
     function formatTimeString(val) {
       if (!val) return '08:00';
       if (typeof val === 'string' && val.includes('T')) {
         const d = new Date(val);
         return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
       }
-      return String(val).substring(0, 5); // รองรับกรณีเป็นสตริง "08:00:00"
+      return String(val).substring(0, 5); 
     }
 
-    function generateTimeSlots() {
+    function openTimeSlotModal() {
       const branchId = document.getElementById('branchSelect').value;
       const type = document.getElementById('selectedLineType').value;
       const totalTime = parseInt(document.getElementById('bookingForm').dataset.totalTime) || 0;
-      const slotContainer = document.getElementById('timeSlots');
       const bookDate = document.getElementById('bookDate').value;
-      
-      if(!branchId || !bookDate || totalTime === 0) {
-        slotContainer.innerHTML = '<p class="col-span-3 text-center text-sm font-bold text-orange-500 bg-orange-50 py-3 rounded-lg"><i class="fa-solid fa-circle-exclamation"></i> กรุณาเลือกบริการในข้อ 2 ก่อน</p>';
-        return;
+
+      if(!branchId || totalTime === 0) {
+        return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการในข้อ 2 ก่อนครับ', 'warning');
+      }
+      if(!bookDate) {
+        return Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่บนปฏิทินก่อนครับ', 'warning');
       }
 
+      // สร้าง HTML ของปุ่มเวลา
+      const slotsHtml = generateTimeSlotsHtml(branchId, type, totalTime);
+
+      // เปิด Popup ด้วย SweetAlert2
+      Swal.fire({
+        title: `เลือกเวลา (วันที่ ${bookDate})`,
+        html: `<div class="grid grid-cols-3 gap-2 mt-4 max-h-64 overflow-y-auto p-2">${slotsHtml}</div>`,
+        showConfirmButton: false,
+        showCloseButton: true,
+        customClass: { popup: 'rounded-2xl' }
+      });
+    }
+
+    function generateTimeSlotsHtml(branchId, type, totalTime) {
       const branch = masterData.branches.find(b => b.branch_id === branchId);
-      
-      // ดึงเวลาเปิดปิด แล้วแปลงผ่าน formatTimeString เพื่อแก้บั๊ก
       const openStr = formatTimeString(branch.open_time);
       const closeStr = formatTimeString(branch.close_time);
 
@@ -269,23 +289,20 @@
         const m = (currentMin % 60).toString().padStart(2, '0');
         const timeStr = `${h}:${m}`;
         
-        html += `<div onclick="selectSlot(this, '${timeStr}')" class="time-slot border border-gray-200 bg-white text-gray-700 text-center py-2 rounded-lg cursor-pointer hover:border-blue-500 transition text-sm font-bold shadow-sm">${timeStr}</div>`;
+        // สร้างปุ่มเวลาแต่ละปุ่ม
+        html += `<button type="button" onclick="confirmTimeSlot('${timeStr}')" class="border-2 border-gray-200 bg-white text-gray-700 py-3 rounded-xl hover:bg-blue-50 hover:border-blue-500 hover:text-blue-600 transition text-sm font-bold shadow-sm focus:outline-none">${timeStr}</button>`;
         
-        if (type === 'LINE1') {
-           currentMin += 10; 
-        } else {
-           currentMin += (totalTime + (parseInt(branch.buffer_time) || 10)); 
-        }
+        if (type === 'LINE1') currentMin += 10; 
+        else currentMin += (totalTime + (parseInt(branch.buffer_time) || 10)); 
       }
-      
-      slotContainer.innerHTML = html || '<p class="col-span-3 text-center text-sm text-gray-400 py-4">คิวเต็ม หรือไม่มีเวลาว่างในสาขานี้</p>';
-      document.getElementById('selectedTime').value = '';
+      return html || '<p class="col-span-3 text-center text-sm text-gray-400 py-4">ไม่มีเวลาว่างในสาขานี้</p>';
     }
 
-    function selectSlot(el, timeStr) {
-      document.querySelectorAll('.time-slot').forEach(div => { div.classList.remove('bg-blue-600', 'text-white', 'border-blue-600'); div.classList.add('bg-white', 'text-gray-700'); });
-      el.classList.remove('bg-white', 'text-gray-700'); el.classList.add('bg-blue-600', 'text-white', 'border-blue-600');
+    // เมื่อลูกค้ากดเลือกเวลาใน Popup
+    function confirmTimeSlot(timeStr) {
       document.getElementById('selectedTime').value = timeStr;
+      document.getElementById('displaySelectedTime').textContent = `${timeStr} น.`;
+      Swal.close(); // ปิด Popup
     }
 
     // ==========================================
@@ -332,9 +349,7 @@
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
       L.marker([bLat, bLng]).addTo(map).bindPopup("สาขาของร้าน").openPopup();
 
-      // หมุดสีเขียว (รับ)
       const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-      // หมุดสีแดง (ส่ง)
       const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
 
       markerPickup = L.marker([bLat+0.005, bLng], {draggable: true, icon: greenIcon}).addTo(map);
