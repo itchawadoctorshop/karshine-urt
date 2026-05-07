@@ -12,9 +12,7 @@
     <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">⚙️ ตั้งค่าระบบหลังบ้าน</h1>
 
     <div class="bg-white rounded-xl shadow p-5 mb-6">
-      <h2 class="font-bold text-lg mb-4 border-b pb-2 text-blue-600 flex justify-between items-center">
-        📍 รายชื่อสาขา
-      </h2>
+      <h2 class="font-bold text-lg mb-4 border-b pb-2 text-blue-600">📍 รายชื่อสาขา</h2>
       <div id="branchList" class="space-y-2 mb-4 text-sm text-gray-600 italic">กำลังโหลด...</div>
       <button onclick="addBranch()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow-sm">+ เพิ่มสาขาใหม่</button>
     </div>
@@ -41,6 +39,8 @@
         const res = await fetch(`${API_URL}?action=getAdminSettings`);
         const data = await res.json();
         
+        if (data.status === 'error') throw new Error(data.message);
+
         // แสดงสาขา
         const bList = document.getElementById('branchList');
         bList.innerHTML = data.branches.length ? data.branches.map(b => `
@@ -72,97 +72,77 @@
         `).join('') : 'ยังไม่มีวิธีชำระเงิน';
 
       } catch (e) {
-        Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้', 'error');
+        Swal.fire('ข้อผิดพลาด', 'สาเหตุ: ' + e.message, 'error');
       }
     }
 
-    // ฟังก์ชันเพิ่มสาขา
-    async function addBranch() {
-      const { value: v } = await Swal.fire({
-        title: 'เพิ่มสาขาใหม่',
-        html: `
-          <input id="b-name" class="swal2-input" placeholder="ชื่อสาขา">
-          <input id="b-lat" class="swal2-input" placeholder="Latitude (เช่น 9.123)">
-          <input id="b-lng" class="swal2-input" placeholder="Longitude (เช่น 99.123)">
-          <input id="b-free" type="number" class="swal2-input" placeholder="ระยะส่งฟรี (กม.)">
-          <input id="b-fee" type="number" class="swal2-input" placeholder="ค่าส่งส่วนเกิน (บาท/กม.)">
-        `,
-        preConfirm: () => [
-          document.getElementById('b-name').value,
-          document.getElementById('b-lat').value,
-          document.getElementById('b-lng').value,
-          document.getElementById('b-free').value,
-          document.getElementById('b-fee').value
-        ]
-      });
-
-      if (v && v[0]) {
-        const url = `${API_URL}?action=saveBranch&id=BR-${Date.now()}&name=${encodeURIComponent(v[0])}&lat=${v[1]}&lng=${v[2]}&free=${v[3]}&fee=${v[4]}`;
-        await callApi(url, 'บันทึกสาขาเรียบร้อย');
-      }
-    }
-
-    // ฟังก์ชันเพิ่มแพ็กเกจแม่แบบ
-    async function addMasterPkg() {
-      const { value: v } = await Swal.fire({
-        title: 'สร้างโปรโมชั่นใหม่',
-        html: `
-          <input id="p-name" class="swal2-input" placeholder="ชื่อแพ็กเกจ (เช่น ล้าง 10 ฟรี 2)">
-          <select id="p-type" class="swal2-input">
-            <option value="count">นับจำนวนครั้ง</option>
-            <option value="buffet">บุฟเฟต์ (รายวัน)</option>
-          </select>
-          <input id="p-amount" type="number" class="swal2-input" placeholder="จำนวนครั้งหรือจำนวนวัน">
-          <input id="p-price" type="number" class="swal2-input" placeholder="ราคา">
-        `,
-        preConfirm: () => [
-          document.getElementById('p-name').value,
-          document.getElementById('p-type').value,
-          document.getElementById('p-amount').value,
-          document.getElementById('p-price').value
-        ]
-      });
-
-      if (v && v[0]) {
-        const url = `${API_URL}?action=saveMasterPkg&id=MP-${Date.now()}&name=${encodeURIComponent(v[0])}&type=${v[1]}&amount=${v[2]}&price=${v[3]}`;
-        await callApi(url, 'บันทึกโปรโมชั่นเรียบร้อย');
-      }
-    }
-
-    // ฟังก์ชันเพิ่มวิธีชำระเงิน
-    async function addPayment() {
-      const { value: v } = await Swal.fire({
-        title: 'เพิ่มวิธีชำระเงิน',
-        html: `
-          <input id="pay-name" class="swal2-input" placeholder="ชื่อช่องทาง (เช่น กสิกรไทย)">
-          <input id="pay-info" class="swal2-input" placeholder="รายละเอียด (เช่น เลขบัญชี/ชื่อบัญชี)">
-        `,
-        preConfirm: () => [
-          document.getElementById('pay-name').value,
-          document.getElementById('pay-info').value
-        ]
-      });
-
-      if (v && v[0]) {
-        const url = `${API_URL}?action=savePayment&id=PAY-${Date.now()}&name=${encodeURIComponent(v[0])}&details=${encodeURIComponent(v[1])}`;
-        await callApi(url, 'บันทึกวิธีชำระเงินเรียบร้อย');
-      }
-    }
-
-    // ฟังก์ชันกลางในการยิง API
     async function callApi(url, successMsg) {
       Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
         const res = await fetch(url);
         const data = await res.json();
         if (data.status === 'success') {
-          Swal.fire('สำเร็จ', successMsg, 'success');
-          loadData();
+          // รอ 1 วินาทีก่อนโหลดข้อมูลใหม่ เพื่อให้ Google Sheets อัปเดตเสร็จ
+          setTimeout(() => {
+            Swal.fire('สำเร็จ', successMsg, 'success');
+            loadData();
+          }, 1000);
         } else {
           throw new Error(data.message);
         }
       } catch (e) {
         Swal.fire('ข้อผิดพลาด', e.message, 'error');
+      }
+    }
+
+    async function addBranch() {
+      const { value: v } = await Swal.fire({
+        title: 'เพิ่มสาขาใหม่',
+        html: `<input id="b-name" class="swal2-input" placeholder="ชื่อสาขา">
+               <input id="b-lat" class="swal2-input" placeholder="Latitude">
+               <input id="b-lng" class="swal2-input" placeholder="Longitude">
+               <input id="b-free" type="number" class="swal2-input" placeholder="ระยะส่งฟรี (กม.)">
+               <input id="b-fee" type="number" class="swal2-input" placeholder="บาท/กม.">`,
+        preConfirm: () => [
+          document.getElementById('b-name').value, document.getElementById('b-lat').value,
+          document.getElementById('b-lng').value, document.getElementById('b-free').value,
+          document.getElementById('b-fee').value
+        ]
+      });
+      if (v && v[0]) {
+        const url = `${API_URL}?action=saveBranch&id=BR-${Date.now()}&name=${encodeURIComponent(v[0])}&lat=${v[1]}&lng=${v[2]}&free=${v[3]}&fee=${v[4]}`;
+        await callApi(url, 'บันทึกสาขาเรียบร้อย');
+      }
+    }
+
+    async function addMasterPkg() {
+      const { value: v } = await Swal.fire({
+        title: 'สร้างโปรโมชั่นใหม่',
+        html: `<input id="p-name" class="swal2-input" placeholder="ชื่อแพ็กเกจ">
+               <select id="p-type" class="swal2-input"><option value="count">นับครั้ง</option><option value="buffet">บุฟเฟต์ (วัน)</option></select>
+               <input id="p-amount" type="number" class="swal2-input" placeholder="จำนวนครั้งหรือวัน">
+               <input id="p-price" type="number" class="swal2-input" placeholder="ราคา">`,
+        preConfirm: () => [
+          document.getElementById('p-name').value, document.getElementById('p-type').value,
+          document.getElementById('p-amount').value, document.getElementById('p-price').value
+        ]
+      });
+      if (v && v[0]) {
+        const url = `${API_URL}?action=saveMasterPkg&id=MP-${Date.now()}&name=${encodeURIComponent(v[0])}&type=${v[1]}&amount=${v[2]}&price=${v[3]}`;
+        await callApi(url, 'บันทึกโปรโมชั่นเรียบร้อย');
+      }
+    }
+
+    async function addPayment() {
+      const { value: v } = await Swal.fire({
+        title: 'เพิ่มวิธีชำระเงิน',
+        html: `<input id="pay-name" class="swal2-input" placeholder="ชื่อช่องทาง">
+               <input id="pay-info" class="swal2-input" placeholder="รายละเอียด">`,
+        preConfirm: () => [document.getElementById('pay-name').value, document.getElementById('pay-info').value]
+      });
+      if (v && v[0]) {
+        const url = `${API_URL}?action=savePayment&id=PAY-${Date.now()}&name=${encodeURIComponent(v[0])}&details=${encodeURIComponent(v[1])}`;
+        await callApi(url, 'บันทึกวิธีชำระเงินเรียบร้อย');
       }
     }
 
