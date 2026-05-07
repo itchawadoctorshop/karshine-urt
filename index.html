@@ -40,26 +40,22 @@
       <div class="bg-white p-5 rounded-2xl shadow-sm">
         <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-car text-blue-500"></i> 1. รถและสาขา</h2>
         <select id="vehicleSelect" class="w-full p-3 border rounded-xl bg-gray-50 text-sm mb-3" required></select>
-        
         <select id="carSizeSelect" class="w-full p-3 border rounded-xl bg-gray-50 text-sm mb-3 font-bold text-blue-700" onchange="renderServices()" required>
           <option value="M">ขนาดรถ: M (รถเก๋งเล็ก/Eco Car)</option>
           <option value="L">ขนาดรถ: L (รถเก๋งใหญ่/SUV)</option>
           <option value="XL">ขนาดรถ: XL (กระบะ/ตู้/PPV)</option>
         </select>
-        
         <select id="branchSelect" class="w-full p-3 border rounded-xl bg-gray-50 text-sm" onchange="branchChanged()" required></select>
       </div>
 
       <div class="bg-white p-5 rounded-2xl shadow-sm">
         <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-spray-can-sparkles text-blue-500"></i> 2. เลือกบริการ (เลือกได้หลายรายการ)</h2>
-        
         <div class="flex bg-gray-100 p-1 rounded-xl mb-4 relative">
           <div id="lineBg" class="absolute w-1/2 h-[calc(100%-8px)] bg-white rounded-lg shadow-sm transition-all left-1 top-1"></div>
           <button type="button" id="btnLine1" onclick="selectLine('LINE1')" class="relative w-1/2 py-2 text-sm font-bold text-gray-800 z-10"><i class="fa-solid fa-robot"></i> ล้างด่วน (เครื่อง)</button>
           <button type="button" id="btnLine2" onclick="selectLine('LINE2')" class="relative w-1/2 py-2 text-sm font-bold text-gray-400 z-10"><i class="fa-solid fa-hands-bubbles"></i> ล้างปกติ (พนักงาน)</button>
         </div>
         <input type="hidden" id="selectedLineType" value="LINE1">
-
         <div id="servicesContainer" class="space-y-4 max-h-80 overflow-y-auto pr-1"></div>
       </div>
 
@@ -69,7 +65,7 @@
         <input type="hidden" id="bookDate" required>
         
         <div id="timeSlots" class="grid grid-cols-3 gap-2 mt-2 max-h-56 overflow-y-auto">
-          <p class="col-span-3 text-center text-sm text-gray-400">กรุณาเลือกบริการและวันที่</p>
+          <p class="col-span-3 text-center text-sm font-bold text-orange-500 bg-orange-50 py-3 rounded-lg"><i class="fa-solid fa-circle-exclamation"></i> กรุณาเลือกบริการในข้อ 2 ก่อน</p>
         </div>
         <input type="hidden" id="selectedTime" required>
       </div>
@@ -78,16 +74,16 @@
         <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-truck-fast text-blue-500"></i> 4. บริการรับ-ส่งรถ</h2>
         <select id="deliverySelect" class="w-full p-3 border rounded-xl bg-gray-50 text-sm mb-4" onchange="toggleDelivery()">
           <option value="none">ขับมาเอง (ไม่ใช้บริการ)</option>
-          <option value="pickup">ให้ร้านไปรับ (พิกัดจุดรับรถ)</option>
-          <option value="dropoff">ให้ร้านไปส่ง (พิกัดจุดส่งรถ)</option>
+          <option value="pickup">ให้ร้านไปรับ (ปักหมุดจุดรับ)</option>
+          <option value="dropoff">ให้ร้านไปส่ง (ปักหมุดจุดส่ง)</option>
           <option value="roundtrip_same">รับ-ส่ง ที่จุดเดียวกัน</option>
           <option value="roundtrip_diff">รับ-ส่ง คนละจุด</option>
         </select>
         
         <div id="mapContainer" class="hidden space-y-3">
           <div id="markerToggle" class="hidden flex gap-2 mb-2">
-            <button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-lg text-sm font-bold bg-green-500 text-white border-2 border-green-600">📍 ปักหมุดรับรถ</button>
-            <button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-lg text-sm font-bold bg-gray-200 text-gray-600 border-2 border-transparent">📍 ปักหมุดส่งรถ</button>
+            <button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-lg text-sm font-bold bg-green-500 text-white border-2 border-green-600">📍 หมุดรับรถ</button>
+            <button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-lg text-sm font-bold bg-gray-200 text-gray-600 border-2 border-transparent">📍 หมุดส่งรถ</button>
           </div>
 
           <div id="map" class="shadow-inner border border-gray-200"></div>
@@ -102,7 +98,7 @@
       </div>
 
       <div class="bg-gray-800 p-5 rounded-2xl shadow-lg text-white">
-        <h2 class="font-bold mb-3 border-b border-gray-600 pb-2"><i class="fa-solid fa-receipt"></i> สรุปรายการ (Order Summary)</h2>
+        <h2 class="font-bold mb-3 border-b border-gray-600 pb-2"><i class="fa-solid fa-receipt"></i> สรุปรายการ</h2>
         <div id="summaryList" class="space-y-1 text-sm text-gray-300 mb-3"></div>
         <div class="flex justify-between text-sm text-gray-300 mb-3">
           <span>ค่าบริการรับ-ส่ง (ประเมิน)</span>
@@ -111,7 +107,7 @@
         
         <div class="flex gap-2 mb-4">
           <input type="text" placeholder="โค้ดส่วนลด / แพ็กเกจ" class="w-2/3 p-2 rounded bg-gray-700 text-white text-sm border border-gray-600">
-          <button type="button" class="w-1/3 bg-gray-600 rounded text-sm font-bold">ใช้โค้ด</button>
+          <button type="button" class="w-1/3 bg-gray-600 rounded text-sm font-bold hover:bg-gray-500 transition">ใช้โค้ด</button>
         </div>
 
         <div class="flex justify-between items-end border-t border-gray-600 pt-3">
@@ -127,17 +123,23 @@
   </div>
 
   <script>
-    // ⚠️ แก้ไข API_URL เป็นของ Google Apps Script ของคุณโอม
+    // ⚠️ แก้ไข API_URL
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
     
     let masterData = {};
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     let map, markerPickup, markerDropoff;
-    let activePin = 'pickup'; // สำหรับคุมว่าจะขยับหมุดไหน
+    let activePin = 'pickup';
 
     async function init() {
       await loadInitialData();
-      flatpickr("#inlineCalendar", { inline: true, locale: "th", minDate: "today", onChange: function(d, dateStr) { document.getElementById('bookDate').value = dateStr; generateTimeSlots(); } });
+      flatpickr("#inlineCalendar", { 
+        inline: true, locale: "th", minDate: "today", 
+        onChange: function(d, dateStr) { 
+          document.getElementById('bookDate').value = dateStr; 
+          generateTimeSlots(); 
+        } 
+      });
       document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
     }
 
@@ -173,9 +175,6 @@
       renderServices();
     }
 
-    // ==========================================
-    // เรนเดอร์ Checkbox บริการ (Multi-select)
-    // ==========================================
     function renderServices() {
       const size = document.getElementById('carSizeSelect').value;
       const container = document.getElementById('servicesContainer');
@@ -185,7 +184,6 @@
       for (const cat in grouped) {
         html += `<div class="font-bold text-xs text-gray-500 mb-2 mt-4 ml-1">${cat}</div>`;
         grouped[cat].forEach(s => {
-          // ดึงราคาตาม Size
           const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl);
           html += `
           <label class="block relative cursor-pointer mb-2">
@@ -207,9 +205,6 @@
       updateSummary();
     }
 
-    // ==========================================
-    // คำนวณสรุปยอด (ราคารวม, เวลา, ค่าส่ง)
-    // ==========================================
     function updateSummary() {
       const checked = document.querySelectorAll('.checkbox-custom:checked');
       let totalSvcPrice = 0;
@@ -222,23 +217,28 @@
         summaryHtml += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`;
       });
 
-      document.getElementById('summaryList').innerHTML = summaryHtml || '<span>ยังไม่ได้เลือกบริการ</span>';
+      document.getElementById('summaryList').innerHTML = summaryHtml || '<span class="text-gray-500 italic">ยังไม่ได้เลือกบริการ</span>';
       
-      // คิดค่าส่งเบื้องต้น (ใช้ระยะทางเส้นตรง Haversine)
       const deliveryFee = calculateDeliveryFee();
       document.getElementById('sumDelivery').textContent = deliveryFee > 0 ? `${deliveryFee}.-` : '0.-';
-      
-      const grandTotal = totalSvcPrice + deliveryFee;
-      document.getElementById('sumTotal').textContent = `${grandTotal}.-`;
-
-      // เก็บ TotalTime ไว้สร้าง Slot
+      document.getElementById('sumTotal').textContent = `${totalSvcPrice + deliveryFee}.-`;
       document.getElementById('bookingForm').dataset.totalTime = totalSvcTime;
-      generateTimeSlots();
+      
+      generateTimeSlots(); // สั่งรีเฟรชเวลา
     }
 
     // ==========================================
-    // สร้าง Slot เวลา (อิงจากผลรวมเวลาที่เลือก)
+    // 🛠️ แก้ไขบั๊กการคำนวณเวลา (Time Slot Logic)
     // ==========================================
+    function formatTimeString(val) {
+      if (!val) return '08:00';
+      if (typeof val === 'string' && val.includes('T')) {
+        const d = new Date(val);
+        return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+      }
+      return String(val).substring(0, 5); // รองรับกรณีเป็นสตริง "08:00:00"
+    }
+
     function generateTimeSlots() {
       const branchId = document.getElementById('branchSelect').value;
       const type = document.getElementById('selectedLineType').value;
@@ -246,13 +246,20 @@
       const slotContainer = document.getElementById('timeSlots');
       const bookDate = document.getElementById('bookDate').value;
       
-      if(!branchId || totalTime === 0 || !bookDate) {
-        slotContainer.innerHTML = '<p class="col-span-3 text-center text-sm text-gray-400 py-4">กรุณาเลือกบริการอย่างน้อย 1 รายการ</p>';
+      if(!branchId || !bookDate || totalTime === 0) {
+        slotContainer.innerHTML = '<p class="col-span-3 text-center text-sm font-bold text-orange-500 bg-orange-50 py-3 rounded-lg"><i class="fa-solid fa-circle-exclamation"></i> กรุณาเลือกบริการในข้อ 2 ก่อน</p>';
         return;
       }
 
       const branch = masterData.branches.find(b => b.branch_id === branchId);
-      const openT = branch.open_time.split(':'); const closeT = branch.close_time.split(':');
+      
+      // ดึงเวลาเปิดปิด แล้วแปลงผ่าน formatTimeString เพื่อแก้บั๊ก
+      const openStr = formatTimeString(branch.open_time);
+      const closeStr = formatTimeString(branch.close_time);
+
+      const openT = openStr.split(':'); 
+      const closeT = closeStr.split(':');
+      
       let currentMin = parseInt(openT[0]) * 60 + parseInt(openT[1]);
       const endMin = parseInt(closeT[0]) * 60 + parseInt(closeT[1]);
       
@@ -264,10 +271,14 @@
         
         html += `<div onclick="selectSlot(this, '${timeStr}')" class="time-slot border border-gray-200 bg-white text-gray-700 text-center py-2 rounded-lg cursor-pointer hover:border-blue-500 transition text-sm font-bold shadow-sm">${timeStr}</div>`;
         
-        if (type === 'LINE1') currentMin += 10; 
-        else currentMin += (totalTime + (parseInt(branch.buffer_time) || 10)); 
+        if (type === 'LINE1') {
+           currentMin += 10; 
+        } else {
+           currentMin += (totalTime + (parseInt(branch.buffer_time) || 10)); 
+        }
       }
-      slotContainer.innerHTML = html;
+      
+      slotContainer.innerHTML = html || '<p class="col-span-3 text-center text-sm text-gray-400 py-4">คิวเต็ม หรือไม่มีเวลาว่างในสาขานี้</p>';
       document.getElementById('selectedTime').value = '';
     }
 
@@ -292,11 +303,10 @@
       
       if(!map) initMap();
       
-      // จัดการหมุด
-      if(val === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); }
-      else if(val === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); }
-      else if(val === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); } // ใช้หมุดรับเป็นตัวแทน
-      else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); } // โชว์ 2 หมุด
+      if(val === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); }
+      else if(val === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); setActivePin('dropoff'); }
+      else if(val === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); }
+      else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); }
       
       updateSummary();
     }
@@ -320,19 +330,21 @@
 
       map = L.map('map').setView([bLat, bLng], 14);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-      
-      // หมุดสาขา (สีน้ำเงิน)
-      L.marker([bLat, bLng]).addTo(map).bindPopup("สาขาของร้าน");
+      L.marker([bLat, bLng]).addTo(map).bindPopup("สาขาของร้าน").openPopup();
 
-      // หมุดรับรถ (สีเขียว) และ หมุดส่งรถ (สีแดง)
-      markerPickup = L.marker([bLat+0.005, bLng], {draggable: true}).addTo(map);
-      markerDropoff = L.marker([bLat-0.005, bLng], {draggable: true}).addTo(map);
+      // หมุดสีเขียว (รับ)
+      const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+      // หมุดสีแดง (ส่ง)
+      const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+      markerPickup = L.marker([bLat+0.005, bLng], {draggable: true, icon: greenIcon}).addTo(map);
+      markerDropoff = L.marker([bLat-0.005, bLng], {draggable: true, icon: redIcon}).addTo(map);
       
       savePinLocation('pickup', markerPickup.getLatLng());
       savePinLocation('dropoff', markerDropoff.getLatLng());
 
-      markerPickup.on('dragend', (e) => { savePinLocation('pickup', e.target.getLatLng()); });
-      markerDropoff.on('dragend', (e) => { savePinLocation('dropoff', e.target.getLatLng()); });
+      markerPickup.on('dragend', (e) => savePinLocation('pickup', e.target.getLatLng()));
+      markerDropoff.on('dragend', (e) => savePinLocation('dropoff', e.target.getLatLng()));
 
       map.on('click', (e) => {
         if(activePin === 'pickup') { markerPickup.setLatLng(e.latlng); savePinLocation('pickup', e.latlng); }
@@ -343,7 +355,7 @@
     function savePinLocation(type, latlng) {
       document.getElementById(`${type}Lat`).value = latlng.lat;
       document.getElementById(`${type}Lng`).value = latlng.lng;
-      updateSummary(); // คำนวณระยะทางใหม่
+      updateSummary();
     }
 
     function getCurrentGPS() {
@@ -355,11 +367,10 @@
           if(activePin==='pickup') { markerPickup.setLatLng(ll); savePinLocation('pickup', {lat:ll[0], lng:ll[1]}); }
           else { markerDropoff.setLatLng(ll); savePinLocation('dropoff', {lat:ll[0], lng:ll[1]}); }
           Swal.close();
-        });
+        }, () => { Swal.fire('แจ้งเตือน', 'กรุณาอนุญาตให้เข้าถึงตำแหน่ง GPS', 'error') });
       }
     }
 
-    // คำนวณระยะทาง (เส้นตรงประเมิน)
     function calcCrow(lat1, lon1, lat2, lon2) {
       const R = 6371; const dLat = (lat2-lat1)*Math.PI/180; const dLon = (lon2-lon1)*Math.PI/180;
       const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
@@ -379,24 +390,15 @@
       const bLat = parseFloat(branch.lat); const bLng = parseFloat(branch.lng);
 
       let dist1 = 0, dist2 = 0;
-      if(val === 'pickup' || val === 'roundtrip_same' || val === 'roundtrip_diff') {
-        dist1 = calcCrow(bLat, bLng, parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value));
-      }
-      if(val === 'dropoff' || val === 'roundtrip_diff') {
-        dist2 = calcCrow(bLat, bLng, parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value));
-      }
-      // ถ้า roundtrip_same ขากลับก็วิ่งเท่าขาไป
+      if(val === 'pickup' || val === 'roundtrip_same' || val === 'roundtrip_diff') dist1 = calcCrow(bLat, bLng, parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value));
+      if(val === 'dropoff' || val === 'roundtrip_diff') dist2 = calcCrow(bLat, bLng, parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value));
       if(val === 'roundtrip_same') dist2 = dist1;
 
-      // หักระยะฟรี (แยกคิดรายเที่ยวตามที่คุณโอมแนะนำ)
       const cost1 = Math.max(0, dist1 - freeKm) * feeKm;
       const cost2 = Math.max(0, dist2 - freeKm) * feeKm;
       return Math.round(cost1 + cost2);
     }
 
-    // ==========================================
-    // ส่งข้อมูล
-    // ==========================================
     document.getElementById('bookingForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const time = document.getElementById('selectedTime').value;
@@ -408,15 +410,15 @@
       const payload = {
         lineUid: userUid,
         vehicleId: document.getElementById('vehicleSelect').value,
-        serviceType: checkedSvcs, // ตอนนี้ส่งเป็น String รวม ID บริการ (เช่น SRV-01,SRV-02)
+        serviceType: checkedSvcs,
         bookingDate: document.getElementById('bookDate').value + 'T' + time,
         deliveryType: document.getElementById('deliverySelect').value,
-        lat: document.getElementById('pickupLat').value, // ย่อส่งแค่จุดเดียวชั่วคราว
+        lat: document.getElementById('pickupLat').value,
         lng: document.getElementById('pickupLng').value,
-        extraFee: calculateDeliveryFee() // แนบค่าส่งไปบันทึก
+        extraFee: calculateDeliveryFee()
       };
 
-      Swal.fire({ title: 'กำลังจองคิว...', didOpen: () => Swal.showLoading() });
+      Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
         const res = await fetch(`${API_URL}?action=submitBooking`, { method: 'POST', body: JSON.stringify(payload) });
         const result = await res.json();
