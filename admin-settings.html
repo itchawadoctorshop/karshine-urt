@@ -141,9 +141,11 @@
                 <option value="ADD-ON" ${data.category==='ADD-ON'?'selected':''}>ADD-ON</option>
                 <option value="PREMIUM" ${data.category==='PREMIUM'?'selected':''}>PREMIUM</option>
                 <option value="TOP WRAP" ${data.category==='TOP WRAP'?'selected':''}>TOP WRAP</option>
-                <option value="OTHER" ${data.category==='OTHER'?'selected':''}>หมวดหมู่ใหม่...</option>
             </select>
             <input id="s-name" class="swal2-input" placeholder="ชื่อบริการ" value="${data.service_name || ''}">
+            
+            <textarea id="s-detail" class="swal2-textarea" placeholder="รายละเอียดบริการ (แสดงให้ลูกค้าเห็น)" rows="2" style="margin: 10px auto; width: 80%;">${data.detail || ''}</textarea>
+
             <div class="flex gap-2 px-4 mt-2">
                 <input id="s-pm" type="number" class="swal2-input !w-1/3 !m-0" placeholder="ราคา M" value="${data.price_m || ''}">
                 <input id="s-pl" type="number" class="swal2-input !w-1/3 !m-0" placeholder="ราคา L" value="${data.price_l || ''}">
@@ -158,6 +160,7 @@
                     actionType: actionType,
                     category: document.getElementById('s-cat').value,
                     name: document.getElementById('s-name').value,
+                    detail: document.getElementById('s-detail').value, // รับค่า Detail
                     priceM: document.getElementById('s-pm').value || 0,
                     priceL: document.getElementById('s-pl').value || 0,
                     priceXL: document.getElementById('s-pxl').value || 0,
@@ -167,22 +170,31 @@
         });
 
         if (v && v.name) {
-            const url = `${API_URL}?action=manageService&actionType=${v.actionType}&id=${v.id}&category=${encodeURIComponent(v.category)}&name=${encodeURIComponent(v.name)}&priceM=${v.priceM}&priceL=${v.priceL}&priceXL=${v.priceXL}&stdTime=${v.stdTime}`;
+            const url = `${API_URL}?action=manageService&actionType=${v.actionType}&id=${v.id}&category=${encodeURIComponent(v.category)}&name=${encodeURIComponent(v.name)}&detail=${encodeURIComponent(v.detail)}&priceM=${v.priceM}&priceL=${v.priceL}&priceXL=${v.priceXL}&stdTime=${v.stdTime}`;
             await callApi(url, actionType === 'add' ? 'เพิ่มบริการเรียบร้อย' : 'แก้ไขสำเร็จ');
         }
     }
 
+    // 🛡️ อัปเกรดระบบลบ ต้องพิมพ์คำว่า ยืนยัน กันมือลั่น
     async function deleteService(id) {
-        const result = await Swal.fire({
-            title: 'ยืนยันการลบ?',
-            text: "คุณต้องการลบบริการนี้ออกจากระบบหรือไม่",
+        const { value: confirmText } = await Swal.fire({
+            title: 'ยืนยันการลบข้อมูล?',
+            html: '<p class="text-sm text-gray-600 mb-3">หากต้องการลบบริการนี้<br>โปรดพิมพ์คำว่า <b>ยืนยัน</b> ลงในช่องด้านล่าง</p>',
+            input: 'text',
+            inputPlaceholder: 'พิมพ์คำว่า ยืนยัน',
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
-            confirmButtonText: 'ใช่, ลบเลย'
+            confirmButtonText: 'ลบข้อมูล',
+            cancelButtonText: 'ยกเลิก',
+            inputValidator: (value) => {
+                if (value !== 'ยืนยัน') {
+                    return 'คุณพิมพ์ไม่ถูกต้อง โปรดพิมพ์คำว่า ยืนยัน';
+                }
+            }
         });
 
-        if (result.isConfirmed) {
+        if (confirmText === 'ยืนยัน') {
             const url = `${API_URL}?action=manageService&actionType=delete&id=${id}`;
             await callApi(url, 'ลบบริการเรียบร้อย');
         }
