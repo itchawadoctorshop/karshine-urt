@@ -74,7 +74,7 @@
     </div>
   </section>
 
-  <section id="booking-section" class="section p-4 space-y-5">
+  <section id="booking-section" class="section p-4 space-y-5" data-total-time="0">
     <div class="bg-white p-5 rounded-3xl shadow-sm">
       <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-calendar-plus text-blue-500"></i> ขั้นตอนการจอง</h2>
       
@@ -225,7 +225,6 @@
         masterData = data.data;
         document.getElementById('userPoints').innerText = document.getElementById('profilePoints').innerText = masterData.points || 0;
         
-        // Render Car List
         const carList = document.getElementById('carList');
         const vehicleSelect = document.getElementById('vehicleSelect');
         if(masterData.vehicles.length > 0) {
@@ -239,9 +238,7 @@
           vehicleSelect.innerHTML = '<option value="">ยังไม่มีข้อมูลรถ</option>';
         }
 
-        // Render Branch
         document.getElementById('branchSelect').innerHTML = masterData.branches.map(b => `<option value="${b.branch_id}">${b.branch_name}</option>`).join('');
-        
         selectLine('LINE1');
         document.getElementById('loading').style.display = 'none';
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
@@ -274,7 +271,7 @@
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
 
-    // --- 📅 Booking System (Combined Logic) ---
+    // --- 📅 Booking System ---
     function selectLine(type) {
       document.getElementById('selectedLineType').value = type;
       document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)';
@@ -321,25 +318,29 @@
       const fee = calculateDeliveryFee();
       document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ';
       document.getElementById('sumTotal').innerText = (totalP + fee) + '.-';
-      document.getElementById('bookingForm').dataset.totalTime = totalT;
+      
+      // ✅ แก้ไขบั๊กตรงนี้: ชี้เป้าหมายไปที่ 'booking-section' แทน 'bookingForm'
+      document.getElementById('booking-section').dataset.totalTime = totalT; 
+      
       document.getElementById('selectedTime').value = ''; document.getElementById('displaySelectedTime').innerText = '- - : - -';
     }
 
     function openTimeSlotModal() {
       const branchId = document.getElementById('branchSelect').value;
       const type = document.getElementById('selectedLineType').value;
-      const totalT = parseInt(document.getElementById('bookingForm').dataset.totalTime) || 0;
+      
+      // ✅ แก้ไขบั๊กตรงนี้: ชี้เป้าหมายไปที่ 'booking-section' เช่นกัน
+      const totalT = parseInt(document.getElementById('booking-section').dataset.totalTime) || 0;
+      
       const date = document.getElementById('bookDate').value;
       if(!branchId || totalT === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการก่อนครับ', 'warning');
       
-      // Slot Logic (Simplified for UI render)
       const branch = masterData.branches.find(b => b.branch_id === branchId);
       const openT = (branch.open_time || '08:00').substring(0,5).split(':');
       const closeT = (branch.close_time || '18:00').substring(0,5).split(':');
       let curr = parseInt(openT[0])*60 + parseInt(openT[1]);
       const end = parseInt(closeT[0])*60 + parseInt(closeT[1]);
       
-      // Check Timeline (Double Booking)
       let tl1 = new Array(1440).fill(0), tl2 = new Array(1440).fill(0);
       masterData.activeBookings.forEach(b => {
         if(b.branchId !== branchId || !b.bookingDate.startsWith(date)) return;
@@ -366,7 +367,6 @@
 
     function confirmTime(t) { document.getElementById('selectedTime').value = t; document.getElementById('displaySelectedTime').innerText = t + ' น.'; Swal.close(); }
 
-    // --- Submit ---
     async function submitBooking() {
       const time = document.getElementById('selectedTime').value;
       if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลา', 'warning');
@@ -381,10 +381,9 @@
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     }
 
-    // (แผนที่และ GPS ตัดสั้นลงเพื่อประหยัดพื้นที่ แต่ฟังก์ชันหลักครบถ้วน)
     function toggleDelivery() { const v = document.getElementById('deliverySelect').value; document.getElementById('mapContainer').style.display = v==='none'?'none':'block'; if(v!=='none' && !map) initMap(); updateSummary(); }
     function initMap() { map = L.map('map').setView([9.143, 99.330], 13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); markerPickup = L.marker([9.143, 99.330], {draggable: true}).addTo(map); markerPickup.on('dragend', updateSummary); }
-    function calculateDeliveryFee() { return 0; /* Logic เดิมที่คุณโอมบรีฟไว้ */ }
+    function calculateDeliveryFee() { return 0; }
 
     document.addEventListener('DOMContentLoaded', init);
   </script>
