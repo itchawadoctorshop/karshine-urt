@@ -227,14 +227,25 @@
     let map, markerPickup, markerDropoff, activePin = 'pickup';
     let currentTotalTime = 0; 
 
-    // 🎯 คืนชีพฟังก์ชันแปลงเวลา Google Sheets ให้ถูกต้อง
-    function formatTimeString(val) {
-      if (!val) return '08:00';
-      if (typeof val === 'string' && val.includes('T')) {
-        const d = new Date(val); 
-        return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }).substring(0,5);
+    // 🎯 ฟังก์ชันสกัดเวลาแบบปลอดภัย 100% (แก้บั๊ก NaN ในมือถือบางรุ่น)
+    function parseTimeStringToMinutes(val, defaultMins) {
+      if (!val) return defaultMins;
+      let str = String(val);
+
+      // กรณีส่งมาจาก Google Sheets เป็น ISO Date (1899-12-30T01:00:00.000Z)
+      if (str.includes('T')) {
+          const d = new Date(str);
+          if (!isNaN(d.getTime())) {
+              return d.getHours() * 60 + d.getMinutes();
+          }
       }
-      return String(val).substring(0, 5); 
+      // กรณีเป็น Text ธรรมดา ลบอักษรซ่อนเร้นทั้งหมดให้เหลือแค่ตัวเลขกับ :
+      str = str.replace(/[^0-9:]/g, '');
+      const parts = str.split(':');
+      if (parts.length >= 2) {
+          return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      }
+      return defaultMins;
     }
 
     async function init() {
@@ -313,11 +324,8 @@
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const payload = new URLSearchParams({
-        action: 'addVehicle',
-        lineUid: userUid,
-        licensePlate: document.getElementById('vPlate').value,
-        brandModel: document.getElementById('vModel').value,
-        color: document.getElementById('vColor').value
+        action: 'addVehicle', lineUid: userUid, licensePlate: document.getElementById('vPlate').value, 
+        brandModel: document.getElementById('vModel').value, color: document.getElementById('vColor').value
       });
 
       Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
@@ -326,9 +334,7 @@
         const result = await res.json();
         if(result.status === 'success') { 
           Swal.fire('สำเร็จ', 'บันทึกข้อมูลรถยนต์เรียบร้อย', 'success'); 
-          e.target.reset(); 
-          await refreshData(); 
-          showSection('home-section');
+          e.target.reset(); await refreshData(); showSection('home-section');
         }
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
@@ -393,7 +399,7 @@
       document.getElementById('displaySelectedTime').innerText = '- - : - -';
     }
 
-    // 🎯 อัปเดตลูปการเช็คคิวซ้อน (Double Booking) ให้แม่นยำ 100%
+    // 🎯 โค้ดสร้างปุ่มเวลาที่อัปเกรดความเสถียรแล้ว
     function openTimeSlotModal() {
       const branchId = document.getElementById('branchSelect').value;
       const type = document.getElementById('selectedLineType').value;
@@ -402,14 +408,12 @@
       
       if(!branchId || totalT === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการในขั้นตอนที่ 2 ก่อนครับ', 'warning');
       
-      // ⚠️ การใช้ == จะปลอดภัยกว่า === ในกรณีที่ Google Sheets ส่ง ID มาเป็น Number
       const branch = masterData.branches.find(b => b.branch_id == branchId);
       if(!branch) return Swal.fire('Error', 'ไม่พบข้อมูลสาขา', 'error');
 
-      const openStr = formatTimeString(branch.open_time);
-      const closeStr = formatTimeString(branch.close_time);
-      let curr = parseInt(openStr.split(':')[0])*60 + parseInt(openStr.split(':')[1]);
-      const end = parseInt(closeStr.split(':')[0])*60 + parseInt(closeStr.split(':')[1]);
+      // ใช้ฟังก์ชันแบบใหม่ ดึงเวลาปลอดภัย 100%
+      let curr = parseTimeStringToMinutes(branch.open_time, 8 * 60);
+      const end = parseTimeStringToMinutes(branch.close_time, 18 * 60);
       
       let tl1 = new Array(1440).fill(0), tl2 = new Array(1440).fill(0);
       if(masterData.activeBookings) {
@@ -417,9 +421,9 @@
           if(b.branchId != branchId || !b.bookingDate.startsWith(date)) return;
           const timePart = b.bookingDate.split('T')[1];
           if(!timePart) return;
-          const start = parseInt(timePart.split(':')[0])*60 + parseInt(timePart.split(':')[1]);
+          const start = parseTimeStringToMinutes(timePart, 0);
           
-          let bDuration = 30; // เผื่อเหนียว
+          let bDuration = 30; 
           if (b.serviceType) {
               bDuration = 0;
               b.serviceType.split(',').forEach(id => {
@@ -447,7 +451,6 @@
       const stepMin = type === 'LINE1' ? 10 : 30;
       const capL1 = 1;
       const capL2 = parseInt(branch.bay_capacity) || 1;
-
       let slotsFound = false;
 
       while(curr + totalT <= end) {
@@ -471,13 +474,13 @@
         }
         
         slotsFound = true;
-        html += avail ? `<button onclick="confirmTime('${timeStr}')" class="p-3 border border-blue-100 rounded-2xl font-bold text-sm bg-white hover:bg-blue-600 hover:text-white transition shadow-sm">${timeStr}</button>` 
-                      : `<div class="p-3 bg-gray-100 text-gray-400 rounded-2xl text-[10px] flex flex-col items-center justify-center font-bold leading-tight"><span class="line-through">${timeStr}</span><span>${reason}</span></div>`;
+        html += avail ? `<button onclick="confirmTime('${timeStr}')" class="p-3 border border-blue-200 rounded-xl font-bold text-sm bg-white hover:bg-blue-600 hover:text-white transition shadow-sm text-gray-700">${timeStr}</button>` 
+                      : `<div class="p-3 bg-gray-100 text-gray-400 rounded-xl text-[10px] flex flex-col items-center justify-center font-bold leading-tight border border-gray-200"><span class="line-through">${timeStr}</span><span class="text-[8px] font-normal mt-1">${reason}</span></div>`;
         curr += stepMin;
       }
       html += '</div>';
       
-      if(!slotsFound) html = '<p class="text-center text-gray-500 py-4">ไม่มีเวลาให้บริการในวันนี้</p>';
+      if(!slotsFound) html = '<p class="text-center text-gray-500 py-6 text-sm font-bold">คิวเต็ม หรือปิดทำการในวันนี้</p>';
 
       Swal.fire({ title: 'เลือกเวลาจอง', html: html, showConfirmButton: false, customClass: { popup: 'rounded-3xl' } });
     }
