@@ -157,7 +157,7 @@
 
   <section id="cars-section" class="section p-4 space-y-5">
     <div class="bg-white p-6 rounded-3xl shadow-sm">
-      <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-car-side text-red-500"></i> รถยนต์ของฉัน</h2>
+      <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-car text-red-500"></i> รถยนต์ของฉัน</h2>
       <div id="carList" class="space-y-3">
         <div class="text-center py-4 text-gray-400 italic">กำลังโหลดรายการรถ...</div>
       </div>
@@ -208,7 +208,7 @@
       <i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">หน้าหลัก</span>
     </button>
     <button onclick="navToBooking()" id="nav-booking" class="flex flex-col items-center gap-1 text-gray-300 transition-all">
-      <i class="fa-solid fa-calendar-check text-xl"></i><span class="text-[10px] font-bold">จองคิว</span>
+      <i class="fa-solid fa-calendar-plus text-xl"></i><span class="text-[10px] font-bold">จองคิว</span>
     </button>
     <button onclick="showSection('cars-section')" id="nav-cars" class="flex flex-col items-center gap-1 text-gray-300 transition-all">
       <i class="fa-solid fa-car text-xl"></i><span class="text-[10px] font-bold">รถของฉัน</span>
@@ -220,7 +220,7 @@
 
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
-    const LIFF_ID = "2009981892-1HxmA42h"; 
+    const LIFF_ID = "2009981892-1HxmA42h"; // ✅ อัปเดต LIFF ID ของคุณโอม
     
     let masterData = {};
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
@@ -257,10 +257,10 @@
 
     async function refreshData() {
       try {
-        // 🎯 เคล็ดลับ: เติม Date.now() ต่อท้าย URL เพื่อบังคับให้มือถือดึงข้อมูลสดใหม่เสมอ ไม่เอาของเก่ามาโชว์!
+        // ใช้ Date.now() ป้องกันมือถือจำแคชเก่า
         const res = await fetch(`${API_URL}?action=getInitialBookingData&lineUid=${userUid}&t=${Date.now()}`);
         const data = await res.json();
-        masterData = data.data; // ดึง .data มาใช้
+        masterData = data.data; 
         
         document.getElementById('userPoints').innerText = document.getElementById('profilePoints').innerText = masterData.points || 0;
         
@@ -269,7 +269,7 @@
         
         if(masterData.vehicles && masterData.vehicles.length > 0) {
           carList.innerHTML = masterData.vehicles.map(v => `<div class="p-4 bg-gray-50 rounded-2xl flex items-center gap-3 border border-gray-100">
-            <div class="bg-red-100 p-2 rounded-lg text-red-500"><i class="fa-solid fa-car-side"></i></div>
+            <div class="bg-red-100 p-2 rounded-lg text-red-500"><i class="fa-solid fa-car"></i></div>
             <div class="flex-1"><b class="text-gray-800">${v.plate}</b><br><span class="text-[10px] text-gray-400">${v.model} (${v.color})</span></div>
           </div>`).join('');
           vSel.innerHTML = masterData.vehicles.map(v => `<option value="${v.id}">${v.plate} - ${v.model}</option>`).join('');
@@ -301,23 +301,26 @@
       } else { showSection('booking-section'); }
     }
 
+    // 🎯 ใช้ URLSearchParams เพื่อแก้ปัญหาการส่งข้อมูลแบบ JSON ที่ทำให้ข้อมูลใน Sheet ว่างเปล่า
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const payload = { 
-        action: 'addVehicle', 
-        lineUid: userUid, 
-        licensePlate: document.getElementById('vPlate').value, 
-        brandModel: document.getElementById('vModel').value, 
-        color: document.getElementById('vColor').value 
-      };
+      
+      const payload = new URLSearchParams({
+        action: 'addVehicle',
+        lineUid: userUid,
+        licensePlate: document.getElementById('vPlate').value,
+        brandModel: document.getElementById('vModel').value,
+        color: document.getElementById('vColor').value
+      });
+
       Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
         const res = await fetch(API_URL, { 
           method: 'POST', 
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
-          body: JSON.stringify(payload) 
+          body: payload // ส่งแบบฟอร์มมาตรฐาน เบราว์เซอร์ไหนก็อ่านออก 100%
         });
         const result = await res.json();
+        
         if(result.status === 'success') { 
           Swal.fire('สำเร็จ', 'บันทึกข้อมูลรถยนต์เรียบร้อย', 'success'); 
           e.target.reset(); 
@@ -522,30 +525,35 @@
       return Math.round(total);
     }
 
+    // 🎯 ใช้ URLSearchParams สำหรับระบบจองคิวด้วย (เพื่อความชัวร์ 100%)
     async function submitBooking() {
       const time = document.getElementById('selectedTime').value;
       if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจองก่อนครับ', 'warning');
       
       const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(',');
-      const payload = { 
-        action: 'submitBooking', 
-        lineUid: userUid, 
-        vehicleId: document.getElementById('vehicleSelect').value, 
-        serviceType: svcs, 
-        bookingDate: document.getElementById('bookDate').value + 'T' + time, 
-        deliveryType: document.getElementById('deliverySelect').value, 
-        extraFee: calculateDeliveryFee(), 
-        branchId: document.getElementById('branchSelect').value, 
+      
+      const payload = new URLSearchParams({
+        action: 'submitBooking',
+        lineUid: userUid,
+        vehicleId: document.getElementById('vehicleSelect').value,
+        serviceType: svcs,
+        bookingDate: document.getElementById('bookDate').value + 'T' + time,
+        deliveryType: document.getElementById('deliverySelect').value,
+        extraFee: calculateDeliveryFee(),
+        branchId: document.getElementById('branchSelect').value,
         lineType: document.getElementById('selectedLineType').value,
         pickupLat: document.getElementById('pickupLat').value,
         pickupLng: document.getElementById('pickupLng').value,
         dropoffLat: document.getElementById('dropoffLat').value,
         dropoffLng: document.getElementById('dropoffLng').value
-      };
+      });
       
       Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
-        const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+        const res = await fetch(API_URL, { 
+          method: 'POST', 
+          body: payload 
+        });
         const result = await res.json();
         if(result.status === 'success') { 
           Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success').then(() => window.location.reload()); 
