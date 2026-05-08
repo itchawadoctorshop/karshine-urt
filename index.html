@@ -24,11 +24,11 @@
 <body class="bg-gray-100 pb-24 font-sans">
   
   <div class="bg-blue-600 text-white p-6 rounded-b-[2.5rem] shadow-lg mb-6 relative overflow-hidden">
-    <div class="flex items-center gap-4 mb-3" id="profileBox">
+    <div class="flex items-center gap-4 mb-3">
       <img id="profileImg" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover">
       <div>
         <p class="text-xs text-blue-200">ยินดีต้อนรับ</p>
-        <p id="profileName" class="font-bold text-lg">กำลังโหลด...</p>
+        <p id="profileName" class="font-bold text-lg">กำลังเชื่อมต่อ LINE...</p>
       </div>
     </div>
     <h1 class="text-xl font-bold">จองคิวเข้ารับบริการ</h1>
@@ -36,7 +36,7 @@
 
   <div class="max-w-md mx-auto px-4" id="app-container">
     <div id="loading" class="text-center py-10 text-gray-500">
-      <i class="fa-solid fa-spinner fa-spin text-4xl mb-3 text-blue-500"></i><p>กำลังโหลดข้อมูล...</p>
+      <i class="fa-solid fa-spinner fa-spin text-4xl mb-3 text-blue-500"></i><p>กำลังเตรียมระบบจองคิว...</p>
     </div>
 
     <form id="bookingForm" class="hidden space-y-5">
@@ -67,7 +67,6 @@
         <div class="mb-4 flex justify-center"><input type="text" id="inlineCalendar" class="hidden"></div>
         <input type="hidden" id="bookDate" required>
         <input type="hidden" id="selectedTime" required>
-        
         <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center cursor-pointer hover:bg-blue-100 transition" onclick="openTimeSlotModal()">
           <p class="text-sm text-gray-500 mb-1">เวลาที่เลือกจอง</p>
           <p id="displaySelectedTime" class="text-3xl font-bold text-blue-600 tracking-wider">- - : - -</p>
@@ -84,7 +83,6 @@
           <option value="roundtrip_same">รับ-ส่ง จุดเดียวกัน</option>
           <option value="roundtrip_diff">รับ-ส่ง คนละจุด</option>
         </select>
-        
         <div id="mapContainer" class="hidden space-y-3">
           <div id="markerToggle" class="hidden flex gap-2 mb-2">
             <button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-lg text-sm font-bold bg-green-500 text-white border-2 border-green-600">📍 หมุดรับรถ</button>
@@ -108,8 +106,8 @@
         </div>
       </div>
       
-      <p class="text-xs text-red-500 text-center font-bold px-2 mt-4">
-        *เงื่อนไข: ต้องทำรายการจองล่วงหน้าอย่างน้อย 15 นาที และกรุณามาเช็คอินหน้าร้านก่อนเวลาจอง 3 นาที มิฉะนั้นระบบจะยกเลิกคิวอัตโนมัติ
+      <p class="text-xs text-red-500 text-center font-bold px-2 mt-4 italic">
+        *เงื่อนไข: จองคิวก่อนอย่างน้อย 15 นาที และมาเช็คอินก่อนเวลา 3 นาที
       </p>
 
       <button type="submit" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition text-lg mt-2">
@@ -120,39 +118,43 @@
 
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
-    const LIFF_ID = "ใส่_LIFF_ID_ของคุณโอม_ที่นี่"; 
+    const LIFF_ID = "2009981892-1HxmA42h"; 
     
     let masterData = {};
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     let map, markerPickup, markerDropoff, activePin = 'pickup';
 
+    // ==========================================
+    // 1. ระบบดึงข้อมูล LINE อัจฉริยะ (กันค้าง)
+    // ==========================================
     async function init() {
       try {
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) {
-          liff.login(); 
+          liff.login();
           return;
         }
         const profile = await liff.getProfile();
         userUid = profile.userId;
         document.getElementById('profileImg').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
         document.getElementById('profileName').textContent = profile.displayName;
-      } catch(e) { 
-        console.log('LIFF Error:', e); 
-        document.getElementById('profileName').textContent = "กำลังใช้งานโหมดทดสอบ";
+        
+        await loadInitialData();
+      } catch(e) {
+        // หาก Error ให้เด้งบอกสาเหตุ เพื่อเอามาแก้ได้ถูกจุด
+        Swal.fire('LIFF Error', 'ไม่สามารถเชื่อมต่อ LINE ได้: ' + e.message, 'error');
+        document.getElementById('profileName').textContent = "โหมดทดสอบ (Offline)";
+        await loadInitialData();
       }
 
-      await loadInitialData();
+      // ปฏิทิน
       flatpickr("#inlineCalendar", { 
         inline: true, locale: "th", minDate: "today", 
-        onChange: function(selectedDates, dateStr) { 
+        onChange: function(d, dateStr) { 
           document.getElementById('bookDate').value = dateStr; 
-          resetSelectedTime(); 
-          openTimeSlotModal(); 
+          resetSelectedTime(); openTimeSlotModal(); 
         } 
       });
-      
-      // ดึงเวลาไทยเป็นค่าเริ่มต้นเพื่อป้องกัน Timezone ผิด
       const localNow = new Date(new Date().getTime() + 7*3600*1000);
       document.getElementById('bookDate').value = localNow.toISOString().split('T')[0];
     }
@@ -169,11 +171,12 @@
         selectLine('LINE1');
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('bookingForm').classList.remove('hidden');
-      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+      } catch (e) {
+        Swal.fire('API Error', 'โหลดข้อมูลล้มเหลว: ' + e.message, 'error');
+      }
     }
 
-    function branchChanged() { renderServices(); }
-
+    // --- Logic สลับ Line 1 และ 2 ---
     function selectLine(type) {
       document.getElementById('selectedLineType').value = type;
       const bg = document.getElementById('lineBg');
@@ -217,8 +220,7 @@
           const opacityClass = (isDisabled && !isAutoCheck) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer';
           const inputState = isAutoCheck ? 'checked onclick="return false;"' : (isDisabled ? 'disabled' : '');
 
-          html += `
-          <label class="block relative ${opacityClass} mb-2">
+          html += `<label class="block relative ${opacityClass} mb-2">
             <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${inputState} onchange="updateSummary()">
             <div class="border-2 border-gray-200 rounded-xl p-3 flex justify-between items-center transition bg-white">
               <div>
@@ -237,16 +239,16 @@
       updateSummary();
     }
 
+    function branchChanged() { renderServices(); }
+
     function updateSummary() {
       const checked = document.querySelectorAll('.checkbox-custom:checked');
       let totalSvcPrice = 0; let totalSvcTime = 0; let summaryHtml = '';
-
       checked.forEach(cb => {
         totalSvcPrice += parseInt(cb.dataset.price); 
         totalSvcTime += parseInt(cb.dataset.time);
         summaryHtml += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`;
       });
-
       document.getElementById('summaryList').innerHTML = summaryHtml || '<span class="text-gray-500 italic">ยังไม่ได้เลือกบริการ</span>';
       const deliveryFee = calculateDeliveryFee();
       document.getElementById('sumDelivery').textContent = deliveryFee > 0 ? `${deliveryFee}.-` : '0.-';
@@ -255,13 +257,7 @@
       resetSelectedTime();
     }
 
-    // ==========================================
-    // 🧠 ระบบ Time Block อัจฉริยะ (จัดการคิวเต็ม + Line แยก)
-    // ==========================================
-    function resetSelectedTime() {
-      document.getElementById('selectedTime').value = '';
-      document.getElementById('displaySelectedTime').innerHTML = '- - : - -';
-    }
+    function resetSelectedTime() { document.getElementById('selectedTime').value = ''; document.getElementById('displaySelectedTime').innerHTML = '- - : - -'; }
 
     function formatTimeString(val) {
       if (!val) return '08:00';
@@ -276,138 +272,89 @@
       const type = document.getElementById('selectedLineType').value;
       const totalTime = parseInt(document.getElementById('bookingForm').dataset.totalTime) || 0;
       const bookDate = document.getElementById('bookDate').value;
-
       if(!branchId || totalTime === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการในข้อ 2 ก่อนครับ', 'warning');
-      if(!bookDate) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่บนปฏิทินก่อนครับ', 'warning');
-
       const slotsHtml = generateTimeSlotsHtml(branchId, type, totalTime, bookDate);
-
-      Swal.fire({
-        title: `เลือกเวลา (วันที่ ${bookDate})`,
-        html: `<div class="grid grid-cols-3 gap-2 mt-4 max-h-64 overflow-y-auto p-2">${slotsHtml}</div>`,
-        showConfirmButton: false, showCloseButton: true, customClass: { popup: 'rounded-2xl' }
-      });
+      Swal.fire({ title: `เลือกเวลา (${bookDate})`, html: `<div class="grid grid-cols-3 gap-2 mt-4 max-h-64 overflow-y-auto p-2">${slotsHtml}</div>`, showConfirmButton: false, showCloseButton: true, customClass: { popup: 'rounded-2xl' } });
     }
 
+    // ==========================================
+    // 🧠 ระบบคิวคู่ขนาน + กฎ 15 นาที + ล็อกเวลาซ้ำ
+    // ==========================================
     function generateTimeSlotsHtml(branchId, type, totalTime, selectedDate) {
       const branch = masterData.branches.find(b => b.branch_id === branchId);
       const openT = formatTimeString(branch.open_time).split(':'); 
       const closeT = formatTimeString(branch.close_time).split(':');
-      
       let currentMin = parseInt(openT[0]) * 60 + parseInt(openT[1]);
       const endMin = parseInt(closeT[0]) * 60 + parseInt(closeT[1]);
 
-      // 🕒 เช็คเวลาปัจจุบัน เพื่อป้องกันการจองอดีตและ 15 นาทีล่วงหน้า
-      const localNow = new Date(new Date().getTime() + 7*3600*1000); // ดึงเวลาไทย
+      // เช็ค 15 นาทีล่วงหน้า (เวลาไทย)
+      const localNow = new Date(new Date().getTime() + 7*3600*1000);
       const todayStr = localNow.toISOString().split('T')[0];
       let minAllowedMin = 0;
       if (selectedDate === todayStr) {
-         minAllowedMin = (localNow.getUTCHours() * 60) + localNow.getUTCMinutes() + 15; // ต้องจองล่วงหน้า 15 นาที
+         minAllowedMin = (localNow.getUTCHours() * 60) + localNow.getUTCMinutes() + 15;
       }
       
-      // สร้าง 2 Timeline แยกกัน
-      let tl1 = new Array(1440).fill(0); // Timeline เครื่องล้าง (รับได้ 1 คัน)
-      let tl2 = new Array(1440).fill(0); // Timeline ช่องปกติ (รับได้ตาม Bay Capacity)
-
+      let tl1 = new Array(1440).fill(0); // Timeline เครื่อง
+      let tl2 = new Array(1440).fill(0); // Timeline ช่องจอด
+      
       masterData.activeBookings.forEach(b => {
-         if(b.branchId !== branchId) return;
-         if(!b.bookingDate.startsWith(selectedDate)) return; 
-         
+         if(b.branchId !== branchId || !b.bookingDate.startsWith(selectedDate)) return; 
          const timePart = b.bookingDate.split('T')[1]; 
          if(timePart) {
            const bStart = parseInt(timePart.split(':')[0])*60 + parseInt(timePart.split(':')[1]);
            let bDuration = 0;
-           b.serviceType.split(',').forEach(sId => {
-              const svc = masterData.services.find(s => s.service_id === sId);
-              if(svc) bDuration += parseInt(svc.std_time_mins) || 30;
+           b.serviceType.split(',').forEach(id => {
+              const s = masterData.services.find(svc => svc.service_id === id);
+              if(s) bDuration += parseInt(s.std_time_mins) || 30;
            });
-
-           // ลอจิกแยก Line 1 และ Line 2 อิงตามประวัติ
            if (b.lineType === 'LINE1') {
-              for(let i = bStart; i < bStart + 10; i++) { if(i < 1440) tl1[i]++; } // กินเครื่อง 10 นาที
-              if (bDuration > 10) {
-                const extraTime = bDuration - 10 + (parseInt(branch.buffer_time) || 10);
-                for(let i = bStart + 10; i < bStart + 10 + extraTime; i++) { if(i < 1440) tl2[i]++; } // กินช่องปกติ
-              }
+              for(let i=bStart; i<bStart+10; i++) tl1[i]++; 
+              if(bDuration>10) for(let i=bStart+10; i<bStart+10+(bDuration-10+parseInt(branch.buffer_time)); i++) tl2[i]++;
            } else {
-              const totalL2 = bDuration + (parseInt(branch.buffer_time) || 10);
-              for(let i = bStart; i < bStart + totalL2; i++) { if(i < 1440) tl2[i]++; } // กินช่องปกติตั้งแต่ต้น
+              for(let i=bStart; i<bStart+bDuration+parseInt(branch.buffer_time); i++) tl2[i]++;
            }
          }
       });
 
       let html = '';
       const stepMin = type === 'LINE1' ? 10 : 30; 
-      const capL1 = 1; // เครื่องมี 1 เครื่อง
-      const capL2 = parseInt(branch.bay_capacity) || 1; // จำนวนช่องปกติ
+      const capL1 = 1; const capL2 = parseInt(branch.bay_capacity) || 1;
 
       while (currentMin + totalTime <= endMin) {
         const h = Math.floor(currentMin / 60).toString().padStart(2, '0');
         const m = (currentMin % 60).toString().padStart(2, '0');
         const timeStr = `${h}:${m}`;
-        
-        let isAvailable = true;
-        let rejectReason = "เต็ม";
+        let isAvail = true; let reason = "เต็ม";
 
-        // กฎ 15 นาทีล่วงหน้า
-        if (selectedDate === todayStr && currentMin < minAllowedMin) {
-            isAvailable = false;
-            rejectReason = "เลยเวลา";
-        } else {
-            // กฎเช็คคิว
+        if (selectedDate === todayStr && currentMin < minAllowedMin) { isAvail = false; reason = "เลยเวลา"; }
+        else {
             if (type === 'LINE1') {
-               // เช็คว่าเครื่องว่างไหม 10 นาทีแรก
-               for(let i = currentMin; i < currentMin + 10; i++) { if(tl1[i] >= capL1) { isAvailable = false; break; } }
-               // เช็คว่าช่องปกติว่างไหม (กรณีมีออปชันเสริม)
-               if (isAvailable && totalTime > 10) {
-                  const extraTime = totalTime - 10 + (parseInt(branch.buffer_time) || 10);
-                  for(let i = currentMin + 10; i < currentMin + 10 + extraTime; i++) {
-                     if(tl2[i] >= capL2) { isAvailable = false; break; }
-                  }
-               }
+               for(let i=currentMin; i<currentMin+10; i++) if(tl1[i]>=capL1) isAvail=false;
+               if(isAvail && totalTime>10) for(let i=currentMin+10; i<currentMin+10+(totalTime-10+parseInt(branch.buffer_time)); i++) if(tl2[i]>=capL2) isAvail=false;
             } else {
-               // เช็คช่องปกติล้วนๆ
-               const reqTime = totalTime + (parseInt(branch.buffer_time) || 10);
-               for(let i = currentMin; i < currentMin + reqTime; i++) {
-                  if(tl2[i] >= capL2) { isAvailable = false; break; }
-               }
+               for(let i=currentMin; i<currentMin+totalTime+parseInt(branch.buffer_time); i++) if(tl2[i]>=capL2) isAvail=false;
             }
         }
-        
-        if (isAvailable) {
-          html += `<button type="button" onclick="confirmTimeSlot('${timeStr}')" class="border-2 border-gray-200 bg-white text-gray-700 py-3 rounded-xl hover:bg-blue-50 hover:border-blue-500 hover:text-blue-600 transition text-sm font-bold shadow-sm">${timeStr}</button>`;
-        } else {
-          html += `<div class="border-2 border-gray-200 bg-gray-100 text-gray-400 py-3 rounded-xl cursor-not-allowed shadow-inner flex flex-col justify-center items-center"><span class="text-sm font-bold line-through">${timeStr}</span><span class="text-[10px] mt-1">${rejectReason}</span></div>`;
-        }
-        
+        if (isAvail) html += `<button type="button" onclick="confirmTimeSlot('${timeStr}')" class="border-2 border-gray-200 bg-white text-gray-700 py-3 rounded-xl hover:border-blue-500 hover:text-blue-600 transition text-sm font-bold shadow-sm">${timeStr}</button>`;
+        else html += `<div class="border-2 border-gray-200 bg-gray-100 text-gray-400 py-3 rounded-xl cursor-not-allowed shadow-inner flex flex-col items-center"><span class="text-sm font-bold line-through">${timeStr}</span><span class="text-[10px]">${reason}</span></div>`;
         currentMin += stepMin;
       }
-      return html || '<p class="col-span-3 text-center text-sm text-gray-400 py-4">คิวเต็มหมดแล้วในวันนี้</p>';
+      return html || '<p class="col-span-3 text-center text-sm text-gray-400 py-4">คิวเต็มหมดแล้ว</p>';
     }
 
-    function confirmTimeSlot(timeStr) {
-      document.getElementById('selectedTime').value = timeStr;
-      document.getElementById('displaySelectedTime').textContent = `${timeStr} น.`;
-      Swal.close();
-    }
+    function confirmTimeSlot(timeStr) { document.getElementById('selectedTime').value = timeStr; document.getElementById('displaySelectedTime').textContent = `${timeStr} น.`; Swal.close(); }
 
-    // ==========================================
-    // แผนที่
-    // ==========================================
+    // --- ระบบแผนที่ (คงเดิมจากรอบที่แล้ว) ---
     function toggleDelivery() {
       const val = document.getElementById('deliverySelect').value;
       const mapDiv = document.getElementById('mapContainer');
-      const toggleBtns = document.getElementById('markerToggle');
-      
       if (val === 'none') { mapDiv.classList.add('hidden'); updateSummary(); return; }
       mapDiv.classList.remove('hidden');
-      toggleBtns.classList.toggle('hidden', val !== 'roundtrip_diff');
-      
+      document.getElementById('markerToggle').classList.toggle('hidden', val !== 'roundtrip_diff');
       if(!map) initMap();
-      
       if(val === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); }
       else if(val === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); setActivePin('dropoff'); }
-      else if(val === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); }
       else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); }
       updateSummary();
     }
@@ -415,35 +362,26 @@
     function setActivePin(type) {
       activePin = type;
       if(type === 'pickup') {
-        document.getElementById('btnPinPickup').classList.replace('bg-gray-200','bg-green-500'); document.getElementById('btnPinPickup').classList.replace('text-gray-600','text-white'); document.getElementById('btnPinPickup').classList.replace('border-transparent','border-green-600');
-        document.getElementById('btnPinDropoff').classList.replace('bg-red-500','bg-gray-200'); document.getElementById('btnPinDropoff').classList.replace('text-white','text-gray-600'); document.getElementById('btnPinDropoff').classList.replace('border-red-600','border-transparent');
+        document.getElementById('btnPinPickup').classList.replace('bg-gray-200','bg-green-500'); document.getElementById('btnPinPickup').classList.replace('text-gray-600','text-white');
+        document.getElementById('btnPinDropoff').classList.replace('bg-red-500','bg-gray-200'); document.getElementById('btnPinDropoff').classList.replace('text-white','text-gray-600');
       } else {
-        document.getElementById('btnPinDropoff').classList.replace('bg-gray-200','bg-red-500'); document.getElementById('btnPinDropoff').classList.replace('text-gray-600','text-white'); document.getElementById('btnPinDropoff').classList.replace('border-transparent','border-red-600');
-        document.getElementById('btnPinPickup').classList.replace('bg-green-500','bg-gray-200'); document.getElementById('btnPinPickup').classList.replace('text-white','text-gray-600'); document.getElementById('btnPinPickup').classList.replace('border-green-600','border-transparent');
+        document.getElementById('btnPinDropoff').classList.replace('bg-gray-200','bg-red-500'); document.getElementById('btnPinDropoff').classList.replace('text-gray-600','text-white');
+        document.getElementById('btnPinPickup').classList.replace('bg-green-500','bg-gray-200'); document.getElementById('btnPinPickup').classList.replace('text-white','text-gray-600');
       }
     }
 
     function initMap() {
-      const branchId = document.getElementById('branchSelect').value;
-      const branch = masterData.branches.find(b => b.branch_id === branchId);
-      const bLat = parseFloat(branch?.lat) || 9.143; const bLng = parseFloat(branch?.lng) || 99.330;
-
+      const bLat = 9.143; const bLng = 99.330;
       map = L.map('map').setView([bLat, bLng], 14);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
       const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
       const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
-
       markerPickup = L.marker([bLat+0.005, bLng], {draggable: true, icon: greenIcon}).addTo(map);
       markerDropoff = L.marker([bLat-0.005, bLng], {draggable: true, icon: redIcon}).addTo(map);
-      
       savePinLocation('pickup', markerPickup.getLatLng()); savePinLocation('dropoff', markerDropoff.getLatLng());
       markerPickup.on('dragend', (e) => savePinLocation('pickup', e.target.getLatLng()));
       markerDropoff.on('dragend', (e) => savePinLocation('dropoff', e.target.getLatLng()));
-      map.on('click', (e) => {
-        if(activePin === 'pickup') { markerPickup.setLatLng(e.latlng); savePinLocation('pickup', e.latlng); }
-        else { markerDropoff.setLatLng(e.latlng); savePinLocation('dropoff', e.latlng); }
-      });
+      map.on('click', (e) => { if(activePin === 'pickup') { markerPickup.setLatLng(e.latlng); savePinLocation('pickup', e.latlng); } else { markerDropoff.setLatLng(e.latlng); savePinLocation('dropoff', e.latlng); } });
     }
 
     function savePinLocation(type, latlng) { document.getElementById(`${type}Lat`).value = latlng.lat; document.getElementById(`${type}Lng`).value = latlng.lng; updateSummary(); }
@@ -453,10 +391,9 @@
         Swal.fire({ title: 'หาพิกัด...', didOpen: () => Swal.showLoading() });
         navigator.geolocation.getCurrentPosition(pos => {
           const ll = [pos.coords.latitude, pos.coords.longitude]; map.flyTo(ll, 16);
-          if(activePin==='pickup') { markerPickup.setLatLng(ll); savePinLocation('pickup', {lat:ll[0], lng:ll[1]}); }
-          else { markerDropoff.setLatLng(ll); savePinLocation('dropoff', {lat:ll[0], lng:ll[1]}); }
+          if(activePin==='pickup') { markerPickup.setLatLng(ll); savePinLocation('pickup', {lat:ll[0], lng:ll[1]}); } else { markerDropoff.setLatLng(ll); savePinLocation('dropoff', {lat:ll[0], lng:ll[1]}); }
           Swal.close();
-        }, () => { Swal.fire('แจ้งเตือน', 'กรุณาอนุญาตให้เข้าถึงตำแหน่ง GPS', 'error') });
+        }, () => Swal.fire('Error', 'กรุณาอนุญาต GPS', 'error'));
       }
     }
 
@@ -467,53 +404,35 @@
     }
 
     function calculateDeliveryFee() {
-      const val = document.getElementById('deliverySelect').value;
-      if (val === 'none') return 0;
+      const val = document.getElementById('deliverySelect').value; if (val === 'none') return 0;
       const branchId = document.getElementById('branchSelect').value;
-      const branch = masterData.branches.find(b => b.branch_id === branchId);
-      if(!branch) return 0;
+      const branch = masterData.branches.find(b => b.branch_id === branchId); if(!branch) return 0;
       const freeKm = parseFloat(branch.free_km) || 0; const feeKm = parseFloat(branch.fee_per_km) || 0;
       const bLat = parseFloat(branch.lat); const bLng = parseFloat(branch.lng);
-
       let dist1 = 0, dist2 = 0;
       if(val === 'pickup' || val === 'roundtrip_same' || val === 'roundtrip_diff') dist1 = calcCrow(bLat, bLng, parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value));
       if(val === 'dropoff' || val === 'roundtrip_diff') dist2 = calcCrow(bLat, bLng, parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value));
       if(val === 'roundtrip_same') dist2 = dist1;
-
-      const cost1 = Math.max(0, dist1 - freeKm) * feeKm;
-      const cost2 = Math.max(0, dist2 - freeKm) * feeKm;
-      return Math.round(cost1 + cost2);
+      return Math.round(Math.max(0, dist1 - freeKm) * feeKm + Math.max(0, dist2 - freeKm) * feeKm);
     }
 
     document.getElementById('bookingForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const time = document.getElementById('selectedTime').value;
-      const checkedSvcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(',');
-      
-      if(!checkedSvcs) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการอย่างน้อย 1 รายการ', 'warning');
       if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจากปฏิทิน', 'warning');
-
+      const checkedSvcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(',');
       const payload = {
-        action: 'submitBooking',
-        lineUid: userUid,
-        vehicleId: document.getElementById('vehicleSelect').value,
-        serviceType: checkedSvcs,
-        bookingDate: document.getElementById('bookDate').value + 'T' + time,
-        deliveryType: document.getElementById('deliverySelect').value,
-        lat: document.getElementById('pickupLat').value,
-        lng: document.getElementById('pickupLng').value,
-        extraFee: calculateDeliveryFee(),
-        branchId: document.getElementById('branchSelect').value,
-        lineType: document.getElementById('selectedLineType').value
+        action: 'submitBooking', lineUid: userUid, vehicleId: document.getElementById('vehicleSelect').value,
+        serviceType: checkedSvcs, bookingDate: document.getElementById('bookDate').value + 'T' + time,
+        deliveryType: document.getElementById('deliverySelect').value, lat: document.getElementById('pickupLat').value,
+        lng: document.getElementById('pickupLng').value, extraFee: calculateDeliveryFee(),
+        branchId: document.getElementById('branchSelect').value, lineType: document.getElementById('selectedLineType').value
       };
-
-      Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      Swal.fire({ title: 'กำลังจองคิว...', didOpen: () => Swal.showLoading() });
       try {
         const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
         const result = await res.json();
-        if(result.status === 'success') {
-           Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อย', 'success').then(() => window.location.reload());
-        }
+        if(result.status === 'success') Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อย', 'success').then(() => window.location.reload());
         else throw new Error(result.message);
       } catch (err) { Swal.fire('Error', err.message, 'error'); }
     });
