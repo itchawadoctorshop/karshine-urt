@@ -68,13 +68,11 @@
 
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> คิวถัดไปของคุณ</h3>
-      <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400">
-        ไม่มีรายการจองในขณะนี้
-      </div>
+      <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400">ไม่มีรายการจองในขณะนี้</div>
     </div>
   </section>
 
-  <section id="booking-section" class="section p-4 space-y-5" data-total-time="0">
+  <section id="booking-section" class="section p-4 space-y-5">
     <div class="bg-white p-5 rounded-3xl shadow-sm">
       <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-calendar-plus text-blue-500"></i> ขั้นตอนการจอง</h2>
       
@@ -195,12 +193,16 @@
   </nav>
 
   <script>
+    // ⚠️ แก้ไข API_URL และ LIFF_ID ของคุณโอมที่นี่
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
     const LIFF_ID = "2009981892-1HxmA42h"; 
     
     let masterData = {};
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     let map, markerPickup, markerDropoff, activePin = 'pickup';
+    
+    // 🎯 ตัวแปรเก็บเวลาที่แก้ปัญหาบั๊ก Error (Dataset Null) แบบ 100%
+    let currentTotalTime = 0; 
 
     async function init() {
       try {
@@ -212,9 +214,18 @@
         document.getElementById('profileName').textContent = document.getElementById('profileNameBig').textContent = profile.displayName;
         document.getElementById('profileUid').textContent = "UID: " + userUid;
       } catch(e) { console.log('Test Mode'); }
+      
       await refreshData();
       
-      flatpickr("#inlineCalendar", { inline: true, locale: "th", minDate: "today", onChange: (d, str) => { document.getElementById('bookDate').value = str; document.getElementById('selectedTime').value=''; document.getElementById('displaySelectedTime').innerText='- - : - -'; openTimeSlotModal(); } });
+      flatpickr("#inlineCalendar", { 
+        inline: true, locale: "th", minDate: "today", 
+        onChange: (d, str) => { 
+          document.getElementById('bookDate').value = str; 
+          document.getElementById('selectedTime').value=''; 
+          document.getElementById('displaySelectedTime').innerText='- - : - -'; 
+          openTimeSlotModal(); 
+        } 
+      });
       document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
     }
 
@@ -223,7 +234,11 @@
         const res = await fetch(`${API_URL}?action=getInitialBookingData&lineUid=${userUid}`);
         const data = await res.json();
         masterData = data.data;
-        document.getElementById('userPoints').innerText = document.getElementById('profilePoints').innerText = masterData.points || 0;
+        
+        const pElement = document.getElementById('userPoints');
+        if(pElement) pElement.innerText = masterData.points || 0;
+        const ppElement = document.getElementById('profilePoints');
+        if(ppElement) ppElement.innerText = masterData.points || 0;
         
         const carList = document.getElementById('carList');
         const vehicleSelect = document.getElementById('vehicleSelect');
@@ -239,12 +254,12 @@
         }
 
         document.getElementById('branchSelect').innerHTML = masterData.branches.map(b => `<option value="${b.branch_id}">${b.branch_name}</option>`).join('');
+        
         selectLine('LINE1');
         document.getElementById('loading').style.display = 'none';
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     }
 
-    // --- 🧭 Navigation ---
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
@@ -255,11 +270,10 @@
 
     function navToBooking() {
       if(masterData.vehicles.length === 0) {
-        Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'กรุณาลงทะเบียนรถอย่างน้อย 1 คันก่อนเริ่มจองคิวครับ', icon: 'warning', confirmButtonText: 'ไปหน้าทะเบียนรถ' }).then(() => showSection('cars-section'));
+        Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'กรุณาลงทะเบียนรถอย่างน้อย 1 คันก่อนครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section'));
       } else { showSection('booking-section'); }
     }
 
-    // --- 🚗 Car System ---
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const payload = { action: 'addVehicle', lineUid: userUid, licensePlate: document.getElementById('vPlate').value, brandModel: document.getElementById('vModel').value, color: document.getElementById('vColor').value };
@@ -271,7 +285,6 @@
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
 
-    // --- 📅 Booking System ---
     function selectLine(type) {
       document.getElementById('selectedLineType').value = type;
       document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)';
@@ -283,7 +296,8 @@
     }
 
     function renderServices() {
-      const size = document.getElementById('carSizeSelect').value;
+      const sizeEl = document.getElementById('carSizeSelect');
+      const size = sizeEl ? sizeEl.value : 'M';
       const type = document.getElementById('selectedLineType').value;
       const container = document.getElementById('servicesContainer');
       const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {});
@@ -314,26 +328,31 @@
     function updateSummary() {
       const checked = document.querySelectorAll('.checkbox-custom:checked');
       let totalP = 0, totalT = 0, html = '';
-      checked.forEach(cb => { totalP += parseInt(cb.dataset.price); totalT += parseInt(cb.dataset.time); html += `<div class="flex justify-between"><span>${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`; });
+      checked.forEach(cb => { 
+        totalP += parseInt(cb.dataset.price); 
+        totalT += parseInt(cb.dataset.time); 
+        html += `<div class="flex justify-between"><span>${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`; 
+      });
       const fee = calculateDeliveryFee();
       document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ';
       document.getElementById('sumTotal').innerText = (totalP + fee) + '.-';
       
-      // ✅ แก้ไขบั๊กตรงนี้: ชี้เป้าหมายไปที่ 'booking-section' แทน 'bookingForm'
-      document.getElementById('booking-section').dataset.totalTime = totalT; 
+      // 🎯 ชี้เป้าหมายมาเก็บที่ตัวแปร Javascript 
+      currentTotalTime = totalT; 
       
-      document.getElementById('selectedTime').value = ''; document.getElementById('displaySelectedTime').innerText = '- - : - -';
+      document.getElementById('selectedTime').value = ''; 
+      document.getElementById('displaySelectedTime').innerText = '- - : - -';
     }
 
     function openTimeSlotModal() {
       const branchId = document.getElementById('branchSelect').value;
       const type = document.getElementById('selectedLineType').value;
-      
-      // ✅ แก้ไขบั๊กตรงนี้: ชี้เป้าหมายไปที่ 'booking-section' เช่นกัน
-      const totalT = parseInt(document.getElementById('booking-section').dataset.totalTime) || 0;
-      
+      const totalT = currentTotalTime; // ดึงเวลาจากตัวแปร 
       const date = document.getElementById('bookDate').value;
-      if(!branchId || totalT === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการก่อนครับ', 'warning');
+      
+      if(!branchId || totalT === 0) {
+        return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการก่อนครับ', 'warning');
+      }
       
       const branch = masterData.branches.find(b => b.branch_id === branchId);
       const openT = (branch.open_time || '08:00').substring(0,5).split(':');
