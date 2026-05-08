@@ -107,8 +107,12 @@
           <span class="text-sm">ยอดชำระโดยประมาณ</span><span id="sumTotal" class="text-2xl font-bold text-green-400">0.-</span>
         </div>
       </div>
+      
+      <p class="text-xs text-red-500 text-center font-bold px-2 mt-4">
+        *เงื่อนไข: ต้องทำรายการจองล่วงหน้าอย่างน้อย 15 นาที และกรุณามาเช็คอินหน้าร้านก่อนเวลาจอง 3 นาที มิฉะนั้นระบบจะยกเลิกคิวอัตโนมัติ
+      </p>
 
-      <button type="submit" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition text-lg">
+      <button type="submit" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition text-lg mt-2">
         ยืนยันการจองคิว
       </button>
     </form>
@@ -116,18 +120,17 @@
 
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
-    const LIFF_ID = "2009981892-1HxmA42h"; // ⚠️ อย่าลืมใส่ LIFF ID นะครับ
+    const LIFF_ID = "ใส่_LIFF_ID_ของคุณโอม_ที่นี่"; 
     
     let masterData = {};
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     let map, markerPickup, markerDropoff, activePin = 'pickup';
 
     async function init() {
-      // โหลด LIFF และบังคับล็อกอินถ้ายังไม่ได้ล็อกอิน
       try {
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) {
-          liff.login(); // บังคับเด้งล็อกอินสำหรับเบราว์เซอร์
+          liff.login(); 
           return;
         }
         const profile = await liff.getProfile();
@@ -136,7 +139,7 @@
         document.getElementById('profileName').textContent = profile.displayName;
       } catch(e) { 
         console.log('LIFF Error:', e); 
-        document.getElementById('profileName').textContent = "กำลังใช้งานในโหมดทดสอบ";
+        document.getElementById('profileName').textContent = "กำลังใช้งานโหมดทดสอบ";
       }
 
       await loadInitialData();
@@ -148,7 +151,10 @@
           openTimeSlotModal(); 
         } 
       });
-      document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
+      
+      // ดึงเวลาไทยเป็นค่าเริ่มต้นเพื่อป้องกัน Timezone ผิด
+      const localNow = new Date(new Date().getTime() + 7*3600*1000);
+      document.getElementById('bookDate').value = localNow.toISOString().split('T')[0];
     }
 
     async function loadInitialData() {
@@ -236,7 +242,8 @@
       let totalSvcPrice = 0; let totalSvcTime = 0; let summaryHtml = '';
 
       checked.forEach(cb => {
-        totalSvcPrice += parseInt(cb.dataset.price); totalSvcTime += parseInt(cb.dataset.time);
+        totalSvcPrice += parseInt(cb.dataset.price); 
+        totalSvcTime += parseInt(cb.dataset.time);
         summaryHtml += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`;
       });
 
@@ -249,7 +256,7 @@
     }
 
     // ==========================================
-    // 🧠 ระบบ Time Block อัจฉริยะ (จัดการคิวเต็ม)
+    // 🧠 ระบบ Time Block อัจฉริยะ (จัดการคิวเต็ม + Line แยก)
     // ==========================================
     function resetSelectedTime() {
       document.getElementById('selectedTime').value = '';
@@ -289,12 +296,22 @@
       
       let currentMin = parseInt(openT[0]) * 60 + parseInt(openT[1]);
       const endMin = parseInt(closeT[0]) * 60 + parseInt(closeT[1]);
+
+      // 🕒 เช็คเวลาปัจจุบัน เพื่อป้องกันการจองอดีตและ 15 นาทีล่วงหน้า
+      const localNow = new Date(new Date().getTime() + 7*3600*1000); // ดึงเวลาไทย
+      const todayStr = localNow.toISOString().split('T')[0];
+      let minAllowedMin = 0;
+      if (selectedDate === todayStr) {
+         minAllowedMin = (localNow.getUTCHours() * 60) + localNow.getUTCMinutes() + 15; // ต้องจองล่วงหน้า 15 นาที
+      }
       
-      let timeline = new Array(1440).fill(0);
+      // สร้าง 2 Timeline แยกกัน
+      let tl1 = new Array(1440).fill(0); // Timeline เครื่องล้าง (รับได้ 1 คัน)
+      let tl2 = new Array(1440).fill(0); // Timeline ช่องปกติ (รับได้ตาม Bay Capacity)
+
       masterData.activeBookings.forEach(b => {
          if(b.branchId !== branchId) return;
          if(!b.bookingDate.startsWith(selectedDate)) return; 
-         if(b.lineType !== type) return; 
          
          const timePart = b.bookingDate.split('T')[1]; 
          if(timePart) {
@@ -304,14 +321,25 @@
               const svc = masterData.services.find(s => s.service_id === sId);
               if(svc) bDuration += parseInt(svc.std_time_mins) || 30;
            });
-           bDuration += parseInt(branch.buffer_time) || 0;
-           for(let i = bStart; i < bStart + bDuration; i++) { if(i < 1440) timeline[i]++; }
+
+           // ลอจิกแยก Line 1 และ Line 2 อิงตามประวัติ
+           if (b.lineType === 'LINE1') {
+              for(let i = bStart; i < bStart + 10; i++) { if(i < 1440) tl1[i]++; } // กินเครื่อง 10 นาที
+              if (bDuration > 10) {
+                const extraTime = bDuration - 10 + (parseInt(branch.buffer_time) || 10);
+                for(let i = bStart + 10; i < bStart + 10 + extraTime; i++) { if(i < 1440) tl2[i]++; } // กินช่องปกติ
+              }
+           } else {
+              const totalL2 = bDuration + (parseInt(branch.buffer_time) || 10);
+              for(let i = bStart; i < bStart + totalL2; i++) { if(i < 1440) tl2[i]++; } // กินช่องปกติตั้งแต่ต้น
+           }
          }
       });
 
       let html = '';
       const stepMin = type === 'LINE1' ? 10 : 30; 
-      const capacity = type === 'LINE1' ? 1 : (parseInt(branch.bay_capacity) || 1); 
+      const capL1 = 1; // เครื่องมี 1 เครื่อง
+      const capL2 = parseInt(branch.bay_capacity) || 1; // จำนวนช่องปกติ
 
       while (currentMin + totalTime <= endMin) {
         const h = Math.floor(currentMin / 60).toString().padStart(2, '0');
@@ -319,16 +347,37 @@
         const timeStr = `${h}:${m}`;
         
         let isAvailable = true;
-        let requiredDuration = type === 'LINE1' ? 10 : (totalTime + (parseInt(branch.buffer_time)||10));
-        
-        for(let i = currentMin; i < currentMin + requiredDuration; i++) {
-           if(timeline[i] >= capacity) { isAvailable = false; break; }
+        let rejectReason = "เต็ม";
+
+        // กฎ 15 นาทีล่วงหน้า
+        if (selectedDate === todayStr && currentMin < minAllowedMin) {
+            isAvailable = false;
+            rejectReason = "เลยเวลา";
+        } else {
+            // กฎเช็คคิว
+            if (type === 'LINE1') {
+               // เช็คว่าเครื่องว่างไหม 10 นาทีแรก
+               for(let i = currentMin; i < currentMin + 10; i++) { if(tl1[i] >= capL1) { isAvailable = false; break; } }
+               // เช็คว่าช่องปกติว่างไหม (กรณีมีออปชันเสริม)
+               if (isAvailable && totalTime > 10) {
+                  const extraTime = totalTime - 10 + (parseInt(branch.buffer_time) || 10);
+                  for(let i = currentMin + 10; i < currentMin + 10 + extraTime; i++) {
+                     if(tl2[i] >= capL2) { isAvailable = false; break; }
+                  }
+               }
+            } else {
+               // เช็คช่องปกติล้วนๆ
+               const reqTime = totalTime + (parseInt(branch.buffer_time) || 10);
+               for(let i = currentMin; i < currentMin + reqTime; i++) {
+                  if(tl2[i] >= capL2) { isAvailable = false; break; }
+               }
+            }
         }
         
         if (isAvailable) {
           html += `<button type="button" onclick="confirmTimeSlot('${timeStr}')" class="border-2 border-gray-200 bg-white text-gray-700 py-3 rounded-xl hover:bg-blue-50 hover:border-blue-500 hover:text-blue-600 transition text-sm font-bold shadow-sm">${timeStr}</button>`;
         } else {
-          html += `<button type="button" disabled class="border-2 border-gray-200 bg-gray-100 text-gray-400 py-3 rounded-xl cursor-not-allowed shadow-inner text-xs font-bold">${timeStr} (เต็ม)</button>`;
+          html += `<div class="border-2 border-gray-200 bg-gray-100 text-gray-400 py-3 rounded-xl cursor-not-allowed shadow-inner flex flex-col justify-center items-center"><span class="text-sm font-bold line-through">${timeStr}</span><span class="text-[10px] mt-1">${rejectReason}</span></div>`;
         }
         
         currentMin += stepMin;
@@ -343,7 +392,7 @@
     }
 
     // ==========================================
-    // ระบบแผนที่คู่
+    // แผนที่
     // ==========================================
     function toggleDelivery() {
       const val = document.getElementById('deliverySelect').value;
