@@ -8,15 +8,12 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
-
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
   <style>
     .flatpickr-calendar { margin: 0 auto; box-shadow: none !important; border: 1px solid #e5e7eb; border-radius: 12px; }
     #map { height: 280px; width: 100%; border-radius: 12px; z-index: 1; }
@@ -25,9 +22,16 @@
   </style>
 </head>
 <body class="bg-gray-100 pb-24 font-sans">
-  <div class="bg-blue-600 text-white p-6 rounded-b-[2.5rem] shadow-lg mb-6">
-    <h1 class="text-2xl font-bold text-center">จองคิวเข้ารับบริการ</h1>
-    <p class="text-center text-blue-100 text-sm mt-1">สะดวกรวดเร็ว สรุปยอดทันที</p>
+  
+  <div class="bg-blue-600 text-white p-6 rounded-b-[2.5rem] shadow-lg mb-6 relative overflow-hidden">
+    <div class="flex items-center gap-4 mb-3" id="profileBox">
+      <img id="profileImg" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover">
+      <div>
+        <p class="text-xs text-blue-200">ยินดีต้อนรับ</p>
+        <p id="profileName" class="font-bold text-lg">ลูกค้าคนสำคัญ</p>
+      </div>
+    </div>
+    <h1 class="text-xl font-bold">จองคิวเข้ารับบริการ</h1>
   </div>
 
   <div class="max-w-md mx-auto px-4" id="app-container">
@@ -36,7 +40,6 @@
     </div>
 
     <form id="bookingForm" class="hidden space-y-5">
-      
       <div class="bg-white p-5 rounded-2xl shadow-sm">
         <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-car text-blue-500"></i> 1. รถและสาขา</h2>
         <select id="vehicleSelect" class="w-full p-3 border rounded-xl bg-gray-50 text-sm mb-3" required></select>
@@ -49,14 +52,13 @@
       </div>
 
       <div class="bg-white p-5 rounded-2xl shadow-sm">
-        <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-spray-can-sparkles text-blue-500"></i> 2. เลือกบริการ (เลือกได้หลายรายการ)</h2>
+        <h2 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-spray-can-sparkles text-blue-500"></i> 2. เลือกบริการ</h2>
         <div class="flex bg-gray-100 p-1 rounded-xl mb-4 relative">
           <div id="lineBg" class="absolute w-1/2 h-[calc(100%-8px)] bg-white rounded-lg shadow-sm transition-all left-1 top-1"></div>
-          <button type="button" id="btnLine1" onclick="selectLine('LINE1')" class="relative w-1/2 py-2 text-sm font-bold text-gray-800 z-10"><i class="fa-solid fa-robot"></i> ล้างด่วน (เครื่อง)</button>
-          <button type="button" id="btnLine2" onclick="selectLine('LINE2')" class="relative w-1/2 py-2 text-sm font-bold text-gray-400 z-10"><i class="fa-solid fa-hands-bubbles"></i> ล้างปกติ (พนักงาน)</button>
+          <button type="button" id="btnLine1" onclick="selectLine('LINE1')" class="relative w-1/2 py-2 text-sm font-bold text-gray-800 z-10"><i class="fa-solid fa-robot"></i> ล้างด่วน</button>
+          <button type="button" id="btnLine2" onclick="selectLine('LINE2')" class="relative w-1/2 py-2 text-sm font-bold text-gray-400 z-10"><i class="fa-solid fa-hands-bubbles"></i> ล้างปกติ</button>
         </div>
         <input type="hidden" id="selectedLineType" value="LINE1">
-        
         <div id="servicesContainer" class="space-y-3 max-h-80 overflow-y-auto pr-1"></div>
       </div>
 
@@ -79,8 +81,7 @@
           <option value="none">ขับมาเอง (ไม่ใช้บริการ)</option>
           <option value="pickup">ให้ร้านไปรับ (ปักหมุดจุดรับ)</option>
           <option value="dropoff">ให้ร้านไปส่ง (ปักหมุดจุดส่ง)</option>
-          <option value="roundtrip_same">รับ-ส่ง ที่จุดเดียวกัน</option>
-          <option value="roundtrip_diff">รับ-ส่ง คนละจุด</option>
+          <option value="roundtrip_diff">รับ-ส่ง (ใช้แผนที่ระบุพิกัด)</option>
         </select>
         
         <div id="mapContainer" class="hidden space-y-3">
@@ -100,19 +101,9 @@
       <div class="bg-gray-800 p-5 rounded-2xl shadow-lg text-white">
         <h2 class="font-bold mb-3 border-b border-gray-600 pb-2"><i class="fa-solid fa-receipt"></i> สรุปรายการ</h2>
         <div id="summaryList" class="space-y-1 text-sm text-gray-300 mb-3"></div>
-        <div class="flex justify-between text-sm text-gray-300 mb-3">
-          <span>ค่าบริการรับ-ส่ง (ประเมิน)</span>
-          <span id="sumDelivery">0.-</span>
-        </div>
-        
-        <div class="flex gap-2 mb-4">
-          <input type="text" placeholder="โค้ดส่วนลด / แพ็กเกจ" class="w-2/3 p-2 rounded bg-gray-700 text-white text-sm border border-gray-600">
-          <button type="button" class="w-1/3 bg-gray-600 rounded text-sm font-bold hover:bg-gray-500 transition">ใช้โค้ด</button>
-        </div>
-
+        <div class="flex justify-between text-sm text-gray-300 mb-3"><span>ค่าบริการรับ-ส่ง</span><span id="sumDelivery">0.-</span></div>
         <div class="flex justify-between items-end border-t border-gray-600 pt-3">
-          <span class="text-sm">ยอดชำระโดยประมาณ</span>
-          <span id="sumTotal" class="text-2xl font-bold text-green-400">0.-</span>
+          <span class="text-sm">ยอดชำระโดยประมาณ</span><span id="sumTotal" class="text-2xl font-bold text-green-400">0.-</span>
         </div>
       </div>
 
@@ -123,15 +114,25 @@
   </div>
 
   <script>
-    // ⚠️ แก้ไข API_URL
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
+    const LIFF_ID = "ใส่_LIFF_ID_ที่นี่"; 
     
     let masterData = {};
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
-    let map, markerPickup, markerDropoff;
-    let activePin = 'pickup';
+    let map, markerPickup, markerDropoff, activePin = 'pickup';
 
     async function init() {
+      // โหลด LIFF Profile
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          userUid = profile.userId;
+          document.getElementById('profileImg').src = profile.pictureUrl;
+          document.getElementById('profileName').textContent = profile.displayName;
+        }
+      } catch(e) { console.log('LIFF NOT READY'); }
+
       await loadInitialData();
       flatpickr("#inlineCalendar", { 
         inline: true, locale: "th", minDate: "today", 
@@ -153,7 +154,7 @@
         document.getElementById('vehicleSelect').innerHTML = masterData.vehicles.length ? masterData.vehicles.map(v => `<option value="${v.id}">${v.plate} (${v.model})</option>`).join('') : `<option value="">โปรดเพิ่มรถยนต์ก่อน</option>`;
         document.getElementById('branchSelect').innerHTML = masterData.branches.map(b => `<option value="${b.branch_id}">${b.branch_name}</option>`).join('');
 
-        selectLine('LINE1'); // เริ่มต้นที่ล้างด่วน
+        selectLine('LINE1');
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('bookingForm').classList.remove('hidden');
       } catch (e) { Swal.fire('Error', e.message, 'error'); }
@@ -176,9 +177,6 @@
       renderServices();
     }
 
-    // ==========================================
-    // 🧠 ระบบฉลาด: ติ๊กอัตโนมัติและล็อกเมนูที่ไม่เกี่ยวข้อง
-    // ==========================================
     function renderServices() {
       const size = document.getElementById('carSizeSelect').value;
       const type = document.getElementById('selectedLineType').value;
@@ -192,23 +190,18 @@
           const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl);
           const name = s.service_name;
           
-          let isAutoCheck = false;
-          let isDisabled = false;
-          let badgeHtml = '';
-
-          // ตรวจสอบคำในชื่อบริการ
+          let isAutoCheck = false; let isDisabled = false; let badgeHtml = '';
           const isQuickWash = name.includes('ด่วน');
           const isNormalWash = name.includes('ปกติ') || name.includes('ภายนอก') || name.includes('สีดูดฝุ่น');
 
           if (type === 'LINE1') {
-             if (isQuickWash) { isAutoCheck = true; badgeHtml = '<span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded ml-2">เริ่มต้น (บังคับ)</span>'; }
-             if (isNormalWash) { isDisabled = true; } // ล็อกล้างปกติ
+             if (isQuickWash) { isAutoCheck = true; badgeHtml = '<span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded ml-2">เริ่มต้น</span>'; }
+             if (isNormalWash) { isDisabled = true; }
           } else {
-             if (isNormalWash) { isAutoCheck = true; badgeHtml = '<span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded ml-2">เริ่มต้น (บังคับ)</span>'; }
-             if (isQuickWash) { isDisabled = true; } // ล็อกล้างด่วน
+             if (isNormalWash) { isAutoCheck = true; badgeHtml = '<span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded ml-2">เริ่มต้น</span>'; }
+             if (isQuickWash) { isDisabled = true; }
           }
 
-          // คลาสสำหรับกล่องสีเทา (หากถูกล็อกและไม่ได้ออโต้ติ๊ก)
           const opacityClass = (isDisabled && !isAutoCheck) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer';
           const inputState = isAutoCheck ? 'checked onclick="return false;"' : (isDisabled ? 'disabled' : '');
 
@@ -234,26 +227,24 @@
 
     function updateSummary() {
       const checked = document.querySelectorAll('.checkbox-custom:checked');
-      let totalSvcPrice = 0;
-      let totalSvcTime = 0;
-      let summaryHtml = '';
+      let totalSvcPrice = 0; let totalSvcTime = 0; let summaryHtml = '';
 
       checked.forEach(cb => {
-        totalSvcPrice += parseInt(cb.dataset.price);
-        totalSvcTime += parseInt(cb.dataset.time);
+        totalSvcPrice += parseInt(cb.dataset.price); totalSvcTime += parseInt(cb.dataset.time);
         summaryHtml += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`;
       });
 
       document.getElementById('summaryList').innerHTML = summaryHtml || '<span class="text-gray-500 italic">ยังไม่ได้เลือกบริการ</span>';
-      
       const deliveryFee = calculateDeliveryFee();
       document.getElementById('sumDelivery').textContent = deliveryFee > 0 ? `${deliveryFee}.-` : '0.-';
       document.getElementById('sumTotal').textContent = `${totalSvcPrice + deliveryFee}.-`;
       document.getElementById('bookingForm').dataset.totalTime = totalSvcTime;
-      
       resetSelectedTime();
     }
 
+    // ==========================================
+    // 🧠 ระบบ Time Block อัจฉริยะ (จัดการคิวเต็ม)
+    // ==========================================
     function resetSelectedTime() {
       document.getElementById('selectedTime').value = '';
       document.getElementById('displaySelectedTime').innerHTML = '- - : - -';
@@ -262,8 +253,7 @@
     function formatTimeString(val) {
       if (!val) return '08:00';
       if (typeof val === 'string' && val.includes('T')) {
-        const d = new Date(val);
-        return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+        const d = new Date(val); return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
       }
       return String(val).substring(0, 5); 
     }
@@ -277,7 +267,7 @@
       if(!branchId || totalTime === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการในข้อ 2 ก่อนครับ', 'warning');
       if(!bookDate) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่บนปฏิทินก่อนครับ', 'warning');
 
-      const slotsHtml = generateTimeSlotsHtml(branchId, type, totalTime);
+      const slotsHtml = generateTimeSlotsHtml(branchId, type, totalTime, bookDate);
 
       Swal.fire({
         title: `เลือกเวลา (วันที่ ${bookDate})`,
@@ -286,7 +276,7 @@
       });
     }
 
-    function generateTimeSlotsHtml(branchId, type, totalTime) {
+    function generateTimeSlotsHtml(branchId, type, totalTime, selectedDate) {
       const branch = masterData.branches.find(b => b.branch_id === branchId);
       const openT = formatTimeString(branch.open_time).split(':'); 
       const closeT = formatTimeString(branch.close_time).split(':');
@@ -294,18 +284,55 @@
       let currentMin = parseInt(openT[0]) * 60 + parseInt(openT[1]);
       const endMin = parseInt(closeT[0]) * 60 + parseInt(closeT[1]);
       
+      // 1. สร้าง Timeline 1 วัน (1440 นาที) เพื่อเช็คคิว
+      let timeline = new Array(1440).fill(0);
+      masterData.activeBookings.forEach(b => {
+         if(b.branchId !== branchId) return;
+         if(!b.bookingDate.startsWith(selectedDate)) return; // เอาแค่วันที่เลือก
+         if(b.lineType !== type) return; // แยกคิว Line1 และ Line2
+         
+         const timePart = b.bookingDate.split('T')[1]; 
+         if(timePart) {
+           const bStart = parseInt(timePart.split(':')[0])*60 + parseInt(timePart.split(':')[1]);
+           // คำนวณระยะเวลาของคิวนั้น
+           let bDuration = 0;
+           b.serviceType.split(',').forEach(sId => {
+              const svc = masterData.services.find(s => s.service_id === sId);
+              if(svc) bDuration += parseInt(svc.std_time_mins) || 30;
+           });
+           bDuration += parseInt(branch.buffer_time) || 0;
+           // จองคิวลง Timeline
+           for(let i = bStart; i < bStart + bDuration; i++) { if(i < 1440) timeline[i]++; }
+         }
+      });
+
       let html = '';
-      while (currentMin < endMin) {
+      const stepMin = type === 'LINE1' ? 10 : 30; // เครื่องหั่น 10 นาที / คนหั่น 30 นาที
+      const capacity = type === 'LINE1' ? 1 : (parseInt(branch.bay_capacity) || 1); // จำนวนช่องรับรถ
+
+      while (currentMin + totalTime <= endMin) {
         const h = Math.floor(currentMin / 60).toString().padStart(2, '0');
         const m = (currentMin % 60).toString().padStart(2, '0');
         const timeStr = `${h}:${m}`;
         
-        html += `<button type="button" onclick="confirmTimeSlot('${timeStr}')" class="border-2 border-gray-200 bg-white text-gray-700 py-3 rounded-xl hover:bg-blue-50 hover:border-blue-500 hover:text-blue-600 transition text-sm font-bold shadow-sm">${timeStr}</button>`;
+        // เช็คว่าเวลานี้ถูกจองเต็มช่องหรือยัง
+        let isAvailable = true;
+        let requiredDuration = type === 'LINE1' ? 10 : (totalTime + (parseInt(branch.buffer_time)||10));
         
-        if (type === 'LINE1') currentMin += 10; 
-        else currentMin += (totalTime + (parseInt(branch.buffer_time) || 10)); 
+        for(let i = currentMin; i < currentMin + requiredDuration; i++) {
+           if(timeline[i] >= capacity) { isAvailable = false; break; }
+        }
+        
+        if (isAvailable) {
+          html += `<button type="button" onclick="confirmTimeSlot('${timeStr}')" class="border-2 border-gray-200 bg-white text-gray-700 py-3 rounded-xl hover:bg-blue-50 hover:border-blue-500 hover:text-blue-600 transition text-sm font-bold shadow-sm">${timeStr}</button>`;
+        } else {
+          // ถ้าคิวเต็มให้ทำปุ่มสีเทา กดไม่ได้
+          html += `<button type="button" disabled class="border-2 border-gray-200 bg-gray-100 text-gray-400 py-3 rounded-xl cursor-not-allowed shadow-inner text-xs font-bold">${timeStr} (เต็ม)</button>`;
+        }
+        
+        currentMin += stepMin;
       }
-      return html || '<p class="col-span-3 text-center text-sm text-gray-400 py-4">ไม่มีเวลาว่างในสาขานี้</p>';
+      return html || '<p class="col-span-3 text-center text-sm text-gray-400 py-4">คิวเต็มหมดแล้วในวันนี้</p>';
     }
 
     function confirmTimeSlot(timeStr) {
@@ -315,7 +342,7 @@
     }
 
     // ==========================================
-    // แผนที่และรับส่ง
+    // ระบบแผนที่คู่
     // ==========================================
     function toggleDelivery() {
       const val = document.getElementById('deliverySelect').value;
@@ -323,7 +350,6 @@
       const toggleBtns = document.getElementById('markerToggle');
       
       if (val === 'none') { mapDiv.classList.add('hidden'); updateSummary(); return; }
-      
       mapDiv.classList.remove('hidden');
       toggleBtns.classList.toggle('hidden', val !== 'roundtrip_diff');
       
@@ -331,9 +357,7 @@
       
       if(val === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); }
       else if(val === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); setActivePin('dropoff'); }
-      else if(val === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); }
       else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); }
-      
       updateSummary();
     }
 
@@ -349,13 +373,9 @@
     }
 
     function initMap() {
-      const branchId = document.getElementById('branchSelect').value;
-      const branch = masterData.branches.find(b => b.branch_id === branchId);
-      const bLat = parseFloat(branch?.lat) || 9.143; const bLng = parseFloat(branch?.lng) || 99.330;
-
+      const bLat = 9.143; const bLng = 99.330;
       map = L.map('map').setView([bLat, bLng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-      L.marker([bLat, bLng]).addTo(map).bindPopup("สาขาของร้าน").openPopup();
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
       const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
       const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
@@ -366,29 +386,23 @@
       savePinLocation('pickup', markerPickup.getLatLng()); savePinLocation('dropoff', markerDropoff.getLatLng());
       markerPickup.on('dragend', (e) => savePinLocation('pickup', e.target.getLatLng()));
       markerDropoff.on('dragend', (e) => savePinLocation('dropoff', e.target.getLatLng()));
-
       map.on('click', (e) => {
         if(activePin === 'pickup') { markerPickup.setLatLng(e.latlng); savePinLocation('pickup', e.latlng); }
         else { markerDropoff.setLatLng(e.latlng); savePinLocation('dropoff', e.latlng); }
       });
     }
 
-    function savePinLocation(type, latlng) {
-      document.getElementById(`${type}Lat`).value = latlng.lat;
-      document.getElementById(`${type}Lng`).value = latlng.lng;
-      updateSummary();
-    }
+    function savePinLocation(type, latlng) { document.getElementById(`${type}Lat`).value = latlng.lat; document.getElementById(`${type}Lng`).value = latlng.lng; updateSummary(); }
 
     function getCurrentGPS() {
       if(navigator.geolocation) {
         Swal.fire({ title: 'หาพิกัด...', didOpen: () => Swal.showLoading() });
         navigator.geolocation.getCurrentPosition(pos => {
-          const ll = [pos.coords.latitude, pos.coords.longitude];
-          map.flyTo(ll, 16);
+          const ll = [pos.coords.latitude, pos.coords.longitude]; map.flyTo(ll, 16);
           if(activePin==='pickup') { markerPickup.setLatLng(ll); savePinLocation('pickup', {lat:ll[0], lng:ll[1]}); }
           else { markerDropoff.setLatLng(ll); savePinLocation('dropoff', {lat:ll[0], lng:ll[1]}); }
           Swal.close();
-        }, () => { Swal.fire('แจ้งเตือน', 'กรุณาอนุญาตให้เข้าถึงตำแหน่ง GPS', 'error') });
+        });
       }
     }
 
@@ -401,19 +415,15 @@
     function calculateDeliveryFee() {
       const val = document.getElementById('deliverySelect').value;
       if (val === 'none') return 0;
-      
       const branchId = document.getElementById('branchSelect').value;
       const branch = masterData.branches.find(b => b.branch_id === branchId);
       if(!branch) return 0;
-
-      const freeKm = parseFloat(branch.free_km) || 0;
-      const feeKm = parseFloat(branch.fee_per_km) || 0;
+      const freeKm = parseFloat(branch.free_km) || 0; const feeKm = parseFloat(branch.fee_per_km) || 0;
       const bLat = parseFloat(branch.lat); const bLng = parseFloat(branch.lng);
 
       let dist1 = 0, dist2 = 0;
-      if(val === 'pickup' || val === 'roundtrip_same' || val === 'roundtrip_diff') dist1 = calcCrow(bLat, bLng, parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value));
+      if(val === 'pickup' || val === 'roundtrip_diff') dist1 = calcCrow(bLat, bLng, parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value));
       if(val === 'dropoff' || val === 'roundtrip_diff') dist2 = calcCrow(bLat, bLng, parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value));
-      if(val === 'roundtrip_same') dist2 = dist1;
 
       const cost1 = Math.max(0, dist1 - freeKm) * feeKm;
       const cost2 = Math.max(0, dist2 - freeKm) * feeKm;
@@ -421,17 +431,17 @@
     }
 
     // ==========================================
-    // ส่งข้อมูลจองคิว
+    // ส่งข้อมูลจองคิว (แก้ไขให้ส่งข้อมูลครบถ้วน)
     // ==========================================
     document.getElementById('bookingForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const time = document.getElementById('selectedTime').value;
       const checkedSvcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(',');
       
-      if(!checkedSvcs) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการอย่างน้อย 1 รายการ', 'warning');
       if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจากปฏิทิน', 'warning');
 
       const payload = {
+        action: 'submitBooking', // เพิ่มบรรทัดนี้ให้ Google Sheets รู้ว่าต้องทำอะไร
         lineUid: userUid,
         vehicleId: document.getElementById('vehicleSelect').value,
         serviceType: checkedSvcs,
@@ -439,18 +449,20 @@
         deliveryType: document.getElementById('deliverySelect').value,
         lat: document.getElementById('pickupLat').value,
         lng: document.getElementById('pickupLng').value,
-        extraFee: calculateDeliveryFee()
+        extraFee: calculateDeliveryFee(),
+        branchId: document.getElementById('branchSelect').value,
+        lineType: document.getElementById('selectedLineType').value
       };
 
       Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
-        const res = await fetch(`${API_URL}?action=submitBooking`, { method: 'POST', body: JSON.stringify(payload) });
+        const res = await fetch(API_URL, { 
+          method: 'POST', 
+          body: JSON.stringify(payload) 
+        });
         const result = await res.json();
         if(result.status === 'success') {
-           Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อย', 'success').then(() => {
-             // เคลียร์ฟอร์มหลังจองเสร็จ หรือปิดหน้าต่าง
-             window.location.reload(); 
-           });
+           Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อย', 'success').then(() => window.location.reload());
         }
         else throw new Error(result.message);
       } catch (err) { Swal.fire('Error', err.message, 'error'); }
