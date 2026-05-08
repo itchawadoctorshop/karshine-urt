@@ -28,7 +28,7 @@
       <img id="profileImg" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover">
       <div>
         <p class="text-xs text-blue-200">ยินดีต้อนรับ</p>
-        <p id="profileName" class="font-bold text-lg">ลูกค้าคนสำคัญ</p>
+        <p id="profileName" class="font-bold text-lg">กำลังโหลด...</p>
       </div>
     </div>
     <h1 class="text-xl font-bold">จองคิวเข้ารับบริการ</h1>
@@ -81,7 +81,8 @@
           <option value="none">ขับมาเอง (ไม่ใช้บริการ)</option>
           <option value="pickup">ให้ร้านไปรับ (ปักหมุดจุดรับ)</option>
           <option value="dropoff">ให้ร้านไปส่ง (ปักหมุดจุดส่ง)</option>
-          <option value="roundtrip_diff">รับ-ส่ง (ใช้แผนที่ระบุพิกัด)</option>
+          <option value="roundtrip_same">รับ-ส่ง จุดเดียวกัน</option>
+          <option value="roundtrip_diff">รับ-ส่ง คนละจุด</option>
         </select>
         
         <div id="mapContainer" class="hidden space-y-3">
@@ -115,23 +116,28 @@
 
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
-    const LIFF_ID = "ใส่_LIFF_ID_ที่นี่"; 
+    const LIFF_ID = "2009981892-1HxmA42h"; // ⚠️ อย่าลืมใส่ LIFF ID นะครับ
     
     let masterData = {};
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     let map, markerPickup, markerDropoff, activePin = 'pickup';
 
     async function init() {
-      // โหลด LIFF Profile
+      // โหลด LIFF และบังคับล็อกอินถ้ายังไม่ได้ล็อกอิน
       try {
         await liff.init({ liffId: LIFF_ID });
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          userUid = profile.userId;
-          document.getElementById('profileImg').src = profile.pictureUrl;
-          document.getElementById('profileName').textContent = profile.displayName;
+        if (!liff.isLoggedIn()) {
+          liff.login(); // บังคับเด้งล็อกอินสำหรับเบราว์เซอร์
+          return;
         }
-      } catch(e) { console.log('LIFF NOT READY'); }
+        const profile = await liff.getProfile();
+        userUid = profile.userId;
+        document.getElementById('profileImg').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        document.getElementById('profileName').textContent = profile.displayName;
+      } catch(e) { 
+        console.log('LIFF Error:', e); 
+        document.getElementById('profileName').textContent = "กำลังใช้งานในโหมดทดสอบ";
+      }
 
       await loadInitialData();
       flatpickr("#inlineCalendar", { 
@@ -284,38 +290,34 @@
       let currentMin = parseInt(openT[0]) * 60 + parseInt(openT[1]);
       const endMin = parseInt(closeT[0]) * 60 + parseInt(closeT[1]);
       
-      // 1. สร้าง Timeline 1 วัน (1440 นาที) เพื่อเช็คคิว
       let timeline = new Array(1440).fill(0);
       masterData.activeBookings.forEach(b => {
          if(b.branchId !== branchId) return;
-         if(!b.bookingDate.startsWith(selectedDate)) return; // เอาแค่วันที่เลือก
-         if(b.lineType !== type) return; // แยกคิว Line1 และ Line2
+         if(!b.bookingDate.startsWith(selectedDate)) return; 
+         if(b.lineType !== type) return; 
          
          const timePart = b.bookingDate.split('T')[1]; 
          if(timePart) {
            const bStart = parseInt(timePart.split(':')[0])*60 + parseInt(timePart.split(':')[1]);
-           // คำนวณระยะเวลาของคิวนั้น
            let bDuration = 0;
            b.serviceType.split(',').forEach(sId => {
               const svc = masterData.services.find(s => s.service_id === sId);
               if(svc) bDuration += parseInt(svc.std_time_mins) || 30;
            });
            bDuration += parseInt(branch.buffer_time) || 0;
-           // จองคิวลง Timeline
            for(let i = bStart; i < bStart + bDuration; i++) { if(i < 1440) timeline[i]++; }
          }
       });
 
       let html = '';
-      const stepMin = type === 'LINE1' ? 10 : 30; // เครื่องหั่น 10 นาที / คนหั่น 30 นาที
-      const capacity = type === 'LINE1' ? 1 : (parseInt(branch.bay_capacity) || 1); // จำนวนช่องรับรถ
+      const stepMin = type === 'LINE1' ? 10 : 30; 
+      const capacity = type === 'LINE1' ? 1 : (parseInt(branch.bay_capacity) || 1); 
 
       while (currentMin + totalTime <= endMin) {
         const h = Math.floor(currentMin / 60).toString().padStart(2, '0');
         const m = (currentMin % 60).toString().padStart(2, '0');
         const timeStr = `${h}:${m}`;
         
-        // เช็คว่าเวลานี้ถูกจองเต็มช่องหรือยัง
         let isAvailable = true;
         let requiredDuration = type === 'LINE1' ? 10 : (totalTime + (parseInt(branch.buffer_time)||10));
         
@@ -326,7 +328,6 @@
         if (isAvailable) {
           html += `<button type="button" onclick="confirmTimeSlot('${timeStr}')" class="border-2 border-gray-200 bg-white text-gray-700 py-3 rounded-xl hover:bg-blue-50 hover:border-blue-500 hover:text-blue-600 transition text-sm font-bold shadow-sm">${timeStr}</button>`;
         } else {
-          // ถ้าคิวเต็มให้ทำปุ่มสีเทา กดไม่ได้
           html += `<button type="button" disabled class="border-2 border-gray-200 bg-gray-100 text-gray-400 py-3 rounded-xl cursor-not-allowed shadow-inner text-xs font-bold">${timeStr} (เต็ม)</button>`;
         }
         
@@ -357,6 +358,7 @@
       
       if(val === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); }
       else if(val === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); setActivePin('dropoff'); }
+      else if(val === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); }
       else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); }
       updateSummary();
     }
@@ -373,7 +375,10 @@
     }
 
     function initMap() {
-      const bLat = 9.143; const bLng = 99.330;
+      const branchId = document.getElementById('branchSelect').value;
+      const branch = masterData.branches.find(b => b.branch_id === branchId);
+      const bLat = parseFloat(branch?.lat) || 9.143; const bLng = parseFloat(branch?.lng) || 99.330;
+
       map = L.map('map').setView([bLat, bLng], 14);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -402,7 +407,7 @@
           if(activePin==='pickup') { markerPickup.setLatLng(ll); savePinLocation('pickup', {lat:ll[0], lng:ll[1]}); }
           else { markerDropoff.setLatLng(ll); savePinLocation('dropoff', {lat:ll[0], lng:ll[1]}); }
           Swal.close();
-        });
+        }, () => { Swal.fire('แจ้งเตือน', 'กรุณาอนุญาตให้เข้าถึงตำแหน่ง GPS', 'error') });
       }
     }
 
@@ -422,26 +427,25 @@
       const bLat = parseFloat(branch.lat); const bLng = parseFloat(branch.lng);
 
       let dist1 = 0, dist2 = 0;
-      if(val === 'pickup' || val === 'roundtrip_diff') dist1 = calcCrow(bLat, bLng, parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value));
+      if(val === 'pickup' || val === 'roundtrip_same' || val === 'roundtrip_diff') dist1 = calcCrow(bLat, bLng, parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value));
       if(val === 'dropoff' || val === 'roundtrip_diff') dist2 = calcCrow(bLat, bLng, parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value));
+      if(val === 'roundtrip_same') dist2 = dist1;
 
       const cost1 = Math.max(0, dist1 - freeKm) * feeKm;
       const cost2 = Math.max(0, dist2 - freeKm) * feeKm;
       return Math.round(cost1 + cost2);
     }
 
-    // ==========================================
-    // ส่งข้อมูลจองคิว (แก้ไขให้ส่งข้อมูลครบถ้วน)
-    // ==========================================
     document.getElementById('bookingForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const time = document.getElementById('selectedTime').value;
       const checkedSvcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(',');
       
+      if(!checkedSvcs) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการอย่างน้อย 1 รายการ', 'warning');
       if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจากปฏิทิน', 'warning');
 
       const payload = {
-        action: 'submitBooking', // เพิ่มบรรทัดนี้ให้ Google Sheets รู้ว่าต้องทำอะไร
+        action: 'submitBooking',
         lineUid: userUid,
         vehicleId: document.getElementById('vehicleSelect').value,
         serviceType: checkedSvcs,
@@ -456,10 +460,7 @@
 
       Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
-        const res = await fetch(API_URL, { 
-          method: 'POST', 
-          body: JSON.stringify(payload) 
-        });
+        const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
         const result = await res.json();
         if(result.status === 'success') {
            Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อย', 'success').then(() => window.location.reload());
