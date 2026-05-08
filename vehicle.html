@@ -58,17 +58,14 @@
   </div>
 
   <script>
-    // ⚠️ แก้ไข API_URL เป็นของ Google Apps Script ของคุณโอม
+    // ⚠️ แก้ไข API_URL ของคุณโอม
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
     
     // ⚠️ แก้ไข LIFF_ID สำหรับหน้าจัดการรถ
-    const LIFF_ID = "2009981892-wLKP1wYT"; 
+    const LIFF_ID = "ใส่_LIFF_ID_ของหน้าจัดการรถ_ที่นี่"; 
     
-    let userUid = "U825fa531ed42d452068d034671e8c2e2"; // Mock UID สำหรับโหมดทดสอบ
+    let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     
-    // ==========================================
-    // 1. ระบบดึงข้อมูล LINE อัจฉริยะ (กันค้าง)
-    // ==========================================
     async function init() {
       try {
         await liff.init({ liffId: LIFF_ID });
@@ -80,23 +77,16 @@
         userUid = profile.userId;
         document.getElementById('profileImg').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
         document.getElementById('profileName').textContent = profile.displayName;
-        
-        // ซ่อนแถบสถานะเมื่อโหลดสำเร็จ
         document.getElementById('liffStatus').style.display = 'none';
         
-        enableForm();
-        loadVehicles();
+        enableForm(); loadVehicles();
       } catch(e) {
-        console.error('LIFF Error:', e);
-        // กรณีเปิดในคอมหรือ LIFF พัง จะสลับเป็นโหมดทดสอบทันที
         const statusBar = document.getElementById('liffStatus');
         statusBar.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ใช้งานโหมดทดสอบ (นอกแอป LINE)';
         statusBar.classList.replace('bg-blue-100', 'bg-yellow-100');
         statusBar.classList.replace('text-blue-700', 'text-yellow-700');
         document.getElementById('profileName').textContent = "โหมดทดสอบระบบ";
-        
-        enableForm();
-        loadVehicles();
+        enableForm(); loadVehicles();
       }
     }
 
@@ -108,9 +98,6 @@
       btn.classList.add('hover:bg-green-800', 'active:scale-95');
     }
 
-    // ==========================================
-    // 2. โหลดรายการรถยนต์ของลูกค้า
-    // ==========================================
     async function loadVehicles() {
       try {
         const res = await fetch(`${API_URL}?action=getUserVehicles&lineUid=${userUid}`);
@@ -135,14 +122,11 @@
       }
     }
 
-    // ==========================================
-    // 3. บันทึกรถยนต์ (ใช้ระบบ POST แบบใหม่)
-    // ==========================================
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const payload = {
-        action: 'addVehicle', // แนบ Action เข้าไปใน Payload ให้หลังบ้านรู้จัก
+        action: 'addVehicle',
         lineUid: userUid,
         licensePlate: document.getElementById('vPlate').value,
         brandModel: document.getElementById('vModel').value,
@@ -153,6 +137,9 @@
       try {
         const res = await fetch(API_URL, { 
           method: 'POST', 
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8' // 👈 บรรทัดที่เพิ่มเข้ามาเพื่อแก้ปัญหาข้อมูลแหว่ง
+          },
           body: JSON.stringify(payload) 
         });
         const result = await res.json();
@@ -160,7 +147,7 @@
         if(result.status === 'success') {
           Swal.fire('สำเร็จ', 'บันทึกข้อมูลรถยนต์เรียบร้อย', 'success');
           document.getElementById('addVehicleForm').reset();
-          loadVehicles(); // รีเฟรชรายการรถ
+          loadVehicles();
         } else {
           throw new Error(result.message);
         }
@@ -169,7 +156,6 @@
       }
     });
 
-    // เริ่มการทำงานเมื่อหน้าเว็บโหลดเสร็จ
     document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
