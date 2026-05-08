@@ -60,6 +60,13 @@
     </div>
 
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+      <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-box-open text-orange-500"></i> แพ็กเกจของฉัน</h3>
+      <div id="homePackages" class="space-y-3">
+        <p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p>
+      </div>
+    </div>
+
+    <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> คิวการจองของคุณ</h3>
       <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</div>
     </div>
@@ -157,7 +164,7 @@
     </div>
     
     <div class="bg-white p-6 rounded-3xl shadow-sm border-t-4 border-gray-400">
-      <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-plus-circle text-gray-400"></i> เพิ่มรถคันใหม่</h2>
+      <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-circle-plus text-gray-400"></i> เพิ่มรถคันใหม่</h2>
       <form id="addVehicleForm" class="space-y-4">
         <div>
           <label class="text-[10px] font-bold text-gray-400 ml-1 uppercase">ทะเบียนรถ</label>
@@ -198,31 +205,28 @@
 
   <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex justify-around p-3 pb-8 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.05)]">
     <button onclick="showSection('home-section')" id="nav-home" class="flex flex-col items-center gap-1 text-gray-300 transition-all nav-active">
-      <i class="fa-solid fa-house-chimney text-xl"></i><span class="text-[10px] font-bold">หน้าหลัก</span>
+      <i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">หน้าหลัก</span>
     </button>
     <button onclick="navToBooking()" id="nav-booking" class="flex flex-col items-center gap-1 text-gray-300 transition-all">
-      <i class="fa-solid fa-calendar-circle-plus text-xl"></i><span class="text-[10px] font-bold">จองคิว</span>
+      <i class="fa-solid fa-calendar-check text-xl"></i><span class="text-[10px] font-bold">จองคิว</span>
     </button>
     <button onclick="showSection('cars-section')" id="nav-cars" class="flex flex-col items-center gap-1 text-gray-300 transition-all">
-      <i class="fa-solid fa-cars text-xl"></i><span class="text-[10px] font-bold">รถของฉัน</span>
+      <i class="fa-solid fa-car text-xl"></i><span class="text-[10px] font-bold">รถของฉัน</span>
     </button>
     <button onclick="showSection('profile-section')" id="nav-profile" class="flex flex-col items-center gap-1 text-gray-300 transition-all">
-      <i class="fa-solid fa-user-gear text-xl"></i><span class="text-[10px] font-bold">สมาชิก</span>
+      <i class="fa-solid fa-user text-xl"></i><span class="text-[10px] font-bold">สมาชิก</span>
     </button>
   </nav>
 
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
-    const LIFF_ID = "2009981892-1HxmA42h"; // ✅ ใช้ LIFF ID ของคุณโอมที่ส่งมา
+    const LIFF_ID = "2009981892-1HxmA42h"; 
     
     let masterData = {};
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     let map, markerPickup, markerDropoff, activePin = 'pickup';
     let currentTotalTime = 0; 
 
-    // ==========================================
-    // 1. LIFF & INITIAL LOAD
-    // ==========================================
     async function init() {
       try {
         await liff.init({ liffId: LIFF_ID });
@@ -253,15 +257,16 @@
 
     async function refreshData() {
       try {
-        const res = await fetch(`${API_URL}?action=getInitialBookingData&lineUid=${userUid}`);
+        // 🎯 เคล็ดลับ: เติม Date.now() ต่อท้าย URL เพื่อบังคับให้มือถือดึงข้อมูลสดใหม่เสมอ ไม่เอาของเก่ามาโชว์!
+        const res = await fetch(`${API_URL}?action=getInitialBookingData&lineUid=${userUid}&t=${Date.now()}`);
         const data = await res.json();
-        masterData = data; // ใช้ข้อมูลโดยตรงเพราะหลังบ้านส่ง object มาแล้ว
+        masterData = data.data; // ดึง .data มาใช้
         
         document.getElementById('userPoints').innerText = document.getElementById('profilePoints').innerText = masterData.points || 0;
         
-        // Render Car List & Select
         const carList = document.getElementById('carList');
         const vSel = document.getElementById('vehicleSelect');
+        
         if(masterData.vehicles && masterData.vehicles.length > 0) {
           carList.innerHTML = masterData.vehicles.map(v => `<div class="p-4 bg-gray-50 rounded-2xl flex items-center gap-3 border border-gray-100">
             <div class="bg-red-100 p-2 rounded-lg text-red-500"><i class="fa-solid fa-car-side"></i></div>
@@ -273,7 +278,6 @@
           vSel.innerHTML = '<option value="">กรุณาเพิ่มรถก่อนจอง</option>';
         }
 
-        // Render Branches
         if(masterData.branches) {
            document.getElementById('branchSelect').innerHTML = masterData.branches.map(b => `<option value="${b.branch_id}">${b.branch_name}</option>`).join('');
         }
@@ -283,9 +287,6 @@
       } catch(e) { Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้: ' + e.message, 'error'); }
     }
 
-    // ==========================================
-    // 2. NAVIGATION
-    // ==========================================
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
@@ -300,9 +301,6 @@
       } else { showSection('booking-section'); }
     }
 
-    // ==========================================
-    // 3. VEHICLE SYSTEM (ใช้ลอจิกจากตัวที่สมบูรณ์)
-    // ==========================================
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const payload = { 
@@ -329,9 +327,6 @@
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
 
-    // ==========================================
-    // 4. BOOKING SYSTEM (Parallel Timeline)
-    // ==========================================
     function selectLine(type) {
       document.getElementById('selectedLineType').value = type;
       document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)';
@@ -406,7 +401,6 @@
       let curr = parseInt(openT[0])*60 + parseInt(openT[1]);
       const end = parseInt(closeT[0])*60 + parseInt(closeT[1]);
       
-      // Parallel Timeline Logic
       let tl1 = new Array(1440).fill(0), tl2 = new Array(1440).fill(0);
       if(masterData.activeBookings) {
         masterData.activeBookings.forEach(b => {
@@ -414,8 +408,6 @@
           const start = parseInt(b.bookingDate.split('T')[1].split(':')[0])*60 + parseInt(b.bookingDate.split('T')[1].split(':')[1]);
           if(b.lineType==='LINE1') { 
             for(let i=start; i<start+10; i++) if(i<1440) tl1[i]++; 
-            // ลอจิก: ถ้าเครื่องล้างเสร็จแล้วมีเวลาจองเพิ่ม (ดูดฝุ่น) ให้ไปนับคิว tl2 ต่อ
-            // (คำนวณจาก b.serviceType...)
           } 
           else { for(let i=start; i<start+30+parseInt(branch.buffer_time); i++) if(i<1440) tl2[i]++; }
         });
@@ -443,9 +435,6 @@
 
     function confirmTime(t) { document.getElementById('selectedTime').value = t; document.getElementById('displaySelectedTime').innerText = t + ' น.'; Swal.close(); }
 
-    // ==========================================
-    // 5. MAP & DELIVERY (ฟีเจอร์ครบ 5 ออปชัน)
-    // ==========================================
     function toggleDelivery() {
       const v = document.getElementById('deliverySelect').value;
       const mapDiv = document.getElementById('mapContainer');
@@ -491,7 +480,6 @@
       document.getElementById(`${type}Lat`).value = ll.lat; 
       document.getElementById(`${type}Lng`).value = ll.lng; 
       if(document.getElementById('deliverySelect').value === 'roundtrip_same') {
-         // ถ้าเลือกจุดเดียวกัน ให้ก๊อปพิกัดไปใส่อีกช่องอัตโนมัติ
          document.getElementById('dropoffLat').value = ll.lat; 
          document.getElementById('dropoffLng').value = ll.lng; 
       }
@@ -529,14 +517,11 @@
       let total = 0;
       if(v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], pL[0], pL[1]) - (b.free_km||0)) * (b.fee_per_km||0);
       if(v === 'dropoff' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], dL[0], dL[1]) - (b.free_km||0)) * (b.fee_per_km||0);
-      if(v === 'roundtrip_same') total *= 2; // ถ้าจุดเดิมก็คูณสองขา
+      if(v === 'roundtrip_same') total *= 2; 
 
       return Math.round(total);
     }
 
-    // ==========================================
-    // 6. FINAL SUBMIT
-    // ==========================================
     async function submitBooking() {
       const time = document.getElementById('selectedTime').value;
       if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจองก่อนครับ', 'warning');
