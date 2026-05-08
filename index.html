@@ -58,10 +58,14 @@
       </div>
       <i class="fa-solid fa-car-wash text-8xl absolute -right-4 -bottom-4 opacity-20 rotate-12"></i>
     </div>
+
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-box-open text-orange-500"></i> แพ็กเกจของฉัน</h3>
-      <div id="homePackages" class="space-y-3"><p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p></div>
+      <div id="homePackages" class="space-y-3">
+        <p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p>
+      </div>
     </div>
+
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> คิวการจองของคุณ</h3>
       <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</div>
@@ -71,6 +75,7 @@
   <section id="booking-section" class="section p-4 space-y-5">
     <div class="bg-white p-5 rounded-3xl shadow-sm">
       <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-calendar-plus text-blue-500"></i> ทำรายการจอง</h2>
+      
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">1. รถยนต์และขนาด</label>
         <select id="vehicleSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" required></select>
@@ -81,7 +86,9 @@
         </select>
         <select id="branchSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="renderServices()"></select>
       </div>
+
       <hr class="my-6 border-dashed">
+
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">2. เลือกบริการ</label>
         <div class="flex bg-gray-100 p-1 rounded-2xl relative mb-4">
@@ -92,17 +99,22 @@
         <input type="hidden" id="selectedLineType" value="LINE1">
         <div id="servicesContainer" class="space-y-2"></div>
       </div>
+
       <hr class="my-6 border-dashed">
+
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">3. วันและเวลาจอง</label>
         <div class="flex justify-center"><input type="text" id="inlineCalendar" class="hidden"></div>
-        <input type="hidden" id="bookDate"><input type="hidden" id="selectedTime">
+        <input type="hidden" id="bookDate">
+        <input type="hidden" id="selectedTime">
         <div class="bg-blue-50 border-2 border-blue-100 rounded-2xl p-4 text-center cursor-pointer active:scale-95 transition" onclick="openTimeSlotModal()">
           <p id="displaySelectedTime" class="text-3xl font-bold text-blue-600">- - : - -</p>
           <p class="text-[10px] text-blue-400 mt-1 uppercase font-bold">กดเพื่อเลือกเวลา</p>
         </div>
       </div>
+      
       <hr class="my-6 border-dashed">
+
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">4. บริการรับ-ส่ง (Valet)</label>
         <select id="deliverySelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="toggleDelivery()">
@@ -112,18 +124,33 @@
           <option value="roundtrip_same">รับ-ส่ง ที่จุดเดียวกัน</option>
           <option value="roundtrip_diff">รับ-ส่ง คนละจุด (ระบุในแผนที่)</option>
         </select>
+        
         <div id="mapContainer" class="hidden space-y-3 pt-2">
-          <div id="markerToggle" class="hidden flex gap-2"><button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow-sm border-2 border-green-600 transition">📍 จุดรับรถ</button><button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent transition">📍 จุดส่งรถ</button></div>
+          <div id="markerToggle" class="hidden flex gap-2">
+            <button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow-sm border-2 border-green-600 transition">📍 จุดรับรถ</button>
+            <button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent transition">📍 จุดส่งรถ</button>
+          </div>
           <div id="map"></div>
-          <button type="button" onclick="getCurrentGPS()" class="w-full py-3 bg-blue-100 text-blue-600 rounded-xl text-xs font-bold active:bg-blue-200 transition"><i class="fa-solid fa-location-crosshairs"></i> ใช้พิกัดปัจจุบันของฉัน</button>
-          <input type="hidden" id="pickupLat"><input type="hidden" id="pickupLng"><input type="hidden" id="dropoffLat"><input type="hidden" id="dropoffLng">
+          <button type="button" onclick="getCurrentGPS()" class="w-full py-3 bg-blue-100 text-blue-600 rounded-xl text-xs font-bold active:bg-blue-200 transition">
+            <i class="fa-solid fa-location-crosshairs"></i> ใช้พิกัดปัจจุบันของฉัน
+          </button>
+          <input type="hidden" id="pickupLat"><input type="hidden" id="pickupLng">
+          <input type="hidden" id="dropoffLat"><input type="hidden" id="dropoffLng">
         </div>
       </div>
     </div>
+
     <div class="bg-gray-900 p-6 rounded-[2.5rem] text-white shadow-2xl">
       <h3 class="font-bold text-sm mb-3 text-blue-400 uppercase tracking-widest">สรุปรายการ</h3>
       <div id="summaryList" class="space-y-1 text-xs text-gray-400 mb-4"></div>
-      <div class="flex justify-between text-xl font-bold border-t border-gray-700 pt-4"><span>ยอดรวมประเมิน</span><span class="text-green-400" id="sumTotal">0.-</span></div>
+      <div class="flex justify-between text-xl font-bold border-t border-gray-700 pt-4">
+        <span>ยอดรวมประเมิน</span>
+        <span class="text-green-400" id="sumTotal">0.-</span>
+      </div>
+      <p class="text-[9px] text-gray-500 mt-4 text-center leading-relaxed">
+        *กรุณามาถึงก่อนเวลาจอง 3 นาที เพื่อเช็คอินผ่าน GPS<br>
+        ระบบจะยกเลิกคิวอัตโนมัติหากท่านมาสายเกินเวลาที่กำหนด
+      </p>
       <button type="button" onclick="submitBooking()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg mt-4 shadow-lg active:scale-95 transition">ยืนยันการจองคิว</button>
     </div>
   </section>
@@ -131,17 +158,19 @@
   <section id="cars-section" class="section p-4 space-y-5">
     <div class="bg-white p-6 rounded-3xl shadow-sm">
       <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-car text-red-500"></i> รถยนต์ของฉัน</h2>
-      <div id="carList" class="space-y-3"><div class="text-center py-4 text-gray-400 italic">กำลังโหลดรายการรถ...</div></div>
+      <div id="carList" class="space-y-3">
+        <div class="text-center py-4 text-gray-400 italic">กำลังโหลดรายการรถ...</div>
+      </div>
     </div>
     
     <div class="bg-white p-6 rounded-3xl shadow-sm border-t-4 border-blue-500">
       <h2 class="font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="fa-solid fa-file-signature text-blue-500"></i> เพิ่มรถคันใหม่</h2>
-      <p class="text-xs text-gray-400 mb-5">ลงทะเบียนรถยนต์เพื่อความรวดเร็วในการจองคิว</p>
+      <p class="text-xs text-gray-400 mb-5">ลงทะเบียนเพื่อความรวดเร็วในการจองคิว</p>
       
       <form id="addVehicleForm" class="space-y-5">
         
         <div class="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
-          <h3 class="text-xs font-bold text-blue-600 uppercase border-b border-gray-200 pb-2"><i class="fa-solid fa-user"></i> ข้อมูลเจ้าของรถ (จำเป็น)</h3>
+          <h3 class="text-xs font-bold text-blue-600 uppercase border-b border-gray-200 pb-2"><i class="fa-solid fa-user"></i> ข้อมูลติดต่อ (จำเป็น)</h3>
           <div>
             <label class="text-[10px] font-bold text-gray-500 uppercase">ชื่อ - นามสกุล</label>
             <input type="text" id="uName" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="ระบุชื่อผู้ติดต่อ" required>
@@ -176,37 +205,34 @@
              </div>
              <div>
                 <label class="text-[10px] font-bold text-gray-500 uppercase">จังหวัด</label>
-                <input type="text" id="vProvince" list="provinceList" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="พิมพ์ชื่อจังหวัด" required>
-                <datalist id="provinceList"></datalist>
+                <input type="text" id="vProvince" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="ระบุจังหวัด" required>
              </div>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
              <div>
-                <label class="text-[10px] font-bold text-gray-500 uppercase">ยี่ห้อ (Brand)</label>
-                <input type="text" id="vBrand" list="brandList" onchange="updateModels()" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เลือกยี่ห้อ" required>
-                <datalist id="brandList"></datalist>
+                <label class="text-[10px] font-bold text-gray-500 uppercase">ยี่ห้อรถ (Brand)</label>
+                <input type="text" id="vBrand" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เช่น Toyota, Honda" required>
              </div>
              <div>
                 <label class="text-[10px] font-bold text-gray-500 uppercase">รุ่นรถ (Model)</label>
-                <input type="text" id="vModel" list="modelList" onchange="autoSelectSize()" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เลือกรุ่น" required>
-                <datalist id="modelList"></datalist>
+                <input type="text" id="vModel" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เช่น Civic, Fortuner" required>
              </div>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
-             <div>
+             <div class="col-span-2">
                 <label class="text-[10px] font-bold text-gray-500 uppercase">สีรถ</label>
                 <input type="text" id="vColor" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เช่น ขาว, เทาด้าน" required>
              </div>
-             <div>
-                <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถ</label>
-                <select id="vSize" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 font-bold text-blue-600 bg-blue-50" required>
-                  <option value="">ประเมินไซส์...</option>
-                  <option value="M">M (Eco/เก๋งเล็ก)</option>
-                  <option value="L">L (SUV/เก๋งใหญ่)</option>
-                  <option value="XL">XL (กระบะ/ตู้)</option>
+             <div class="col-span-2 mt-2">
+                <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถเบื้องต้น (เพื่อประเมินราคา)</label>
+                <select id="vSize" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 font-bold text-blue-600 bg-blue-50 focus:ring-2 focus:ring-blue-500 shadow-sm" required>
+                  <option value="M">ขนาด M (รถเก๋งเล็ก / Eco Car)</option>
+                  <option value="L">ขนาด L (รถเก๋งใหญ่ / SUV)</option>
+                  <option value="XL">ขนาด XL (รถกระบะ / รถตู้ / PPV)</option>
                 </select>
+                <p class="text-[9px] text-red-500 mt-1.5 font-bold">* แอดมินจะทำการตรวจสอบและยืนยันขนาดรถที่ถูกต้องอีกครั้งที่หน้าสาขา</p>
              </div>
           </div>
         </div>
@@ -223,9 +249,16 @@
       <img id="profileImgBig" src="" class="w-24 h-24 rounded-full mx-auto border-4 border-blue-50 object-cover mb-4 shadow-md">
       <h2 id="profileNameBig" class="text-xl font-bold text-gray-800">...</h2>
       <p id="profileUid" class="text-[10px] text-gray-300 mt-2 uppercase tracking-widest">UID: ...</p>
+      
       <div class="grid grid-cols-2 gap-4 mt-8">
-        <div class="bg-blue-50 p-5 rounded-[2rem]"><p class="text-[10px] text-blue-400 uppercase font-bold">แต้มทั้งหมด</p><p class="text-2xl font-bold text-blue-600" id="profilePoints">0</p></div>
-        <div class="bg-green-50 p-5 rounded-[2rem]"><p class="text-[10px] text-green-400 uppercase font-bold">มาใช้บริการ</p><p class="text-2xl font-bold text-green-600">0 <span class="text-xs">ครั้ง</span></p></div>
+        <div class="bg-blue-50 p-5 rounded-[2rem]">
+          <p class="text-[10px] text-blue-400 uppercase font-bold">แต้มทั้งหมด</p>
+          <p class="text-2xl font-bold text-blue-600" id="profilePoints">0</p>
+        </div>
+        <div class="bg-green-50 p-5 rounded-[2rem]">
+          <p class="text-[10px] text-green-400 uppercase font-bold">มาใช้บริการ</p>
+          <p class="text-2xl font-bold text-green-600">0 <span class="text-xs">ครั้ง</span></p>
+        </div>
       </div>
     </div>
     <button onclick="liff.closeWindow()" class="w-full text-red-400 font-bold py-4 text-sm"><i class="fa-solid fa-door-open"></i> ปิดแอปพลิเคชัน</button>
@@ -246,24 +279,6 @@
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     let map, markerPickup, markerDropoff, activePin = 'pickup';
     let currentTotalTime = 0; 
-
-    // 🧠 ฐานข้อมูลอัจฉริยะ (Dictionary) สำหรับรถยนต์
-    const provinces = ["สุราษฎร์ธานี", "กรุงเทพมหานคร", "กระบี่", "ภูเก็ต", "นครศรีธรรมราช", "ชุมพร", "สงขลา", "พังงา"]; // (สามารถพิมพ์หาจังหวัดอื่นได้อิสระ)
-    const carDb = {
-      "Toyota": { "Yaris": "M", "Vios": "M", "Altis": "L", "Camry": "L", "Corolla Cross": "L", "Fortuner": "XL", "Hilux Revo": "XL" },
-      "Honda": { "Brio": "M", "City": "M", "Civic": "M", "HR-V": "L", "CR-V": "L", "Accord": "L" },
-      "Isuzu": { "D-Max": "XL", "MU-X": "XL" },
-      "Mazda": { "Mazda 2": "M", "Mazda 3": "M", "CX-3": "L", "CX-5": "L", "BT-50": "XL" },
-      "Nissan": { "Mazda 2": "M", "Almera": "M", "Kicks": "L", "Navara": "XL", "Terra": "XL" },
-      "Mitsubishi": { "D-Max": "XL", "Triton": "XL", "Pajero Sport": "XL" },
-      "Ford": { "Colorado": "XL", "Ranger": "XL", "Everest": "XL" },
-      "BYD": { "Dolphin": "M", "Atto 3": "L", "Seal": "M" },
-      "Tesla": { "Model 3": "M", "Model Y": "L" },
-      "Avatr": { "11": "L", "12": "L" },
-      "Mercedes-Benz": { "A-Class": "M", "C-Class": "L", "E-Class": "L", "SLK 200": "M", "GLC": "L" },
-      "BMW": { "A-Class": "M", "3 Series": "L", "5 Series": "L", "X1": "L", "X3": "L" },
-      "Chevrolet": { "Sonic": "M", "Colorado": "XL", "Captiva": "XL" }
-    };
 
     function parseTimeStringToMinutes(val, defaultMins) {
       if (!val) return defaultMins;
@@ -287,41 +302,10 @@
         console.log('Test Mode Active'); document.getElementById('profileName').textContent = "โหมดทดสอบระบบ";
       }
       
-      initCarDropdowns();
       await refreshData();
       
       flatpickr("#inlineCalendar", { inline: true, locale: "th", minDate: "today", onChange: (d, str) => { document.getElementById('bookDate').value = str; document.getElementById('selectedTime').value=''; document.getElementById('displaySelectedTime').innerText='- - : - -'; openTimeSlotModal(); } });
       document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
-    }
-
-    // 🎯 โหลดรายชื่อจังหวัดและยี่ห้อรถใส่ Datalist
-    function initCarDropdowns() {
-      document.getElementById('provinceList').innerHTML = provinces.map(p => `<option value="${p}">`).join('');
-      document.getElementById('brandList').innerHTML = Object.keys(carDb).map(b => `<option value="${b}">`).join('');
-    }
-
-    // 🎯 อัปเดตรายชื่อรุ่นรถ ตามยี่ห้อที่เลือก
-    function updateModels() {
-      const brand = document.getElementById('vBrand').value;
-      const modelList = document.getElementById('modelList');
-      if (carDb[brand]) {
-        modelList.innerHTML = Object.keys(carDb[brand]).map(m => `<option value="${m}">`).join('');
-      } else {
-        modelList.innerHTML = ''; // ถ้าพิมพ์ยี่ห้อแปลกๆ เข้ามา ให้ล้างรายการรุ่น
-      }
-    }
-
-    // 🎯 AI คำนวณไซส์รถอัตโนมัติ
-    function autoSelectSize() {
-      const brand = document.getElementById('vBrand').value;
-      const model = document.getElementById('vModel').value;
-      const sizeSelect = document.getElementById('vSize');
-      if (carDb[brand] && carDb[brand][model]) {
-        sizeSelect.value = carDb[brand][model];
-        // ทำให้กระพริบให้ลูกค้ารู้ว่า AI ช่วยคำนวณให้แล้ว
-        sizeSelect.classList.add('ring-2', 'ring-green-400');
-        setTimeout(() => sizeSelect.classList.remove('ring-2', 'ring-green-400'), 1000);
-      }
     }
 
     async function refreshData() {
@@ -339,11 +323,9 @@
           carList.innerHTML = masterData.vehicles.map(v => `<div class="p-4 bg-gray-50 rounded-2xl flex items-center gap-3 border border-gray-100 relative">
             <div class="bg-red-100 p-2 rounded-lg text-red-500"><i class="fa-solid fa-car"></i></div>
             <div class="flex-1"><b class="text-gray-800">${v.plate}</b><br><span class="text-[10px] text-gray-400">${v.model} (${v.color})</span></div>
-            <button class="absolute top-2 right-2 text-gray-300 hover:text-red-500 p-2"><i class="fa-solid fa-trash-can text-sm"></i></button>
           </div>`).join('');
           vSel.innerHTML = masterData.vehicles.map(v => `<option value="${v.id}">${v.plate} - ${v.model}</option>`).join('');
           
-          // ดึงชื่อและเบอร์มาใส่ฟอร์มไว้ให้ ถ้าเคยลงทะเบียนรถแล้ว
           if(masterData.profile) {
              document.getElementById('uName').value = masterData.profile.name || '';
              document.getElementById('uPhone').value = masterData.profile.phone || '';
@@ -397,7 +379,6 @@
       } else { showSection('booking-section'); }
     }
 
-    // 🎯 ส่งข้อมูลรถ + Profile แบบครบถ้วนไปหลังบ้าน
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -427,7 +408,6 @@
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
 
-    // (ส่วน Booking, สรุปยอด, เปิดปฏิทิน, แผนที่ เหมือนเดิม ตัดออกเพื่อความกระชับของการส่ง แต่ในไฟล์จริงมีครบครับ)
     function selectLine(type) { document.getElementById('selectedLineType').value = type; document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)'; document.getElementById('btnLine1').classList.toggle('text-gray-800', type==='LINE1'); document.getElementById('btnLine1').classList.toggle('text-gray-400', type!=='LINE1'); document.getElementById('btnLine2').classList.toggle('text-gray-800', type==='LINE2'); document.getElementById('btnLine2').classList.toggle('text-gray-400', type!=='LINE2'); renderServices(); }
     function renderServices() { if(!masterData.services) return; const size = document.getElementById('carSizeSelect').value; const type = document.getElementById('selectedLineType').value; const container = document.getElementById('servicesContainer'); const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {}); let html = ''; for (const cat in grouped) { html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`; grouped[cat].forEach(s => { const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); const isQuick = s.service_name.includes('ด่วน'); const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน'); let auto = false, disabled = false; if (type==='LINE1') { if(isQuick) auto=true; if(isNormal) disabled=true; } else { if(isNormal) auto=true; if(isQuick) disabled=true; } html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2"> <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()"> <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]"> <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div> <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div> </div> </label>`; }); } container.innerHTML = html; updateSummary(); }
     function updateSummary() { const checked = document.querySelectorAll('.checkbox-custom:checked'); let totalP = 0, totalT = 0, html = ''; checked.forEach(cb => { totalP += parseInt(cb.dataset.price); totalT += parseInt(cb.dataset.time); html += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`; }); const fee = calculateDeliveryFee(); if(fee > 0) html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง</span><span>${fee}.-</span></div>`; document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ'; document.getElementById('sumTotal').innerText = (totalP + fee) + '.-'; currentTotalTime = totalT; document.getElementById('selectedTime').value = ''; document.getElementById('displaySelectedTime').innerText = '- - : - -'; }
