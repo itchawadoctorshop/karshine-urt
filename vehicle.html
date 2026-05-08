@@ -6,46 +6,51 @@
   <title>จัดการข้อมูลรถ - Karshine URT</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body class="bg-gray-50 p-4">
+<body class="bg-gray-100 pb-20 font-sans">
+  
+  <div id="liffStatus" class="bg-blue-100 text-blue-700 text-center py-2 text-sm font-bold shadow-sm">
+    <i class="fa-solid fa-spinner fa-spin"></i> สถานะ: กำลังเชื่อมต่อ LIFF...
+  </div>
 
-  <div class="max-w-md mx-auto">
-    <div id="debugStatus" class="text-sm text-center font-bold text-blue-800 mb-4 p-2 bg-blue-100 rounded-lg">
-      สถานะ: กำลังเชื่อมต่อระบบ...
-    </div>
-
-    <div id="profileBox" class="hidden flex items-center mb-6 p-3 bg-blue-50 rounded-lg shadow-sm border border-blue-100">
-      <img id="profileImage" src="" class="w-12 h-12 rounded-full mr-4 border-2 border-white shadow-sm">
+  <div class="max-w-md mx-auto p-4">
+    <div class="bg-white rounded-2xl shadow-sm p-4 mb-5 flex items-center gap-4 border border-gray-100">
+      <img id="profileImg" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="w-14 h-14 rounded-full border-2 border-gray-200 object-cover shadow-sm">
       <div>
         <p class="text-xs text-gray-500 mb-0.5">ผู้ใช้งานระบบ</p>
-        <p id="displayName" class="font-bold text-gray-800 text-sm"></p>
+        <p id="profileName" class="font-bold text-gray-800 text-lg">กำลังโหลด...</p>
       </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow-md overflow-hidden p-6 mb-6">
-      <h2 class="text-xl font-bold text-gray-800 border-b pb-2 mb-4">🚗 รถยนต์ของฉัน</h2>
-      <div id="loading" class="text-center text-gray-500 py-4">กำลังโหลดข้อมูลรถ...</div>
-      <div id="vehicleList" class="space-y-3 hidden"></div>
-      <div id="emptyState" class="text-center text-gray-400 py-4 hidden">ยังไม่มีข้อมูลรถยนต์ในระบบ</div>
+    <div class="bg-white rounded-2xl shadow-sm p-5 mb-5 border-t-4 border-red-500">
+      <h2 class="font-bold text-gray-800 mb-3 border-b border-gray-100 pb-3">
+        <i class="fa-solid fa-car text-red-500 mr-1"></i> รถยนต์ของฉัน
+      </h2>
+      <div id="vehicleList" class="space-y-3 text-sm text-gray-600">
+        <div class="text-center py-4 text-gray-400"><i class="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i><br>กำลังโหลดข้อมูลรถ...</div>
+      </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow-md overflow-hidden p-6">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">➕ เพิ่มรถคันใหม่</h2>
-      <form id="vehicleForm">
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-bold mb-2">ทะเบียนรถ (ระบุจังหวัด)</label>
-          <input type="text" id="licensePlate" required placeholder="เช่น กข 1234 สุราษฎร์ธานี" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+    <div class="bg-white rounded-2xl shadow-sm p-5 border-t-4 border-gray-500">
+      <h2 class="font-bold text-gray-800 mb-4">
+        <i class="fa-solid fa-plus text-gray-500 mr-1"></i> เพิ่มรถคันใหม่
+      </h2>
+      <form id="addVehicleForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">ทะเบียนรถ (ระบุจังหวัด)</label>
+          <input type="text" id="vPlate" class="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm focus:ring-2 focus:ring-gray-400 transition" placeholder="เช่น กข 1234 สุราษฎร์ธานี" required>
         </div>
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-bold mb-2">ยี่ห้อและรุ่น</label>
-          <input type="text" id="brandModel" required placeholder="เช่น Avatr 11, Mercedes SLK 200" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">ยี่ห้อและรุ่น</label>
+          <input type="text" id="vModel" class="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm focus:ring-2 focus:ring-gray-400 transition" placeholder="เช่น Avatr 11, Mercedes SLK 200" required>
         </div>
-        <div class="mb-6">
-          <label class="block text-gray-700 text-sm font-bold mb-2">สีรถ</label>
-          <input type="text" id="color" required placeholder="เช่น สีขาว, สีเทาด้าน" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">สีรถ</label>
+          <input type="text" id="vColor" class="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-sm focus:ring-2 focus:ring-gray-400 transition" placeholder="เช่น สีขาว, สีเทาด้าน" required>
         </div>
-        <button type="button" id="submitBtn" disabled class="w-full bg-gray-400 text-white font-bold py-3 px-4 rounded-lg cursor-not-allowed transition duration-300 shadow-sm">
+        <button type="submit" id="btnSubmit" class="w-full bg-gray-400 text-white font-bold py-4 rounded-xl shadow transition mt-2" disabled>
           รอระบบเชื่อมต่อ LINE...
         </button>
       </form>
@@ -53,130 +58,119 @@
   </div>
 
   <script>
-    // ⚠️⚠️ แก้ไข 2 บรรทัดนี้ให้เป็นข้อมูลของคุณ ⚠️⚠️
-    const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec"; 
-    const LIFF_ID = "2009981892-wLKP1wYT"; // ใส่ LIFF ID หน้าจัดการรถ
-
-    let lineUid = '';
-    const debugText = document.getElementById('debugStatus');
-    const submitBtn = document.getElementById('submitBtn');
-
-    async function main() {
+    // ⚠️ แก้ไข API_URL เป็นของ Google Apps Script ของคุณโอม
+    const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
+    
+    // ⚠️ แก้ไข LIFF_ID สำหรับหน้าจัดการรถ
+    const LIFF_ID = "2009981892-wLKP1wYT"; 
+    
+    let userUid = "U825fa531ed42d452068d034671e8c2e2"; // Mock UID สำหรับโหมดทดสอบ
+    
+    // ==========================================
+    // 1. ระบบดึงข้อมูล LINE อัจฉริยะ (กันค้าง)
+    // ==========================================
+    async function init() {
       try {
-        debugText.textContent = "สถานะ: กำลังเชื่อมต่อ LIFF...";
         await liff.init({ liffId: LIFF_ID });
-        
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          lineUid = profile.userId;
-          debugText.style.display = 'none'; 
-          
-          submitBtn.disabled = false;
-          submitBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
-          submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-          submitBtn.innerHTML = 'บันทึกข้อมูลรถ';
-          submitBtn.onclick = handleVehicleSubmit; 
-          
-          document.getElementById('profileBox').classList.remove('hidden');
-          document.getElementById('profileImage').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-          document.getElementById('displayName').textContent = profile.displayName;
-
-          loadVehicles(); // โหลดข้อมูลผ่าน API ใหม่
-        } else {
+        if (!liff.isLoggedIn()) {
           liff.login();
+          return;
         }
-      } catch (err) {
-        debugText.textContent = "สถานะ: ติดปัญหา (" + err.message + ")";
+        const profile = await liff.getProfile();
+        userUid = profile.userId;
+        document.getElementById('profileImg').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        document.getElementById('profileName').textContent = profile.displayName;
+        
+        // ซ่อนแถบสถานะเมื่อโหลดสำเร็จ
+        document.getElementById('liffStatus').style.display = 'none';
+        
+        enableForm();
+        loadVehicles();
+      } catch(e) {
+        console.error('LIFF Error:', e);
+        // กรณีเปิดในคอมหรือ LIFF พัง จะสลับเป็นโหมดทดสอบทันที
+        const statusBar = document.getElementById('liffStatus');
+        statusBar.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ใช้งานโหมดทดสอบ (นอกแอป LINE)';
+        statusBar.classList.replace('bg-blue-100', 'bg-yellow-100');
+        statusBar.classList.replace('text-blue-700', 'text-yellow-700');
+        document.getElementById('profileName').textContent = "โหมดทดสอบระบบ";
+        
+        enableForm();
+        loadVehicles();
       }
     }
 
-    document.addEventListener("DOMContentLoaded", main);
+    function enableForm() {
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = false;
+      btn.textContent = "บันทึกข้อมูลรถ";
+      btn.classList.replace('bg-gray-400', 'bg-green-700');
+      btn.classList.add('hover:bg-green-800', 'active:scale-95');
+    }
 
-    // ฟังก์ชันยิง API ดึงข้อมูลจาก Google Apps Script
+    // ==========================================
+    // 2. โหลดรายการรถยนต์ของลูกค้า
+    // ==========================================
     async function loadVehicles() {
-      document.getElementById('loading').classList.remove('hidden');
-      document.getElementById('vehicleList').classList.add('hidden');
-      document.getElementById('emptyState').classList.add('hidden');
-
       try {
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          redirect: 'follow',
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: 'getUserVehicles', lineUid: lineUid })
-        });
+        const res = await fetch(`${API_URL}?action=getUserVehicles&lineUid=${userUid}`);
+        const data = await res.json();
+        const vList = document.getElementById('vehicleList');
         
-        const resData = await response.json();
-        document.getElementById('loading').classList.add('hidden');
-
-        if(resData.status === 'success' && resData.data.length > 0) {
-          const listContainer = document.getElementById('vehicleList');
-          listContainer.innerHTML = '';
-          resData.data.forEach(v => {
-            const item = document.createElement('div');
-            item.className = 'p-3 border border-gray-200 rounded-lg flex justify-between items-center bg-gray-50';
-            item.innerHTML = `<div><p class="font-bold text-gray-800">${v.plate}</p><p class="text-sm text-gray-600">${v.model} (${v.color})</p></div>`;
-            listContainer.appendChild(item);
-          });
-          listContainer.classList.remove('hidden');
+        if(data.status === 'success' && data.data.length > 0) {
+          vList.innerHTML = data.data.map(v => `
+            <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl shadow-sm flex items-center gap-3 relative">
+              <div class="bg-red-100 p-2 rounded-lg text-red-600"><i class="fa-solid fa-car-side"></i></div>
+              <div>
+                <b class="text-gray-800">${v.plate}</b><br>
+                <span class="text-xs text-gray-500">${v.model} • ${v.color}</span>
+              </div>
+            </div>
+          `).join('');
         } else {
-          document.getElementById('emptyState').classList.remove('hidden');
+          vList.innerHTML = '<p class="text-center text-gray-400 py-2">ยังไม่มีข้อมูลรถยนต์</p>';
         }
       } catch(e) {
-        document.getElementById('loading').innerHTML = 'เกิดข้อผิดพลาดในการดึงข้อมูลรถ';
+        document.getElementById('vehicleList').innerHTML = '<span class="text-red-500 text-sm"><i class="fa-solid fa-circle-xmark"></i> โหลดข้อมูลล้มเหลว โปรดลองใหม่</span>';
       }
     }
 
-    // ฟังก์ชันยิง API ส่งข้อมูลเพิ่มรถไปยัง Google Apps Script
-    async function handleVehicleSubmit(e) {
+    // ==========================================
+    // 3. บันทึกรถยนต์ (ใช้ระบบ POST แบบใหม่)
+    // ==========================================
+    document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const plate = document.getElementById('licensePlate').value;
-      const model = document.getElementById('brandModel').value;
-      const color = document.getElementById('color').value;
       
-      if(!plate || !model || !color) {
-        Swal.fire('แจ้งเตือน', 'กรุณากรอกข้อมูลให้ครบถ้วน', 'warning'); return;
-      }
-
-      submitBtn.innerHTML = 'กำลังบันทึก...';
-      submitBtn.disabled = true;
-      submitBtn.classList.replace('bg-green-600', 'bg-gray-400');
-
-      const payload = { lineUid: lineUid, licensePlate: plate, brandModel: model, color: color };
-
+      const payload = {
+        action: 'addVehicle', // แนบ Action เข้าไปใน Payload ให้หลังบ้านรู้จัก
+        lineUid: userUid,
+        licensePlate: document.getElementById('vPlate').value,
+        brandModel: document.getElementById('vModel').value,
+        color: document.getElementById('vColor').value
+      };
+      
+      Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          redirect: 'follow',
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: 'addVehicle', data: payload })
+        const res = await fetch(API_URL, { 
+          method: 'POST', 
+          body: JSON.stringify(payload) 
         });
+        const result = await res.json();
         
-        const resData = await response.json();
-
-        if(resData.status === 'success') {
-          Swal.fire({ title: 'สำเร็จ!', text: 'เพิ่มข้อมูลรถเรียบร้อยแล้ว', icon: 'success', timer: 1500, showConfirmButton: false }).then(() => {
-            document.getElementById('licensePlate').value = '';
-            document.getElementById('brandModel').value = '';
-            document.getElementById('color').value = '';
-            loadVehicles();
-            submitBtn.innerHTML = 'บันทึกข้อมูลรถ';
-            submitBtn.disabled = false;
-            submitBtn.classList.replace('bg-gray-400', 'bg-green-600');
-          });
+        if(result.status === 'success') {
+          Swal.fire('สำเร็จ', 'บันทึกข้อมูลรถยนต์เรียบร้อย', 'success');
+          document.getElementById('addVehicleForm').reset();
+          loadVehicles(); // รีเฟรชรายการรถ
         } else {
-          Swal.fire('เกิดข้อผิดพลาด', resData.message, 'error');
-          submitBtn.innerHTML = 'บันทึกข้อมูลรถ';
-          submitBtn.disabled = false;
-          submitBtn.classList.replace('bg-gray-400', 'bg-green-600');
+          throw new Error(result.message);
         }
-      } catch(e) {
-        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้', 'error');
-        submitBtn.innerHTML = 'บันทึกข้อมูลรถ';
-        submitBtn.disabled = false;
-        submitBtn.classList.replace('bg-gray-400', 'bg-green-600');
+      } catch(e) { 
+        Swal.fire('เกิดข้อผิดพลาด', e.message, 'error'); 
       }
-    }
+    });
+
+    // เริ่มการทำงานเมื่อหน้าเว็บโหลดเสร็จ
+    document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
