@@ -68,7 +68,9 @@
 
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> คิวการจองของคุณ</h3>
-      <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</div>
+      <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400 italic">
+        ไม่มีรายการจองในขณะนี้
+      </div>
     </div>
   </section>
 
@@ -227,24 +229,16 @@
     let map, markerPickup, markerDropoff, activePin = 'pickup';
     let currentTotalTime = 0; 
 
-    // 🎯 ฟังก์ชันสกัดเวลาแบบปลอดภัย 100% (แก้บั๊ก NaN ในมือถือบางรุ่น)
     function parseTimeStringToMinutes(val, defaultMins) {
       if (!val) return defaultMins;
       let str = String(val);
-
-      // กรณีส่งมาจาก Google Sheets เป็น ISO Date (1899-12-30T01:00:00.000Z)
       if (str.includes('T')) {
           const d = new Date(str);
-          if (!isNaN(d.getTime())) {
-              return d.getHours() * 60 + d.getMinutes();
-          }
+          if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
       }
-      // กรณีเป็น Text ธรรมดา ลบอักษรซ่อนเร้นทั้งหมดให้เหลือแค่ตัวเลขกับ :
       str = str.replace(/[^0-9:]/g, '');
       const parts = str.split(':');
-      if (parts.length >= 2) {
-          return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-      }
+      if (parts.length >= 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
       return defaultMins;
     }
 
@@ -284,9 +278,9 @@
         
         document.getElementById('userPoints').innerText = document.getElementById('profilePoints').innerText = masterData.points || 0;
         
+        // --- 🚗 วาดข้อมูลรถ ---
         const carList = document.getElementById('carList');
         const vSel = document.getElementById('vehicleSelect');
-        
         if(masterData.vehicles && masterData.vehicles.length > 0) {
           carList.innerHTML = masterData.vehicles.map(v => `<div class="p-4 bg-gray-50 rounded-2xl flex items-center gap-3 border border-gray-100">
             <div class="bg-red-100 p-2 rounded-lg text-red-500"><i class="fa-solid fa-car"></i></div>
@@ -296,6 +290,53 @@
         } else {
           carList.innerHTML = '<p class="text-center text-gray-400 py-4 italic text-sm">ยังไม่มีข้อมูลรถ</p>';
           vSel.innerHTML = '<option value="">กรุณาเพิ่มรถก่อนจอง</option>';
+        }
+
+        // --- 📅 วาดรายการจองหน้าหลัก (My Bookings) ---
+        const nextBookingEl = document.getElementById('homeNextBooking');
+        if (masterData.myBookings && masterData.myBookings.length > 0) {
+          nextBookingEl.innerHTML = masterData.myBookings.map(b => {
+            // หาทะเบียนรถ
+            const veh = masterData.vehicles.find(v => v.id === b.vehicleId);
+            const plate = veh ? veh.plate : 'ไม่ระบุรถ';
+            
+            // หาชื่อบริการรวมกัน
+            let svcs = [];
+            if (b.serviceType && masterData.services) {
+               b.serviceType.split(',').forEach(id => {
+                 const s = masterData.services.find(svc => svc.service_id == id);
+                 if(s) svcs.push(s.service_name);
+               });
+            }
+            const svcText = svcs.length > 0 ? svcs.join(' + ') : 'บริการทั่วไป';
+            
+            // จัดรูปแบบวันที่และเวลา
+            let dateShow = b.bookingDate;
+            if(b.bookingDate.includes('T')){
+               const pts = b.bookingDate.split('T');
+               dateShow = pts[0] + ' <i class="fa-regular fa-clock ml-1"></i> ' + pts[1] + ' น.';
+            }
+            
+            // สีตามสถานะ
+            const isConfirmed = b.status === 'confirmed';
+            const statusColor = isConfirmed ? 'text-green-700 bg-green-100' : 'text-orange-600 bg-orange-100 border border-orange-200';
+            const statusText = isConfirmed ? 'กำลังให้บริการ' : 'รอการยืนยัน';
+            const statusIcon = isConfirmed ? '<i class="fa-solid fa-spinner fa-spin mr-1"></i>' : '<i class="fa-regular fa-hourglass-half mr-1"></i>';
+
+            return `
+              <div class="text-left bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-3 shadow-sm relative overflow-hidden">
+                ${isConfirmed ? '<div class="absolute top-0 left-0 w-1 h-full bg-green-500"></div>' : '<div class="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>'}
+                <div class="flex justify-between items-start mb-2 ml-1">
+                  <span class="text-[11px] font-bold text-gray-500"><i class="fa-regular fa-calendar text-blue-500"></i> ${dateShow}</span>
+                  <span class="text-[9px] font-bold px-2 py-1 rounded-full ${statusColor}">${statusIcon} ${statusText}</span>
+                </div>
+                <p class="font-bold text-gray-800 text-sm ml-1"><i class="fa-solid fa-car-side text-gray-400 mr-1"></i> ${plate}</p>
+                <p class="text-[10px] text-gray-500 mt-1 truncate ml-1"><i class="fa-solid fa-spray-can-sparkles text-gray-400 mr-1"></i> ${svcText}</p>
+              </div>
+            `;
+          }).join('');
+        } else {
+          nextBookingEl.innerHTML = '<p class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</p>';
         }
 
         if(masterData.branches) {
@@ -399,7 +440,6 @@
       document.getElementById('displaySelectedTime').innerText = '- - : - -';
     }
 
-    // 🎯 โค้ดสร้างปุ่มเวลาที่อัปเกรดความเสถียรแล้ว
     function openTimeSlotModal() {
       const branchId = document.getElementById('branchSelect').value;
       const type = document.getElementById('selectedLineType').value;
@@ -411,7 +451,6 @@
       const branch = masterData.branches.find(b => b.branch_id == branchId);
       if(!branch) return Swal.fire('Error', 'ไม่พบข้อมูลสาขา', 'error');
 
-      // ใช้ฟังก์ชันแบบใหม่ ดึงเวลาปลอดภัย 100%
       let curr = parseTimeStringToMinutes(branch.open_time, 8 * 60);
       const end = parseTimeStringToMinutes(branch.close_time, 18 * 60);
       
