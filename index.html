@@ -58,14 +58,10 @@
       </div>
       <i class="fa-solid fa-car-wash text-8xl absolute -right-4 -bottom-4 opacity-20 rotate-12"></i>
     </div>
-
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-box-open text-orange-500"></i> แพ็กเกจของฉัน</h3>
-      <div id="homePackages" class="space-y-3">
-        <p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p>
-      </div>
+      <div id="homePackages" class="space-y-3"><p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p></div>
     </div>
-
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> คิวการจองของคุณ</h3>
       <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</div>
@@ -75,7 +71,6 @@
   <section id="booking-section" class="section p-4 space-y-5">
     <div class="bg-white p-5 rounded-3xl shadow-sm">
       <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-calendar-plus text-blue-500"></i> ทำรายการจอง</h2>
-      
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">1. รถยนต์และขนาด</label>
         <select id="vehicleSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" required></select>
@@ -86,9 +81,7 @@
         </select>
         <select id="branchSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="renderServices()"></select>
       </div>
-
       <hr class="my-6 border-dashed">
-
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">2. เลือกบริการ</label>
         <div class="flex bg-gray-100 p-1 rounded-2xl relative mb-4">
@@ -99,22 +92,17 @@
         <input type="hidden" id="selectedLineType" value="LINE1">
         <div id="servicesContainer" class="space-y-2"></div>
       </div>
-
       <hr class="my-6 border-dashed">
-
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">3. วันและเวลาจอง</label>
         <div class="flex justify-center"><input type="text" id="inlineCalendar" class="hidden"></div>
-        <input type="hidden" id="bookDate">
-        <input type="hidden" id="selectedTime">
+        <input type="hidden" id="bookDate"><input type="hidden" id="selectedTime">
         <div class="bg-blue-50 border-2 border-blue-100 rounded-2xl p-4 text-center cursor-pointer active:scale-95 transition" onclick="openTimeSlotModal()">
           <p id="displaySelectedTime" class="text-3xl font-bold text-blue-600">- - : - -</p>
           <p class="text-[10px] text-blue-400 mt-1 uppercase font-bold">กดเพื่อเลือกเวลา</p>
         </div>
       </div>
-      
       <hr class="my-6 border-dashed">
-
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">4. บริการรับ-ส่ง (Valet)</label>
         <select id="deliverySelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="toggleDelivery()">
@@ -124,33 +112,18 @@
           <option value="roundtrip_same">รับ-ส่ง ที่จุดเดียวกัน</option>
           <option value="roundtrip_diff">รับ-ส่ง คนละจุด (ระบุในแผนที่)</option>
         </select>
-        
         <div id="mapContainer" class="hidden space-y-3 pt-2">
-          <div id="markerToggle" class="hidden flex gap-2">
-            <button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow-sm border-2 border-green-600 transition">📍 จุดรับรถ</button>
-            <button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent transition">📍 จุดส่งรถ</button>
-          </div>
+          <div id="markerToggle" class="hidden flex gap-2"><button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow-sm border-2 border-green-600 transition">📍 จุดรับรถ</button><button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent transition">📍 จุดส่งรถ</button></div>
           <div id="map"></div>
-          <button type="button" onclick="getCurrentGPS()" class="w-full py-3 bg-blue-100 text-blue-600 rounded-xl text-xs font-bold active:bg-blue-200 transition">
-            <i class="fa-solid fa-location-crosshairs"></i> ใช้พิกัดปัจจุบันของฉัน
-          </button>
-          <input type="hidden" id="pickupLat"><input type="hidden" id="pickupLng">
-          <input type="hidden" id="dropoffLat"><input type="hidden" id="dropoffLng">
+          <button type="button" onclick="getCurrentGPS()" class="w-full py-3 bg-blue-100 text-blue-600 rounded-xl text-xs font-bold active:bg-blue-200 transition"><i class="fa-solid fa-location-crosshairs"></i> ใช้พิกัดปัจจุบันของฉัน</button>
+          <input type="hidden" id="pickupLat"><input type="hidden" id="pickupLng"><input type="hidden" id="dropoffLat"><input type="hidden" id="dropoffLng">
         </div>
       </div>
     </div>
-
     <div class="bg-gray-900 p-6 rounded-[2.5rem] text-white shadow-2xl">
       <h3 class="font-bold text-sm mb-3 text-blue-400 uppercase tracking-widest">สรุปรายการ</h3>
       <div id="summaryList" class="space-y-1 text-xs text-gray-400 mb-4"></div>
-      <div class="flex justify-between text-xl font-bold border-t border-gray-700 pt-4">
-        <span>ยอดรวมประเมิน</span>
-        <span class="text-green-400" id="sumTotal">0.-</span>
-      </div>
-      <p class="text-[9px] text-gray-500 mt-4 text-center leading-relaxed">
-        *กรุณามาถึงก่อนเวลาจอง 3 นาที เพื่อเช็คอินผ่าน GPS<br>
-        ระบบจะยกเลิกคิวอัตโนมัติหากท่านมาสายเกินเวลาที่กำหนด
-      </p>
+      <div class="flex justify-between text-xl font-bold border-t border-gray-700 pt-4"><span>ยอดรวมประเมิน</span><span class="text-green-400" id="sumTotal">0.-</span></div>
       <button type="button" onclick="submitBooking()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg mt-4 shadow-lg active:scale-95 transition">ยืนยันการจองคิว</button>
     </div>
   </section>
@@ -158,14 +131,12 @@
   <section id="cars-section" class="section p-4 space-y-5">
     <div class="bg-white p-6 rounded-3xl shadow-sm">
       <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-car text-red-500"></i> รถยนต์ของฉัน</h2>
-      <div id="carList" class="space-y-3">
-        <div class="text-center py-4 text-gray-400 italic">กำลังโหลดรายการรถ...</div>
-      </div>
+      <div id="carList" class="space-y-3"><div class="text-center py-4 text-gray-400 italic">กำลังโหลดรายการรถ...</div></div>
     </div>
     
     <div class="bg-white p-6 rounded-3xl shadow-sm border-t-4 border-blue-500">
       <h2 class="font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="fa-solid fa-file-signature text-blue-500"></i> เพิ่มรถคันใหม่</h2>
-      <p class="text-xs text-gray-400 mb-5">ลงทะเบียนเพื่อความรวดเร็วในการจองคิว</p>
+      <p class="text-xs text-gray-400 mb-5">ลงทะเบียนรถยนต์เพื่อความรวดเร็วในการจองคิว</p>
       
       <form id="addVehicleForm" class="space-y-5">
         <div class="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
@@ -203,7 +174,8 @@
              </div>
              <div>
                 <label class="text-[10px] font-bold text-gray-500 uppercase">จังหวัด</label>
-                <input type="text" id="vProvince" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="ระบุจังหวัด" required>
+                <input type="text" id="vProvince" list="provinceList" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="พิมพ์ชื่อจังหวัด" required autocomplete="off">
+                <datalist id="provinceList"></datalist>
              </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
@@ -228,7 +200,7 @@
                   <option value="L">ขนาด L (รถเก๋งใหญ่ / SUV)</option>
                   <option value="XL">ขนาด XL (รถกระบะ / รถตู้ / PPV)</option>
                 </select>
-                <p class="text-[9px] text-red-500 mt-1.5 font-bold">* แอดมินจะทำการตรวจสอบและยืนยันขนาดรถที่ถูกต้องอีกครั้งที่หน้าสาขา</p>
+                <p class="text-[9px] text-red-500 mt-1.5 font-bold">* แอดมินจะตรวจสอบและยืนยันขนาดรถที่ถูกต้องอีกครั้งที่หน้าสาขา</p>
              </div>
           </div>
         </div>
@@ -245,16 +217,9 @@
       <img id="profileImgBig" src="" class="w-24 h-24 rounded-full mx-auto border-4 border-blue-50 object-cover mb-4 shadow-md">
       <h2 id="profileNameBig" class="text-xl font-bold text-gray-800">...</h2>
       <p id="profileUid" class="text-[10px] text-gray-300 mt-2 uppercase tracking-widest">UID: ...</p>
-      
       <div class="grid grid-cols-2 gap-4 mt-8">
-        <div class="bg-blue-50 p-5 rounded-[2rem]">
-          <p class="text-[10px] text-blue-400 uppercase font-bold">แต้มทั้งหมด</p>
-          <p class="text-2xl font-bold text-blue-600" id="profilePoints">0</p>
-        </div>
-        <div class="bg-green-50 p-5 rounded-[2rem]">
-          <p class="text-[10px] text-green-400 uppercase font-bold">มาใช้บริการ</p>
-          <p class="text-2xl font-bold text-green-600">0 <span class="text-xs">ครั้ง</span></p>
-        </div>
+        <div class="bg-blue-50 p-5 rounded-[2rem]"><p class="text-[10px] text-blue-400 uppercase font-bold">แต้มทั้งหมด</p><p class="text-2xl font-bold text-blue-600" id="profilePoints">0</p></div>
+        <div class="bg-green-50 p-5 rounded-[2rem]"><p class="text-[10px] text-green-400 uppercase font-bold">มาใช้บริการ</p><p class="text-2xl font-bold text-green-600">0 <span class="text-xs">ครั้ง</span></p></div>
       </div>
     </div>
     <button onclick="liff.closeWindow()" class="w-full text-red-400 font-bold py-4 text-sm"><i class="fa-solid fa-door-open"></i> ปิดแอปพลิเคชัน</button>
@@ -276,9 +241,11 @@
     let map, markerPickup, markerDropoff, activePin = 'pickup';
     let currentTotalTime = 0; 
 
+    // 🎯 ฐานข้อมูล 77 จังหวัด
+    const thaiProvinces = ["กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พะเยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"];
+
     function parseTimeStringToMinutes(val, defaultMins) {
-      if (!val) return defaultMins;
-      let str = String(val);
+      if (!val) return defaultMins; let str = String(val);
       if (str.includes('T')) { const d = new Date(str); if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes(); }
       str = str.replace(/[^0-9:]/g, ''); const parts = str.split(':');
       if (parts.length >= 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
@@ -294,12 +261,12 @@
         document.getElementById('profileImg').src = document.getElementById('profileImgBig').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
         document.getElementById('profileName').textContent = document.getElementById('profileNameBig').textContent = profile.displayName;
         document.getElementById('profileUid').textContent = "UID: " + userUid;
-      } catch(e) { 
-        console.log('Test Mode Active'); document.getElementById('profileName').textContent = "โหมดทดสอบระบบ";
-      }
+      } catch(e) { console.log('Test Mode'); document.getElementById('profileName').textContent = "โหมดทดสอบระบบ"; }
+      
+      // นำจังหวัดไปใส่ใน Datalist
+      document.getElementById('provinceList').innerHTML = thaiProvinces.map(p => `<option value="${p}">`).join('');
       
       await refreshData();
-      
       flatpickr("#inlineCalendar", { inline: true, locale: "th", minDate: "today", onChange: (d, str) => { document.getElementById('bookDate').value = str; document.getElementById('selectedTime').value=''; document.getElementById('displaySelectedTime').innerText='- - : - -'; openTimeSlotModal(); } });
       document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
     }
@@ -361,100 +328,29 @@
       } catch(e) { Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้: ' + e.message, 'error'); }
     }
 
-    function showSection(id) {
-      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-      document.getElementById(id).classList.add('active');
-      document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active'));
-      document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active');
-      window.scrollTo(0,0);
-    }
-
-    function navToBooking() {
-      if(!masterData.vehicles || masterData.vehicles.length === 0) {
-        Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section'));
-      } else { showSection('booking-section'); }
-    }
+    function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active')); document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active'); window.scrollTo(0,0); }
+    function navToBooking() { if(!masterData.vehicles || masterData.vehicles.length === 0) { Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section')); } else { showSection('booking-section'); } }
 
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
       const payload = new URLSearchParams({
-        action: 'addVehicle',
-        lineUid: userUid,
-        uName: document.getElementById('uName').value,
-        uPhone: document.getElementById('uPhone').value,
-        uGender: document.getElementById('uGender').value,
-        uAge: document.getElementById('uAge').value,
-        licensePlate: document.getElementById('vPlate').value,
-        province: document.getElementById('vProvince').value,
-        brand: document.getElementById('vBrand').value,
-        model: document.getElementById('vModel').value,
-        color: document.getElementById('vColor').value,
-        size: document.getElementById('vSize').value
+        action: 'addVehicle', lineUid: userUid, uName: document.getElementById('uName').value, uPhone: document.getElementById('uPhone').value,
+        uGender: document.getElementById('uGender').value, uAge: document.getElementById('uAge').value, licensePlate: document.getElementById('vPlate').value,
+        province: document.getElementById('vProvince').value, brand: document.getElementById('vBrand').value, model: document.getElementById('vModel').value,
+        color: document.getElementById('vColor').value, size: document.getElementById('vSize').value
       });
-
       Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
-        const res = await fetch(API_URL, { method: 'POST', body: payload });
-        const result = await res.json();
-        if(result.status === 'success') { 
-          Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success'); 
-          e.target.reset(); await refreshData(); showSection('home-section');
-        }
+        const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json();
+        if(result.status === 'success') { Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success'); e.target.reset(); await refreshData(); showSection('home-section'); }
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
 
+    // ส่วนของปฏิทิน การคำนวณราคา แผนที่ คิว ฯลฯ ยังอยู่เหมือนเดิมทุกประการ
     function selectLine(type) { document.getElementById('selectedLineType').value = type; document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)'; document.getElementById('btnLine1').classList.toggle('text-gray-800', type==='LINE1'); document.getElementById('btnLine1').classList.toggle('text-gray-400', type!=='LINE1'); document.getElementById('btnLine2').classList.toggle('text-gray-800', type==='LINE2'); document.getElementById('btnLine2').classList.toggle('text-gray-400', type!=='LINE2'); renderServices(); }
-    
-    function renderServices() { 
-      if(!masterData.services) return; 
-      const size = document.getElementById('carSizeSelect').value; 
-      const type = document.getElementById('selectedLineType').value; 
-      const container = document.getElementById('servicesContainer'); 
-      const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {}); 
-      let html = ''; 
-      for (const cat in grouped) { 
-        html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`; 
-        grouped[cat].forEach(s => { 
-          const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); 
-          const isQuick = s.service_name.includes('ด่วน'); 
-          const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน'); 
-          let auto = false, disabled = false; 
-          if (type==='LINE1') { if(isQuick) auto=true; if(isNormal) disabled=true; } 
-          else { if(isNormal) auto=true; if(isQuick) disabled=true; } 
-          html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2"> <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()"> <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]"> <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div> <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div> </div> </label>`; 
-        }); 
-      } 
-      container.innerHTML = html; updateSummary(); 
-    }
-    
+    function renderServices() { if(!masterData.services) return; const size = document.getElementById('carSizeSelect').value; const type = document.getElementById('selectedLineType').value; const container = document.getElementById('servicesContainer'); const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {}); let html = ''; for (const cat in grouped) { html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`; grouped[cat].forEach(s => { const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); const isQuick = s.service_name.includes('ด่วน'); const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน'); let auto = false, disabled = false; if (type==='LINE1') { if(isQuick) auto=true; if(isNormal) disabled=true; } else { if(isNormal) auto=true; if(isQuick) disabled=true; } html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2"> <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()"> <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]"> <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div> <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div> </div> </label>`; }); } container.innerHTML = html; updateSummary(); }
     function updateSummary() { const checked = document.querySelectorAll('.checkbox-custom:checked'); let totalP = 0, totalT = 0, html = ''; checked.forEach(cb => { totalP += parseInt(cb.dataset.price); totalT += parseInt(cb.dataset.time); html += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`; }); const fee = calculateDeliveryFee(); if(fee > 0) html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง</span><span>${fee}.-</span></div>`; document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ'; document.getElementById('sumTotal').innerText = (totalP + fee) + '.-'; currentTotalTime = totalT; document.getElementById('selectedTime').value = ''; document.getElementById('displaySelectedTime').innerText = '- - : - -'; }
-    
-    function openTimeSlotModal() { 
-      const branchId = document.getElementById('branchSelect').value; const type = document.getElementById('selectedLineType').value; const totalT = currentTotalTime; const date = document.getElementById('bookDate').value; if(!branchId || totalT === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการในขั้นตอนที่ 2 ก่อนครับ', 'warning'); 
-      const branch = masterData.branches.find(b => b.branch_id == branchId); if(!branch) return Swal.fire('Error', 'ไม่พบข้อมูลสาขา', 'error'); 
-      let curr = parseTimeStringToMinutes(branch.open_time, 8 * 60); const end = parseTimeStringToMinutes(branch.close_time, 18 * 60); 
-      let tl1 = new Array(1440).fill(0), tl2 = new Array(1440).fill(0); 
-      if(masterData.activeBookings) { 
-        masterData.activeBookings.forEach(b => { 
-          if(b.branchId != branchId || !b.bookingDate.startsWith(date)) return; 
-          const timePart = b.bookingDate.split('T')[1]; if(!timePart) return; 
-          const start = parseTimeStringToMinutes(timePart, 0); 
-          let bDuration = 30; 
-          if (b.serviceType) { bDuration = 0; b.serviceType.split(',').forEach(id => { const s = masterData.services.find(svc => svc.service_id == id); if(s) bDuration += parseInt(s.std_time_mins) || 0; }); if(bDuration === 0) bDuration = 30; } 
-          if(b.lineType==='LINE1') { for(let i=start; i<start+10; i++) if(i<1440) tl1[i]++; if(bDuration > 10) { for(let i=start+10; i<start+10+(bDuration-10+parseInt(branch.buffer_time||10)); i++) if(i<1440) tl2[i]++; } } 
-          else { for(let i=start; i<start+bDuration+parseInt(branch.buffer_time||10); i++) if(i<1440) tl2[i]++; } 
-        }); 
-      } 
-      let html = '<div class="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto p-2">'; const localNow = new Date(new Date().getTime() + 7*3600*1000); const minStart = (date === localNow.toISOString().split('T')[0]) ? (localNow.getUTCHours()*60 + localNow.getUTCMinutes() + 15) : 0; const stepMin = type === 'LINE1' ? 10 : 30; const capL1 = 1; const capL2 = parseInt(branch.bay_capacity) || 1; let slotsFound = false; 
-      while(curr + totalT <= end) { 
-        const timeStr = `${Math.floor(curr/60).toString().padStart(2,'0')}:${(curr%60).toString().padStart(2,'0')}`; let avail = curr >= minStart; let reason = "เลยเวลา"; 
-        if(avail) { if (type === 'LINE1') { for(let i=curr; i<curr+10; i++) if(tl1[i]>=capL1) { avail=false; reason="เต็ม"; break; } if(avail && totalT > 10) { for(let i=curr+10; i<curr+10+(totalT-10+parseInt(branch.buffer_time||10)); i++) { if(tl2[i]>=capL2) { avail=false; reason="เต็ม"; break; } } } } else { for(let i=curr; i<curr+totalT+parseInt(branch.buffer_time||10); i++) { if(tl2[i]>=capL2) { avail=false; reason="เต็ม"; break; } } } } 
-        slotsFound = true; html += avail ? `<button onclick="confirmTime('${timeStr}')" class="p-3 border border-blue-200 rounded-xl font-bold text-sm bg-white hover:bg-blue-600 hover:text-white transition shadow-sm text-gray-700">${timeStr}</button>` : `<div class="p-3 bg-gray-100 text-gray-400 rounded-xl text-[10px] flex flex-col items-center justify-center font-bold leading-tight border border-gray-200"><span class="line-through">${timeStr}</span><span class="text-[8px] font-normal mt-1">${reason}</span></div>`; curr += stepMin; 
-      } 
-      html += '</div>'; if(!slotsFound) html = '<p class="text-center text-gray-500 py-6 text-sm font-bold">คิวเต็ม หรือปิดทำการในวันนี้</p>'; Swal.fire({ title: 'เลือกเวลาจอง', html: html, showConfirmButton: false, customClass: { popup: 'rounded-3xl' } }); 
-    }
-    
+    function openTimeSlotModal() { const branchId = document.getElementById('branchSelect').value; const type = document.getElementById('selectedLineType').value; const totalT = currentTotalTime; const date = document.getElementById('bookDate').value; if(!branchId || totalT === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการในขั้นตอนที่ 2 ก่อนครับ', 'warning'); const branch = masterData.branches.find(b => b.branch_id == branchId); if(!branch) return Swal.fire('Error', 'ไม่พบข้อมูลสาขา', 'error'); let curr = parseTimeStringToMinutes(branch.open_time, 8 * 60); const end = parseTimeStringToMinutes(branch.close_time, 18 * 60); let tl1 = new Array(1440).fill(0), tl2 = new Array(1440).fill(0); if(masterData.activeBookings) { masterData.activeBookings.forEach(b => { if(b.branchId != branchId || !b.bookingDate.startsWith(date)) return; const timePart = b.bookingDate.split('T')[1]; if(!timePart) return; const start = parseTimeStringToMinutes(timePart, 0); let bDuration = 30; if (b.serviceType) { bDuration = 0; b.serviceType.split(',').forEach(id => { const s = masterData.services.find(svc => svc.service_id == id); if(s) bDuration += parseInt(s.std_time_mins) || 0; }); if(bDuration === 0) bDuration = 30; } if(b.lineType==='LINE1') { for(let i=start; i<start+10; i++) if(i<1440) tl1[i]++; if(bDuration > 10) { for(let i=start+10; i<start+10+(bDuration-10+parseInt(branch.buffer_time||10)); i++) if(i<1440) tl2[i]++; } } else { for(let i=start; i<start+bDuration+parseInt(branch.buffer_time||10); i++) if(i<1440) tl2[i]++; } }); } let html = '<div class="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto p-2">'; const localNow = new Date(new Date().getTime() + 7*3600*1000); const minStart = (date === localNow.toISOString().split('T')[0]) ? (localNow.getUTCHours()*60 + localNow.getUTCMinutes() + 15) : 0; const stepMin = type === 'LINE1' ? 10 : 30; const capL1 = 1; const capL2 = parseInt(branch.bay_capacity) || 1; let slotsFound = false; while(curr + totalT <= end) { const timeStr = `${Math.floor(curr/60).toString().padStart(2,'0')}:${(curr%60).toString().padStart(2,'0')}`; let avail = curr >= minStart; let reason = "เลยเวลา"; if(avail) { if (type === 'LINE1') { for(let i=curr; i<curr+10; i++) if(tl1[i]>=capL1) { avail=false; reason="เต็ม"; break; } if(avail && totalT > 10) { for(let i=curr+10; i<curr+10+(totalT-10+parseInt(branch.buffer_time||10)); i++) { if(tl2[i]>=capL2) { avail=false; reason="เต็ม"; break; } } } } else { for(let i=curr; i<curr+totalT+parseInt(branch.buffer_time||10); i++) { if(tl2[i]>=capL2) { avail=false; reason="เต็ม"; break; } } } } slotsFound = true; html += avail ? `<button onclick="confirmTime('${timeStr}')" class="p-3 border border-blue-200 rounded-xl font-bold text-sm bg-white hover:bg-blue-600 hover:text-white transition shadow-sm text-gray-700">${timeStr}</button>` : `<div class="p-3 bg-gray-100 text-gray-400 rounded-xl text-[10px] flex flex-col items-center justify-center font-bold leading-tight border border-gray-200"><span class="line-through">${timeStr}</span><span class="text-[8px] font-normal mt-1">${reason}</span></div>`; curr += stepMin; } html += '</div>'; if(!slotsFound) html = '<p class="text-center text-gray-500 py-6 text-sm font-bold">คิวเต็ม หรือปิดทำการในวันนี้</p>'; Swal.fire({ title: 'เลือกเวลาจอง', html: html, showConfirmButton: false, customClass: { popup: 'rounded-3xl' } }); }
     function confirmTime(t) { document.getElementById('selectedTime').value = t; document.getElementById('displaySelectedTime').innerText = t + ' น.'; Swal.close(); }
     function toggleDelivery() { const v = document.getElementById('deliverySelect').value; const mapDiv = document.getElementById('mapContainer'); if (v === 'none') { mapDiv.classList.add('hidden'); updateSummary(); return; } mapDiv.classList.remove('hidden'); document.getElementById('markerToggle').classList.toggle('hidden', v !== 'roundtrip_diff'); if(!map) initMap(); if(v === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); } else if(v === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); setActivePin('dropoff'); } else if(v === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); } else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); } updateSummary(); }
     function setActivePin(type) { activePin = type; const bp = document.getElementById('btnPinPickup'), bd = document.getElementById('btnPinDropoff'); if(type === 'pickup') { bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow border-2 border-green-600"; bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent"; } else { bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-red-500 text-white shadow border-2 border-red-600"; bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent"; } }
@@ -462,7 +358,6 @@
     function savePin(ll, type) { document.getElementById(`${type}Lat`).value = ll.lat; document.getElementById(`${type}Lng`).value = ll.lng; if(document.getElementById('deliverySelect').value === 'roundtrip_same') { document.getElementById('dropoffLat').value = ll.lat; document.getElementById('dropoffLng').value = ll.lng; } updateSummary(); }
     function getCurrentGPS() { if(navigator.geolocation) { Swal.fire({ title: 'กำลังหาตำแหน่ง...', didOpen: () => Swal.showLoading() }); navigator.geolocation.getCurrentPosition(pos => { const ll = [pos.coords.latitude, pos.coords.longitude]; map.flyTo(ll, 16); if(activePin==='pickup') { markerPickup.setLatLng(ll); savePin({lat:ll[0], lng:ll[1]}, 'pickup'); } else { markerDropoff.setLatLng(ll); savePin({lat:ll[0], lng:ll[1]}, 'dropoff'); } Swal.close(); }); } }
     function calculateDeliveryFee() { const v = document.getElementById('deliverySelect').value; if(v==='none') return 0; const b = masterData.branches?.find(br => br.branch_id == document.getElementById('branchSelect').value); if(!b) return 0; const R = 6371; const deg2rad = (deg) => deg * (Math.PI/180); const getDist = (lat1, lon1, lat2, lon2) => { const dLat = deg2rad(lat2-lat1), dLon = deg2rad(lon2-lon1); const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(deg2rad(lat1))*Math.cos(deg2rad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2); return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }; const bL = [parseFloat(b.lat), parseFloat(b.lng)]; const pL = [parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value)]; const dL = [parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value)]; let total = 0; if(v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], pL[0], pL[1]) - (b.free_km||0)) * (b.fee_per_km||0); if(v === 'dropoff' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], dL[0], dL[1]) - (b.free_km||0)) * (b.fee_per_km||0); if(v === 'roundtrip_same') total *= 2; return Math.round(total); }
-    
     async function submitBooking() { const time = document.getElementById('selectedTime').value; if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจองก่อนครับ', 'warning'); const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(','); const payload = new URLSearchParams({ action: 'submitBooking', lineUid: userUid, vehicleId: document.getElementById('vehicleSelect').value, serviceType: svcs, bookingDate: document.getElementById('bookDate').value + 'T' + time, deliveryType: document.getElementById('deliverySelect').value, extraFee: calculateDeliveryFee(), branchId: document.getElementById('branchSelect').value, lineType: document.getElementById('selectedLineType').value, pickupLat: document.getElementById('pickupLat').value, pickupLng: document.getElementById('pickupLng').value, dropoffLat: document.getElementById('dropoffLat').value, dropoffLng: document.getElementById('dropoffLng').value }); Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success').then(() => window.location.reload()); } } catch(e) { Swal.fire('Error', e.message, 'error'); } }
 
     document.addEventListener('DOMContentLoaded', init);
