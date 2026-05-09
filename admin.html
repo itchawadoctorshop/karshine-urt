@@ -109,24 +109,31 @@
     <div class="bg-white rounded-3xl p-6 shadow-sm border-t-4 border-gray-800">
       <h2 class="font-bold text-xl text-gray-800 mb-6"><i class="fa-solid fa-gears text-gray-600 mr-2"></i>ตั้งค่าระบบหลังร้าน</h2>
       
-      <div class="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-         <button onclick="switchConfigTab('services')" id="tab-services" class="px-5 py-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap transition">ล้างรถ (Services)</button>
-         <button onclick="switchConfigTab('packages')" id="tab-packages" class="px-5 py-3 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">แพ็กเกจโปรโมชัน</button>
+      <div class="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto pb-2">
+         <button onclick="switchConfigTab('services')" id="tab-services" class="px-4 py-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap transition">บริการ</button>
+         <button onclick="switchConfigTab('packages')" id="tab-packages" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">แพ็กเกจ</button>
+         <button onclick="switchConfigTab('branches')" id="tab-branches" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">สาขา</button>
+         <button onclick="switchConfigTab('payments')" id="tab-payments" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">ชำระเงิน</button>
       </div>
 
       <div id="content-services" class="config-content block">
          <button onclick="openConfigModal('service', 'add')" class="mb-4 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95"><i class="fa-solid fa-plus mr-1"></i> เพิ่มบริการล้างรถใหม่</button>
-         <div id="configServicesList" class="space-y-3">
-           <div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div>
-         </div>
+         <div id="configServicesList" class="space-y-3"><div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div></div>
       </div>
 
       <div id="content-packages" class="config-content hidden">
          <button onclick="openConfigModal('package', 'add')" class="mb-4 bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95"><i class="fa-solid fa-plus mr-1"></i> สร้างแพ็กเกจใหม่</button>
-         <p class="text-xs text-gray-500 mb-3">*แพ็กเกจที่สร้างไว้ที่นี่ จะไปโผล่ในหน้าจัดการลูกค้า (CRM) ให้กดขายได้ครับ</p>
-         <div id="configPackagesList" class="space-y-3">
-           <div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div>
-         </div>
+         <div id="configPackagesList" class="space-y-3"><div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div></div>
+      </div>
+
+      <div id="content-branches" class="config-content hidden">
+         <button onclick="addBranch()" class="mb-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95"><i class="fa-solid fa-plus mr-1"></i> เพิ่มสาขาใหม่</button>
+         <div id="configBranchesList" class="space-y-3"><div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div></div>
+      </div>
+
+      <div id="content-payments" class="config-content hidden">
+         <button onclick="addPayment()" class="mb-4 bg-purple-500 hover:bg-purple-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95"><i class="fa-solid fa-plus mr-1"></i> เพิ่มวิธีชำระเงิน</button>
+         <div id="configPaymentsList" class="space-y-3"><div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div></div>
       </div>
     </div>
   </section>
@@ -161,13 +168,13 @@
       <form id="svcForm" class="p-5 overflow-y-auto max-h-[70vh] space-y-4 bg-gray-50">
         <input type="hidden" id="svcId">
         <div class="grid grid-cols-2 gap-3">
-           <div class="col-span-2"><label class="text-[10px] font-bold text-gray-500 uppercase">หมวดหมู่ (เช่น ล้างด่วน, เคลือบแก้ว)</label><input type="text" id="svcCategory" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1" required></div>
+           <div class="col-span-2"><label class="text-[10px] font-bold text-gray-500 uppercase">หมวดหมู่</label><input type="text" id="svcCategory" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1" required></div>
            <div class="col-span-2"><label class="text-[10px] font-bold text-gray-500 uppercase">ชื่อบริการ</label><input type="text" id="svcName" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1" required></div>
-           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ราคา Size M (บาท)</label><input type="number" id="svcPriceM" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 font-bold text-blue-600" required></div>
-           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ราคา Size L (บาท)</label><input type="number" id="svcPriceL" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 font-bold text-blue-600" required></div>
-           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ราคา Size XL (บาท)</label><input type="number" id="svcPriceXL" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 font-bold text-blue-600" required></div>
+           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ราคา M (บาท)</label><input type="number" id="svcPriceM" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 font-bold text-blue-600" required></div>
+           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ราคา L (บาท)</label><input type="number" id="svcPriceL" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 font-bold text-blue-600" required></div>
+           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ราคา XL (บาท)</label><input type="number" id="svcPriceXL" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 font-bold text-blue-600" required></div>
            <div><label class="text-[10px] font-bold text-gray-500 uppercase">เวลามาตรฐาน (นาที)</label><input type="number" id="svcTime" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1" required></div>
-           <div class="col-span-2"><label class="text-[10px] font-bold text-gray-500 uppercase">รายละเอียดเพิ่มเติม (เว้นว่างได้)</label><textarea id="svcDetail" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1"></textarea></div>
+           <div class="col-span-2"><label class="text-[10px] font-bold text-gray-500 uppercase">รายละเอียดเพิ่มเติม</label><textarea id="svcDetail" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1"></textarea></div>
         </div>
         <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow transition mt-2"><i class="fa-solid fa-save mr-1"></i> บันทึกข้อมูล</button>
       </form>
@@ -197,13 +204,22 @@
   </nav>
 
   <script>
+    // ⚠️ อย่าลืมแก้ API_URL เป็นของคุณโอม
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
     
-    // Global Data
     let adminServices = []; 
     let currentCrmUid = ""; 
-    let configData = { services: [], packages: [] }; 
-    let currentManageAction = 'add'; // 'add' หรือ 'edit'
+    let configData = { services: [], packages: [], branches: [], payments: [] }; 
+    let currentManageAction = 'add';
+
+    function formatTime(val) {
+      if (!val) return '00:00';
+      if (typeof val === 'string' && val.includes('T')) {
+        const d = new Date(val);
+        return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+      }
+      return val;
+    }
 
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -424,15 +440,25 @@
     function switchConfigTab(tab) {
       document.querySelectorAll('.config-content').forEach(el => el.classList.add('hidden'));
       document.getElementById(`content-${tab}`).classList.remove('hidden');
-      document.getElementById('tab-services').className = tab==='services' ? "px-5 py-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap transition" : "px-5 py-3 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition";
-      document.getElementById('tab-packages').className = tab==='packages' ? "px-5 py-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap transition" : "px-5 py-3 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition";
+      const activeClass = "px-4 py-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap transition";
+      const inactiveClass = "px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition";
+      
+      document.getElementById('tab-services').className = tab==='services' ? activeClass : inactiveClass;
+      document.getElementById('tab-packages').className = tab==='packages' ? activeClass : inactiveClass;
+      document.getElementById('tab-branches').className = tab==='branches' ? activeClass : inactiveClass;
+      document.getElementById('tab-payments').className = tab==='payments' ? activeClass : inactiveClass;
     }
 
     async function loadStoreConfig() {
       const svcsContainer = document.getElementById('configServicesList');
       const pkgsContainer = document.getElementById('configPackagesList');
+      const brContainer = document.getElementById('configBranchesList');
+      const payContainer = document.getElementById('configPaymentsList');
+      
       svcsContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>';
       pkgsContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>';
+      brContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>';
+      payContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>';
 
       try {
         const payload = new URLSearchParams({ action: 'getAdminSettings' });
@@ -475,6 +501,42 @@
             `).join('');
           } else { pkgsContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีแพ็กเกจในระบบ</div>'; }
 
+          // Render Branches
+          if(configData.branches && configData.branches.length > 0) {
+            brContainer.innerHTML = configData.branches.map(b => `
+              <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex justify-between items-start">
+                <div class="w-4/5">
+                  <h4 class="font-bold text-blue-800 text-sm mb-1">${b.branch_name}</h4>
+                  <div class="text-[10px] text-gray-600 space-y-1">
+                    <div><i class="fa-regular fa-clock"></i> ${formatTime(b.open_time)} - ${formatTime(b.close_time)} น.</div>
+                    <div><i class="fa-solid fa-car-side"></i> ${b.bay_capacity} ช่อง | พัก ${b.buffer_time} นาที</div>
+                    <div><i class="fa-solid fa-truck-fast"></i> ฟรี ${b.free_km} กม. | ${b.fee_per_km} บ./กม.</div>
+                  </div>
+                </div>
+                <div class="flex gap-2 flex-col">
+                  <button onclick='editBranch(${JSON.stringify(b)})' class="bg-white text-blue-500 hover:bg-blue-100 border border-blue-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
+                  <button onclick="deleteConfigData('Branches', '${b.branch_id}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </div>
+            `).join('');
+          } else { brContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีสาขาในระบบ</div>'; }
+
+          // Render Payments
+          if(configData.payments && configData.payments.length > 0) {
+            payContainer.innerHTML = configData.payments.map(p => `
+              <div class="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex justify-between items-center">
+                <div class="w-4/5">
+                  <h4 class="font-bold text-purple-800 text-sm mb-1">${p.pay_name}</h4>
+                  <p class="text-[10px] text-gray-600">${p.details}</p>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick='editPayment(${JSON.stringify(p)})' class="bg-white text-purple-500 hover:bg-purple-100 border border-purple-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
+                  <button onclick="deleteConfigData('Payment_Methods', '${p.pay_id}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </div>
+            `).join('');
+          } else { payContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีวิธีชำระเงิน</div>'; }
+
         }
       } catch(e) { console.error(e); }
     }
@@ -494,7 +556,7 @@
           document.getElementById('svcDetail').value = data.details || '';
         } else { document.getElementById('svcForm').reset(); document.getElementById('svcId').value = 'SVC-' + Date.now(); }
         document.getElementById('serviceModal').classList.remove('hidden');
-      } else {
+      } else if (type === 'package') {
         document.getElementById('pkgModalTitle').innerText = action === 'add' ? 'สร้างแพ็กเกจใหม่' : 'แก้ไขแพ็กเกจ';
         if (action === 'edit') {
           document.getElementById('pkgId').value = data.package_id;
@@ -517,14 +579,10 @@
       Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
       const payload = new URLSearchParams({
         action: 'manageData', target: 'Services', actionType: currentManageAction,
-        id: document.getElementById('svcId').value,
-        category: document.getElementById('svcCategory').value,
-        name: document.getElementById('svcName').value,
-        priceM: document.getElementById('svcPriceM').value,
-        priceL: document.getElementById('svcPriceL').value,
-        priceXL: document.getElementById('svcPriceXL').value,
-        stdTime: document.getElementById('svcTime').value,
-        detail: document.getElementById('svcDetail').value
+        id: document.getElementById('svcId').value, category: document.getElementById('svcCategory').value,
+        name: document.getElementById('svcName').value, priceM: document.getElementById('svcPriceM').value,
+        priceL: document.getElementById('svcPriceL').value, priceXL: document.getElementById('svcPriceXL').value,
+        stdTime: document.getElementById('svcTime').value, detail: document.getElementById('svcDetail').value
       });
       try {
         await fetch(API_URL, { method: 'POST', body: payload });
@@ -538,17 +596,90 @@
       Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
       const payload = new URLSearchParams({
         action: 'manageData', target: 'Master_Packages', actionType: currentManageAction,
-        id: document.getElementById('pkgId').value,
-        name: document.getElementById('pkgName').value,
-        type: 'count', // บังคับเป็นนับจำนวนครั้งไปก่อน
-        amount: document.getElementById('pkgAmount').value,
-        price: document.getElementById('pkgPrice').value
+        id: document.getElementById('pkgId').value, name: document.getElementById('pkgName').value,
+        type: 'count', amount: document.getElementById('pkgAmount').value, price: document.getElementById('pkgPrice').value
       });
       try {
         await fetch(API_URL, { method: 'POST', body: payload });
         closeConfigModals(); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกแพ็กเกจเรียบร้อย', 'success');
       } catch(err) { Swal.fire('Error', err.message, 'error'); }
     });
+
+    // Branch Settings
+    function addBranch() { showBranchForm('add', {}); }
+    function editBranch(data) { showBranchForm('edit', data); }
+    async function showBranchForm(action, data) {
+      const { value: v } = await Swal.fire({
+        title: action === 'add' ? 'เพิ่มสาขาใหม่' : 'แก้ไขสาขา',
+        html: `
+          <div class="space-y-3">
+            <div>
+              <div class="text-left text-xs font-bold text-gray-500 mb-1 ml-1"><i class="fa-solid fa-location-dot"></i> ข้อมูลทั่วไป</div>
+              <input id="b-name" class="swal2-input !w-full !m-0" placeholder="ชื่อสาขา" value="${data.branch_name||''}">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <input id="b-lat" class="swal2-input !w-full !m-0 text-sm" placeholder="Latitude" value="${data.lat||''}">
+              <input id="b-lng" class="swal2-input !w-full !m-0 text-sm" placeholder="Longitude" value="${data.lng||''}">
+            </div>
+            <div class="mt-4">
+              <div class="text-left text-xs font-bold text-gray-500 mb-1 ml-1"><i class="fa-regular fa-clock"></i> เวลาเปิด-ปิด</div>
+              <div class="grid grid-cols-2 gap-2">
+                <input id="b-open" type="time" class="swal2-input !w-full !m-0" value="${formatTime(data.open_time)||'08:00'}">
+                <input id="b-close" type="time" class="swal2-input !w-full !m-0" value="${formatTime(data.close_time)||'18:00'}">
+              </div>
+            </div>
+            <div class="mt-4">
+              <div class="text-left text-xs font-bold text-gray-500 mb-1 ml-1"><i class="fa-solid fa-car-side"></i> ช่องล้าง & เวลาพัก</div>
+              <div class="grid grid-cols-2 gap-2">
+                <input id="b-cap" type="number" class="swal2-input !w-full !m-0" placeholder="จำนวนช่องล้าง" value="${data.bay_capacity||1}">
+                <input id="b-buf" type="number" class="swal2-input !w-full !m-0" placeholder="เวลาพัก (นาที)" value="${data.buffer_time||10}">
+              </div>
+            </div>
+            <div class="mt-4">
+              <div class="text-left text-xs font-bold text-gray-500 mb-1 ml-1"><i class="fa-solid fa-truck-fast"></i> ตั้งค่ารับ-ส่ง</div>
+              <div class="grid grid-cols-2 gap-2">
+                <input id="b-free" type="number" class="swal2-input !w-full !m-0" placeholder="ระยะฟรี (กม.)" value="${data.free_km||0}">
+                <input id="b-fee" type="number" class="swal2-input !w-full !m-0" placeholder="ค่าส่ง (บ./กม.)" value="${data.fee_per_km||0}">
+              </div>
+            </div>
+          </div>
+        `,
+        preConfirm: () => ({
+          id: action === 'add' ? 'BR-' + Date.now() : data.branch_id,
+          name: document.getElementById('b-name').value, lat: document.getElementById('b-lat').value || 0, lng: document.getElementById('b-lng').value || 0,
+          openTime: document.getElementById('b-open').value || '08:00', closeTime: document.getElementById('b-close').value || '18:00',
+          bayCapacity: document.getElementById('b-cap').value || 1, bufferTime: document.getElementById('b-buf').value || 10,
+          freeKm: document.getElementById('b-free').value || 0, feePerKm: document.getElementById('b-fee').value || 0
+        })
+      });
+      if (v && v.name) {
+        Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+        const payload = new URLSearchParams({
+          action: 'manageData', target: 'Branches', actionType: action,
+          id: v.id, name: v.name, lat: v.lat, lng: v.lng, openTime: v.openTime, closeTime: v.closeTime,
+          bayCapacity: v.bayCapacity, bufferTime: v.bufferTime, freeKm: v.freeKm, feePerKm: v.feePerKm
+        });
+        try { await fetch(API_URL, { method: 'POST', body: payload }); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกข้อมูลสาขาเรียบร้อย', 'success'); } 
+        catch(err) { Swal.fire('Error', err.message, 'error'); }
+      }
+    }
+
+    // Payment Settings
+    function addPayment() { showPaymentForm('add', {}); }
+    function editPayment(data) { showPaymentForm('edit', data); }
+    async function showPaymentForm(action, data) {
+      const { value: v } = await Swal.fire({ 
+        title: action==='add'?'เพิ่มวิธีชำระเงิน':'แก้ไขวิธีชำระเงิน', 
+        html: `<div class="space-y-3"><input id="pay-name" class="swal2-input !w-full !m-0" placeholder="ชื่อช่องทาง" value="${data.pay_name||''}"><textarea id="pay-info" class="swal2-textarea !w-full !m-0" placeholder="รายละเอียด" rows="2">${data.details||''}</textarea></div>`, 
+        preConfirm: () => ({ id: action==='add'?'PAY-'+Date.now():data.pay_id, name: document.getElementById('pay-name').value, details: document.getElementById('pay-info').value }) 
+      });
+      if (v && v.name) {
+        Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+        const payload = new URLSearchParams({ action: 'manageData', target: 'Payment_Methods', actionType: action, id: v.id, name: v.name, details: v.details });
+        try { await fetch(API_URL, { method: 'POST', body: payload }); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกวิธีชำระเงินเรียบร้อย', 'success'); } 
+        catch(err) { Swal.fire('Error', err.message, 'error'); }
+      }
+    }
 
     // Delete Config Data
     async function deleteConfigData(target, id) {
