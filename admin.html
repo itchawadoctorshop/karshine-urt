@@ -115,7 +115,7 @@
       <p class="text-xs text-gray-500 mb-6 border-b pb-4">ค้นหาข้อมูลลูกค้าเพื่อตรวจสอบประวัติ หรือแก้ไขคะแนนสะสม</p>
 
       <form id="crmSearchForm" class="flex gap-2 mb-6">
-        <input type="text" id="crmKeyword" class="flex-1 p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500" placeholder="พิมพ์ชื่อ หรือ เบอร์โทรศัพท์ลูกค้า..." required>
+        <input type="tel" id="crmKeyword" maxlength="10" pattern="[0-9]*" class="flex-1 p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500" placeholder="พิมพ์เบอร์โทรศัพท์ลูกค้า 10 หลัก..." required>
         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow transition">
           <i class="fa-solid fa-magnifying-glass"></i> ค้นหา
         </button>
