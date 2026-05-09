@@ -133,45 +133,30 @@
     // ⚠️ อย่าลืมแก้ API_URL เป็นของคุณโอม
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
 
-    // --- 🧭 ระบบนำทาง Admin SPA ---
+    // --- 🧭 ระบบนำทาง ---
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
       document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active'));
       document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active');
       window.scrollTo(0,0);
-      
       if(id === 'board-section') loadAdminData();
     }
 
-    // --- 📋 ระบบโหลดกระดาน Kanban ---
+    // --- 📋 ระบบกระดานคิว ---
     async function loadAdminData() {
       const loading = document.getElementById('loading');
       const board = document.getElementById('board');
       
-      if(loading && board) {
-        loading.classList.remove('hidden');
-        board.style.opacity = '0.5';
-      }
+      if(loading && board) { loading.classList.remove('hidden'); board.style.opacity = '0.5'; }
       
       try {
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: payload });
         const result = await res.json();
-        
-        if (result.status === 'success') {
-          renderBoard(result.data);
-        } else {
-          Swal.fire('Error', result.message, 'error');
-        }
-      } catch (e) {
-        console.error('Connection Error:', e);
-      } finally {
-        if(loading && board) {
-          loading.classList.add('hidden');
-          board.style.opacity = '1';
-        }
-      }
+        if (result.status === 'success') renderBoard(result.data);
+      } catch (e) { console.error('Connection Error:', e); } 
+      finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
     }
 
     function renderBoard(bookings) {
@@ -220,11 +205,9 @@
     function getActionButton(b) {
       if(b.status === 'pending' || b.status === 'confirmed') {
         return `<button onclick="updateStatus('${b.bookingId}', 'checked_in')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-3 rounded-xl text-xs font-bold transition border border-gray-200">ช่วยเหลือ: กดเช็คอินแทนลูกค้า</button>`;
-      } 
-      else if(b.status === 'checked_in') {
+      } else if(b.status === 'checked_in') {
         return `<button onclick="updateStatus('${b.bookingId}', 'in_progress')" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-play mr-1"></i> เลื่อนรถเข้าช่องล้าง</button>`;
-      } 
-      else if(b.status === 'in_progress') {
+      } else if(b.status === 'in_progress') {
         return `<button onclick="updateStatus('${b.bookingId}', 'completed')" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-check-double mr-1"></i> ล้างเสร็จสมบูรณ์</button>`;
       }
       return '';
@@ -248,19 +231,28 @@
           const response = await fetch(API_URL, { method: 'POST', body: payload });
           const result = await response.json();
           if(result.status === 'success') {
-            Swal.close();
-            loadAdminData();
+            Swal.close(); loadAdminData();
           } else throw new Error(result.message);
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
       }
     }
 
-    // ==============================================
-    // 🔍 ระบบค้นหา Walk-in (รองรับเจ้าของหลายคน)
-    // ==============================================
+    // --- ➕ ระบบค้นหา Walk-in ---
+    function setWiLine(type) {
+      document.getElementById('wiLine').value = type;
+      if(type === 'LINE1') {
+        document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition";
+        document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition";
+      } else {
+        document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition";
+        document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition";
+      }
+    }
+
+    // ตรวจจับเมื่อพิมพ์ทะเบียนเสร็จแล้วคลิกที่อื่น
     document.getElementById('wiPlate').addEventListener('blur', async (e) => {
       const plate = e.target.value;
-      if(plate.length < 3) return;
+      if(plate.length < 3) return; // ไม่ค้นหาถ้าพิมพ์มาสั้นเกินไป
 
       Swal.fire({ title: 'กำลังค้นหาประวัติรถ...', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, didOpen: () => Swal.showLoading() });
       
@@ -273,10 +265,10 @@
           const matches = result.data;
 
           if(matches.length === 1) {
-            // กรณีที่ 1: เจอคนเดียว (ลงทะเบียนปกติ)
+            // เจอคนเดียว โหลดข้อมูลอัตโนมัติ
             selectWalkInVehicle(matches[0]);
           } else {
-            // กรณีที่ 2: เจอเจ้าของหลายคน! (ให้แอดมินจิ้มเลือก)
+            // เจอหลายคน ให้แอดมินเลือก
             let optionsHtml = matches.map((v, idx) => `
               <label class="flex items-center p-3 border border-gray-200 rounded-xl mb-2 cursor-pointer hover:bg-blue-50 transition">
                 <input type="radio" name="selectOwner" value="${idx}" class="mr-3 w-5 h-5 text-blue-600">
@@ -302,12 +294,10 @@
               }
             });
 
-            if(swalRes.isConfirmed) {
-              selectWalkInVehicle(matches[swalRes.value]);
-            }
+            if(swalRes.isConfirmed) selectWalkInVehicle(matches[swalRes.value]);
           }
         } else {
-          // กรณีที่ 3: ไม่เจอรถเลย
+          // ไม่เจอเลย (ลูกค้าใหม่)
           document.getElementById('walkInForm').dataset.vid = '';
           document.getElementById('walkInForm').dataset.uid = 'WALKIN_NEW';
           Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'ลูกค้าใหม่! กรุณาเลือกขนาดรถด้วยตนเอง', showConfirmButton: false, timer: 3000 });
@@ -315,7 +305,6 @@
       } catch (err) { console.error('Search Error:', err); }
     });
 
-    // ฟังก์ชันเสริมสำหรับเซ็ตค่าตอนแอดมินจิ้มเลือกคน
     function selectWalkInVehicle(v) {
       document.getElementById('wiSize').value = v.size;
       Swal.fire({
@@ -332,25 +321,17 @@
       });
       document.getElementById('walkInForm').dataset.vid = v.vehicleId;
       document.getElementById('walkInForm').dataset.uid = v.lineUid;
-    } else {
-          // ไม่เจอรถ
-          document.getElementById('walkInForm').dataset.vid = '';
-          document.getElementById('walkInForm').dataset.uid = 'WALKIN_NEW';
-          Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'ลูกค้าใหม่! กรุณาเลือกขนาดรถ', showConfirmButton: false, timer: 3000 });
-        }
-      } catch (err) { console.error('Search Error:', err); }
-    });
+    }
 
     document.getElementById('walkInForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      // ลอจิกกดบันทึก Walk-in จะตามมาในเฟสถัดไปครับ
-      Swal.fire('ยอดเยี่ยม!', 'ระบบค้นหาทำงานสมบูรณ์ ขั้นตอนต่อไปเราจะยิงคิวนีเข้าตารางจองครับ', 'success');
+      Swal.fire('ยอดเยี่ยม!', 'ระบบค้นหาทำงานสมบูรณ์ ขั้นตอนต่อไปเราจะยิงคิวนี้เข้าตารางจองครับ', 'success');
     });
 
-    // เริ่มทำงานเมื่อเปิดเว็บ
+    // เริ่มทำงานเมื่อโหลดเสร็จ
     document.addEventListener('DOMContentLoaded', () => {
-      showSection('board-section'); // บังคับเปิดหน้าแรกเป็นกระดานคิว
-      setInterval(loadAdminData, 30000); // รีเฟรชอัตโนมัติทุก 30 วิ
+      showSection('board-section'); 
+      setInterval(loadAdminData, 30000); 
     });
   </script>
 </body>
