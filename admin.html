@@ -256,23 +256,11 @@
     }
 
     // ==============================================
-    // 🔍 ระบบค้นหา Walk-in အัจฉริยะ 
+    // 🔍 ระบบค้นหา Walk-in (รองรับเจ้าของหลายคน)
     // ==============================================
-    function setWiLine(type) {
-      document.getElementById('wiLine').value = type;
-      if(type === 'LINE1') {
-        document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition";
-        document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition";
-      } else {
-        document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition";
-        document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition";
-      }
-    }
-
-    // เมื่อแอดมินพิมพ์ทะเบียนเสร็จ (blur = กดออกนอกช่องกรอก)
     document.getElementById('wiPlate').addEventListener('blur', async (e) => {
       const plate = e.target.value;
-      if(plate.length < 3) return; // ทะเบียนสั้นไปไม่ต้องหา
+      if(plate.length < 3) return;
 
       Swal.fire({ title: 'กำลังค้นหาประวัติรถ...', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, didOpen: () => Swal.showLoading() });
       
@@ -281,28 +269,70 @@
         const res = await fetch(API_URL, { method: 'POST', body: payload });
         const result = await res.json();
         
-        if(result.status === 'success') {
-          const v = result.data.vehicle;
-          // เจอรถ! อัปเดตขนาดรถอัตโนมัติ
-          document.getElementById('wiSize').value = v.size;
-          
-          Swal.fire({
-            icon: 'success',
-            title: 'พบข้อมูลลูกค้าเก่า!',
-            html: `<div class="text-sm text-left mt-2 bg-gray-50 p-3 rounded-lg border border-green-200">
-                     <b>ชื่อ:</b> ${result.data.ownerName}<br>
-                     <b>เบอร์โทร:</b> ${result.data.ownerPhone}<br>
-                     <b>รุ่นรถ:</b> ${v.brand} ${v.model} (${v.color})
-                   </div>
-                   <p class="text-xs text-red-500 mt-3 font-bold">*คุณสามารถกดสร้างคิวเพื่อสะสมแต้มให้ลูกค้าท่านนี้ได้เลย</p>`,
-            confirmButtonText: 'รับทราบ',
-            customClass: { confirmButton: 'bg-green-600' }
-          });
-          
-          // แอบซ่อนข้อมูลไว้ใช้ตอนกดสร้างคิว
-          document.getElementById('walkInForm').dataset.vid = v.vehicleId;
-          document.getElementById('walkInForm').dataset.uid = v.lineUid;
+        if(result.status === 'success' && result.data.length > 0) {
+          const matches = result.data;
+
+          if(matches.length === 1) {
+            // กรณีที่ 1: เจอคนเดียว (ลงทะเบียนปกติ)
+            selectWalkInVehicle(matches[0]);
+          } else {
+            // กรณีที่ 2: เจอเจ้าของหลายคน! (ให้แอดมินจิ้มเลือก)
+            let optionsHtml = matches.map((v, idx) => `
+              <label class="flex items-center p-3 border border-gray-200 rounded-xl mb-2 cursor-pointer hover:bg-blue-50 transition">
+                <input type="radio" name="selectOwner" value="${idx}" class="mr-3 w-5 h-5 text-blue-600">
+                <div class="text-left">
+                  <b class="text-sm text-gray-800">${v.ownerName}</b> <span class="text-xs text-gray-500">(${v.ownerPhone})</span><br>
+                  <span class="text-xs text-blue-600 font-bold">${v.brand} ${v.model} (${v.color})</span>
+                </div>
+              </label>
+            `).join('');
+
+            const swalRes = await Swal.fire({
+              title: 'พบรายชื่อหลายท่าน',
+              html: `<p class="text-xs text-gray-500 mb-3">รถทะเบียนนี้ถูกลงทะเบียนไว้หลายบัญชี<br>กรุณาสอบถามลูกค้าว่าต้องการสะสมแต้มเข้าเบอร์ใดครับ</p>
+                     <div class="text-left max-h-48 overflow-y-auto">${optionsHtml}</div>`,
+              showCancelButton: true,
+              confirmButtonText: 'เลือกสะสมแต้มบัญชีนี้',
+              cancelButtonText: 'ยกเลิก',
+              customClass: { confirmButton: 'bg-blue-600', cancelButton: 'bg-gray-400' },
+              preConfirm: () => {
+                const selected = document.querySelector('input[name="selectOwner"]:checked');
+                if (!selected) Swal.showValidationMessage('กรุณาเลือกบัญชี 1 ท่านครับ');
+                return selected ? selected.value : null;
+              }
+            });
+
+            if(swalRes.isConfirmed) {
+              selectWalkInVehicle(matches[swalRes.value]);
+            }
+          }
         } else {
+          // กรณีที่ 3: ไม่เจอรถเลย
+          document.getElementById('walkInForm').dataset.vid = '';
+          document.getElementById('walkInForm').dataset.uid = 'WALKIN_NEW';
+          Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'ลูกค้าใหม่! กรุณาเลือกขนาดรถด้วยตนเอง', showConfirmButton: false, timer: 3000 });
+        }
+      } catch (err) { console.error('Search Error:', err); }
+    });
+
+    // ฟังก์ชันเสริมสำหรับเซ็ตค่าตอนแอดมินจิ้มเลือกคน
+    function selectWalkInVehicle(v) {
+      document.getElementById('wiSize').value = v.size;
+      Swal.fire({
+        icon: 'success',
+        title: 'ดึงข้อมูลสำเร็จ!',
+        html: `<div class="text-sm text-left mt-2 bg-gray-50 p-3 rounded-lg border border-green-200">
+                 <b>ชื่อ:</b> ${v.ownerName}<br>
+                 <b>เบอร์โทร:</b> ${v.ownerPhone}<br>
+                 <b>รถ:</b> ${v.brand} ${v.model} (${v.color})
+               </div>
+               <p class="text-[10px] text-blue-500 mt-3 font-bold">*คะแนนและแพ็กเกจจะถูกคำนวณเข้าบัญชี <b>${v.ownerName}</b></p>`,
+        confirmButtonText: 'เยี่ยมเลย',
+        customClass: { confirmButton: 'bg-green-600' }
+      });
+      document.getElementById('walkInForm').dataset.vid = v.vehicleId;
+      document.getElementById('walkInForm').dataset.uid = v.lineUid;
+    } else {
           // ไม่เจอรถ
           document.getElementById('walkInForm').dataset.vid = '';
           document.getElementById('walkInForm').dataset.uid = 'WALKIN_NEW';
