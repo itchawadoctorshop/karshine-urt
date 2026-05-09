@@ -234,29 +234,57 @@
 
     // --- ➕ ระบบสร้างคิว Walk-in ---
     
-    // 🌟 วาด Dropdown เมนูบริการให้ตรงกับไซส์และไลน์
+    // 🌟 วาด Dropdown เมนูบริการแบบจัดหมวดหมู่ โชว์เวลาและราคา
     function renderWiServices() {
       const size = document.getElementById('wiSize').value;
       const line = document.getElementById('wiLine').value;
       const sel = document.getElementById('wiService');
-      sel.innerHTML = '';
       
-      if(adminServices.length === 0) { sel.innerHTML = '<option value="">กำลังโหลดข้อมูล...</option>'; return; }
+      // ล้างค่าเก่าและใส่ Default
+      sel.innerHTML = '<option value="" disabled selected>-- กรุณาเลือกแพ็กเกจบริการ --</option>';
+      
+      if(adminServices.length === 0) return;
 
-      adminServices.forEach(s => {
-        const price = size === 'M' ? s.priceM : (size === 'L' ? s.priceL : s.priceXL);
-        const isQuick = s.name.includes('ด่วน');
-        const isNormal = s.name.includes('ปกติ') || s.name.includes('ภายนอก') || s.name.includes('พนักงาน');
-        
-        let shouldShow = false;
-        if (line === 'LINE1' && isQuick) shouldShow = true;
-        if (line === 'LINE2' && isNormal) shouldShow = true;
-        if (!isQuick && !isNormal) shouldShow = true; // บริการทั่วไปโชว์หมด
+      // จัดกลุ่มตามหมวดหมู่ (Category)
+      const grouped = adminServices.reduce((acc, obj) => {
+        const k = obj.category || 'บริการทั่วไป';
+        if (!acc[k]) acc[k] = [];
+        acc[k].push(obj);
+        return acc;
+      }, {});
 
-        if (shouldShow) {
-          sel.innerHTML += `<option value="${s.id}">${s.name} (${price}.-)</option>`;
-        }
-      });
+      for (const cat in grouped) {
+        // สร้างหัวข้อหมวดหมู่
+        let optgroup = document.createElement('optgroup');
+        optgroup.label = `📍 ${cat}`;
+        let hasItem = false;
+
+        grouped[cat].forEach(s => {
+          // ดึงราคาตามขนาดรถ (ดึงตัวแปรแบบใหม่ที่ตรงกับฐานข้อมูล)
+          const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl);
+          const time = s.std_time_mins || 0;
+          
+          const isQuick = s.service_name.includes('ด่วน');
+          const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน');
+          
+          let shouldShow = false;
+          if (line === 'LINE1' && isQuick) shouldShow = true;
+          if (line === 'LINE2' && isNormal) shouldShow = true;
+          if (!isQuick && !isNormal) shouldShow = true; // บริการเคลือบ/ขัด โชว์หมด
+
+          if (shouldShow) {
+            hasItem = true;
+            const opt = document.createElement('option');
+            opt.value = s.service_id;
+            // 🌟 ตั้งชื่อที่จะแสดง: ชื่อบริการ | เวลา | ราคา
+            opt.textContent = `${s.service_name} | ⏱️ ${time} นาที | 💰 ${price}.-`;
+            optgroup.appendChild(opt);
+          }
+        });
+
+        // ถ้าในหมวดหมู่นั้นมีบริการที่ตรงเงื่อนไข ถึงจะเอามาแสดง
+        if(hasItem) sel.appendChild(optgroup);
+      }
     }
 
     function setWiLine(type) {
