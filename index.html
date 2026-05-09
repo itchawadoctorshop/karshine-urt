@@ -235,6 +235,45 @@
         document.getElementById('profilePoints').innerText = masterData.points || 0;
         document.getElementById('profileVisits').innerText = masterData.visitCount || 0;
         
+        // --- 🌟 ดึงข้อมูลแพ็กเกจของลูกค้ามาแสดง ---
+        const pkgContainer = document.getElementById('homePackages');
+        if (masterData.packages && masterData.packages.length > 0) {
+          pkgContainer.innerHTML = masterData.packages.map(pkg => {
+            const percentUsed = pkg.total > 0 ? (pkg.used / pkg.total) * 100 : 0;
+            let statusBadge = '';
+            
+            if(pkg.status === 'active') {
+              statusBadge = `<span class="bg-green-100 text-green-800 text-[10px] px-2 py-1 rounded-full font-bold">พร้อมใช้งาน</span>`;
+            } else if(pkg.status === 'empty') {
+              statusBadge = `<span class="bg-gray-100 text-gray-800 text-[10px] px-2 py-1 rounded-full font-bold">หมดแล้ว</span>`;
+            } else {
+              statusBadge = `<span class="bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded-full font-bold">หมดอายุ</span>`;
+            }
+            
+            let expDate = pkg.expireDate;
+            if(expDate && expDate.includes('T')) expDate = expDate.split('T')[0];
+
+            return `
+              <div class="p-4 border border-blue-100 rounded-2xl bg-blue-50 shadow-sm relative overflow-hidden">
+                <div class="flex justify-between items-start mb-2">
+                  <h3 class="font-bold text-blue-900 text-sm">${pkg.packageName}</h3>
+                  ${statusBadge}
+                </div>
+                <p class="text-[10px] text-gray-500 mb-3">หมดอายุ: ${expDate}</p>
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-1 overflow-hidden">
+                  <div class="bg-blue-500 h-full rounded-full transition-all" style="width: ${percentUsed}%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-gray-600 font-bold mt-1">
+                  <span>ใช้ไป: ${pkg.used}</span>
+                  <span class="text-blue-700">คงเหลือ: <span class="text-sm">${pkg.remaining}</span> / ${pkg.total}</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          pkgContainer.innerHTML = '<p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p>';
+        }
+
         const carList = document.getElementById('carList');
         const vSel = document.getElementById('vehicleSelect');
         
@@ -251,13 +290,11 @@
         }
 
         const nextBookingEl = document.getElementById('homeNextBooking');
-        
-        // 🌟 ลอจิกซ่อนคิวข้ามวัน (โชว์คิวที่เสร็จแล้วเฉพาะของ "วันนี้" เท่านั้น)
         const nowLocal = new Date(new Date().getTime() + 7*3600*1000).toISOString().split('T')[0];
         
         const displayBookings = (masterData.myBookings || []).filter(b => {
-          if (b.status !== 'completed') return true; // คิวที่ยังล้างไม่เสร็จ โชว์เสมอ
-          return b.bookingDate.startsWith(nowLocal); // คิวที่เสร็จแล้ว โชว์เฉพาะถ้าล้างวันนี้ ข้ามคืนลบกระดานอัตโนมัติ
+          if (b.status !== 'completed') return true; 
+          return b.bookingDate.startsWith(nowLocal); 
         });
 
         if (displayBookings.length > 0) {
@@ -359,7 +396,7 @@
     function toggleDelivery() { const v = document.getElementById('deliverySelect').value; const mapDiv = document.getElementById('mapContainer'); if (v === 'none') { mapDiv.classList.add('hidden'); updateSummary(); return; } mapDiv.classList.remove('hidden'); document.getElementById('markerToggle').classList.toggle('hidden', v !== 'roundtrip_diff'); if(!map) initMap(); if(v === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); } else if(v === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); setActivePin('dropoff'); } else if(v === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); } else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); } updateSummary(); }
     function setActivePin(type) { activePin = type; const bp = document.getElementById('btnPinPickup'), bd = document.getElementById('btnPinDropoff'); if(type === 'pickup') { bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow border-2 border-green-600"; bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent"; } else { bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-red-500 text-white shadow border-2 border-red-600"; bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent"; } }
     function initMap() { const bLat = 9.143, bLng = 99.330; map = L.map('map').setView([bLat, bLng], 13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); const gI = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] }); const rI = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] }); markerPickup = L.marker([bLat+0.005, bLng], {draggable: true, icon: gI}).addTo(map); markerDropoff = L.marker([bLat-0.005, bLng], {draggable: true, icon: rI}).addTo(map); savePin(markerPickup.getLatLng(), 'pickup'); savePin(markerDropoff.getLatLng(), 'dropoff'); markerPickup.on('dragend', (e) => savePin(e.target.getLatLng(), 'pickup')); markerDropoff.on('dragend', (e) => savePin(e.target.getLatLng(), 'dropoff')); map.on('click', (e) => { if(activePin==='pickup') { markerPickup.setLatLng(e.latlng); savePin(e.latlng,'pickup'); } else { markerDropoff.setLatLng(e.latlng); savePin(e.latlng,'dropoff'); } }); }
-    function savePin(ll, type) { document.getElementById(`${type}Lat`).value = ll.lat; document.getElementById(`${type}Lng`).value = ll.lng; if(document.getElementById('deliverySelect').value === 'roundtrip_same') { document.getElementById('dropoffLat').value = ll.lat; document.getElementById('dropoffLng').value = ll.lng; } updateSummary(); }
+    function savePin(ll, type) { document.getElementById(`${type}Lat`).value = ll.lat; document.getElementById(`${type}Lng`).value = ll.lng; if(document.getElementById('deliverySelect').value === 'roundtrip_same') { document.getElementById('dropoffLat').value = ll.lat; document.getElementById('dropoffLat').value = ll.lat; document.getElementById('dropoffLng').value = ll.lng; } updateSummary(); }
     function getCurrentGPS() { if(navigator.geolocation) { Swal.fire({ title: 'กำลังหาตำแหน่ง...', didOpen: () => Swal.showLoading() }); navigator.geolocation.getCurrentPosition(pos => { const ll = [pos.coords.latitude, pos.coords.longitude]; map.flyTo(ll, 16); if(activePin==='pickup') { markerPickup.setLatLng(ll); savePin({lat:ll[0], lng:ll[1]}, 'pickup'); } else { markerDropoff.setLatLng(ll); savePin({lat:ll[0], lng:ll[1]}, 'dropoff'); } Swal.close(); }); } }
     function calculateDeliveryFee() { const v = document.getElementById('deliverySelect').value; if(v==='none') return 0; const b = masterData.branches?.find(br => br.branch_id == document.getElementById('branchSelect').value); if(!b) return 0; const R = 6371; const deg2rad = (deg) => deg * (Math.PI/180); const getDist = (lat1, lon1, lat2, lon2) => { const dLat = deg2rad(lat2-lat1), dLon = deg2rad(lon2-lon1); const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(deg2rad(lat1))*Math.cos(deg2rad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2); return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }; const bL = [parseFloat(b.lat), parseFloat(b.lng)]; const pL = [parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value)]; const dL = [parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value)]; let total = 0; if(v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], pL[0], pL[1]) - (b.free_km||0)) * (b.fee_per_km||0); if(v === 'dropoff' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], dL[0], dL[1]) - (b.free_km||0)) * (b.fee_per_km||0); if(v === 'roundtrip_same') total *= 2; return Math.round(total); }
     async function submitBooking() { const time = document.getElementById('selectedTime').value; if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจองก่อนครับ', 'warning'); const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(','); const payload = new URLSearchParams({ action: 'submitBooking', lineUid: userUid, vehicleId: document.getElementById('vehicleSelect').value, serviceType: svcs, bookingDate: document.getElementById('bookDate').value + 'T' + time, deliveryType: document.getElementById('deliverySelect').value, extraFee: calculateDeliveryFee(), branchId: document.getElementById('branchSelect').value, lineType: document.getElementById('selectedLineType').value, pickupLat: document.getElementById('pickupLat').value, pickupLng: document.getElementById('pickupLng').value, dropoffLat: document.getElementById('dropoffLat').value, dropoffLng: document.getElementById('dropoffLng').value }); Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success').then(() => window.location.reload()); } } catch(e) { Swal.fire('Error', e.message, 'error'); } }
