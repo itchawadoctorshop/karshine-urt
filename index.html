@@ -58,14 +58,10 @@
       </div>
       <i class="fa-solid fa-car-wash text-8xl absolute -right-4 -bottom-4 opacity-20 rotate-12"></i>
     </div>
-
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-box-open text-orange-500"></i> แพ็กเกจของฉัน</h3>
-      <div id="homePackages" class="space-y-3">
-        <p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p>
-      </div>
+      <div id="homePackages" class="space-y-3"><p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p></div>
     </div>
-
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> คิวการจองของคุณ</h3>
       <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</div>
@@ -108,7 +104,11 @@
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">4. บริการรับ-ส่ง (Valet)</label>
         <select id="deliverySelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="toggleDelivery()">
-          <option value="none">ขับรถมาเองที่ร้าน</option><option value="pickup">ให้ร้านไปรับรถ (ขาเดียว)</option><option value="dropoff">ให้ร้านไปส่งรถ (ขาเดียว)</option><option value="roundtrip_same">รับ-ส่ง ที่จุดเดียวกัน</option><option value="roundtrip_diff">รับ-ส่ง คนละจุด (ระบุในแผนที่)</option>
+          <option value="none">ขับรถมาเองที่ร้าน</option>
+          <option value="pickup">ให้ร้านไปรับรถ (ขาเดียว)</option>
+          <option value="dropoff">ให้ร้านไปส่งรถ (ขาเดียว)</option>
+          <option value="roundtrip_same">รับ-ส่ง ที่จุดเดียวกัน</option>
+          <option value="roundtrip_diff">รับ-ส่ง คนละจุด (ระบุในแผนที่)</option>
         </select>
         <div id="mapContainer" class="hidden space-y-3 pt-2">
           <div id="markerToggle" class="hidden flex gap-2"><button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow-sm border-2 border-green-600 transition">📍 จุดรับรถ</button><button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent transition">📍 จุดส่งรถ</button></div>
@@ -118,14 +118,10 @@
         </div>
       </div>
     </div>
-
     <div class="bg-gray-900 p-6 rounded-[2.5rem] text-white shadow-2xl">
       <h3 class="font-bold text-sm mb-3 text-blue-400 uppercase tracking-widest">สรุปรายการ</h3>
       <div id="summaryList" class="space-y-1 text-xs text-gray-400 mb-4"></div>
-      <div class="flex justify-between text-xl font-bold border-t border-gray-700 pt-4">
-        <span>ยอดรวมประเมิน</span><span class="text-green-400" id="sumTotal">0.-</span>
-      </div>
-      <p class="text-[9px] text-gray-500 mt-4 text-center leading-relaxed">*กรุณามาถึงก่อนเวลาจอง 3 นาที เพื่อเช็คอินผ่าน GPS<br>ระบบจะยกเลิกคิวอัตโนมัติหากท่านมาสายเกินเวลาที่กำหนด</p>
+      <div class="flex justify-between text-xl font-bold border-t border-gray-700 pt-4"><span>ยอดรวมประเมิน</span><span class="text-green-400" id="sumTotal">0.-</span></div>
       <button type="button" onclick="submitBooking()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg mt-4 shadow-lg active:scale-95 transition">ยืนยันการจองคิว</button>
     </div>
   </section>
@@ -179,8 +175,14 @@
       <h2 id="profileNameBig" class="text-xl font-bold text-gray-800">...</h2>
       <p id="profileUid" class="text-[10px] text-gray-300 mt-2 uppercase tracking-widest">UID: ...</p>
       <div class="grid grid-cols-2 gap-4 mt-8">
-        <div class="bg-blue-50 p-5 rounded-[2rem]"><p class="text-[10px] text-blue-400 uppercase font-bold">แต้มทั้งหมด</p><p class="text-2xl font-bold text-blue-600" id="profilePoints">0</p></div>
-        <div class="bg-green-50 p-5 rounded-[2rem]"><p class="text-[10px] text-green-400 uppercase font-bold">มาใช้บริการ</p><p class="text-2xl font-bold text-green-600">0 <span class="text-xs">ครั้ง</span></p></div>
+        <div class="bg-blue-50 p-5 rounded-[2rem]">
+          <p class="text-[10px] text-blue-400 uppercase font-bold">แต้มทั้งหมด</p>
+          <p class="text-2xl font-bold text-blue-600" id="profilePoints">0</p>
+        </div>
+        <div class="bg-green-50 p-5 rounded-[2rem]">
+          <p class="text-[10px] text-green-400 uppercase font-bold">มาใช้บริการ</p>
+          <p class="text-2xl font-bold text-green-600"><span id="profileVisits">0</span> <span class="text-xs">ครั้ง</span></p>
+        </div>
       </div>
     </div>
     <button onclick="liff.closeWindow()" class="w-full text-red-400 font-bold py-4 text-sm"><i class="fa-solid fa-door-open"></i> ปิดแอปพลิเคชัน</button>
@@ -201,26 +203,10 @@
     let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
     let map, markerPickup, markerDropoff, activePin = 'pickup';
     let currentTotalTime = 0; 
-
     const thaiProvinces = ["กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พะเยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"];
 
-    // 🎯 สูตรคำนวณระยะทาง GPS (Haversine Formula) ส่งค่ากลับมาเป็นกิโลเมตร
-    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-      const R = 6371; // รัศมีโลก
-      const dLat = (lat2 - lat1) * (Math.PI / 180);
-      const dLon = (lon2 - lon1) * (Math.PI / 180);
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    function parseTimeStringToMinutes(val, defaultMins) {
-      if (!val) return defaultMins; let str = String(val);
-      if (str.includes('T')) { const d = new Date(str); if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes(); }
-      str = str.replace(/[^0-9:]/g, ''); const parts = str.split(':');
-      if (parts.length >= 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-      return defaultMins;
-    }
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) { const R = 6371; const dLat = (lat2 - lat1) * (Math.PI / 180); const dLon = (lon2 - lon1) * (Math.PI / 180); const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2); const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); return R * c; }
+    function parseTimeStringToMinutes(val, defaultMins) { if (!val) return defaultMins; let str = String(val); if (str.includes('T')) { const d = new Date(str); if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes(); } str = str.replace(/[^0-9:]/g, ''); const parts = str.split(':'); if (parts.length >= 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]); return defaultMins; }
 
     async function init() {
       try {
@@ -245,7 +231,10 @@
         const data = await res.json();
         masterData = data.data; 
         
-        document.getElementById('userPoints').innerText = document.getElementById('profilePoints').innerText = masterData.points || 0;
+        // 🌟 อัปเดตข้อมูลแต้มและจำนวนครั้ง
+        document.getElementById('userPoints').innerText = masterData.points || 0;
+        document.getElementById('profilePoints').innerText = masterData.points || 0;
+        document.getElementById('profileVisits').innerText = masterData.visitCount || 0;
         
         const carList = document.getElementById('carList');
         const vSel = document.getElementById('vehicleSelect');
@@ -256,11 +245,7 @@
             <div class="flex-1"><b class="text-gray-800">${v.plate} ${v.province ? `จ.${v.province}` : ''}</b><br><span class="text-[10px] text-gray-400">${v.brand} ${v.model} (${v.color})</span></div>
           </div>`).join('');
           vSel.innerHTML = masterData.vehicles.map(v => `<option value="${v.id}">${v.plate} - ${v.model}</option>`).join('');
-          
-          if(masterData.profile) {
-             document.getElementById('uName').value = masterData.profile.name || '';
-             document.getElementById('uPhone').value = masterData.profile.phone || '';
-          }
+          if(masterData.profile) { document.getElementById('uName').value = masterData.profile.name || ''; document.getElementById('uPhone').value = masterData.profile.phone || ''; }
         } else {
           carList.innerHTML = '<p class="text-center text-gray-400 py-4 italic text-sm">ยังไม่มีข้อมูลรถ</p>';
           vSel.innerHTML = '<option value="">กรุณาเพิ่มรถก่อนจอง</option>';
@@ -272,44 +257,57 @@
             const veh = masterData.vehicles.find(v => v.id === b.vehicleId);
             const plate = veh ? veh.plate : 'ไม่ระบุรถ';
             let svcs = [];
-            if (b.serviceType && masterData.services) {
-               b.serviceType.split(',').forEach(id => { const s = masterData.services.find(svc => svc.service_id == id); if(s) svcs.push(s.service_name); });
-            }
+            if (b.serviceType && masterData.services) { b.serviceType.split(',').forEach(id => { const s = masterData.services.find(svc => svc.service_id == id); if(s) svcs.push(s.service_name); }); }
             const svcText = svcs.length > 0 ? svcs.join(' + ') : 'บริการทั่วไป';
             let dateShow = b.bookingDate;
             if(b.bookingDate.includes('T')){ const pts = b.bookingDate.split('T'); dateShow = pts[0] + ' <i class="fa-regular fa-clock ml-1"></i> ' + pts[1] + ' น.'; }
             
-            const isCheckedIn = (b.status === 'checked_in' || b.status === 'in_progress');
+            // 🌟 ลอจิกสถานะครอบคลุม 'completed'
+            const isCompleted = (b.status === 'completed');
+            const isCheckedIn = (b.status === 'checked_in' || b.status === 'in_progress' || b.status === 'completed');
             
-            // 🎨 UI ใหม่: แถบสถานะรถ (Status Tracker)
+            let statusColor = 'text-orange-600 bg-orange-100 border border-orange-200';
+            let statusText = 'รอการยืนยัน';
+            
+            if((b.status === 'confirmed' || b.status === 'checked_in') && !isCheckedIn) { statusColor = 'text-blue-700 bg-blue-100'; statusText = 'ยืนยันคิวแล้ว'; }
+            if(b.status === 'checked_in') { statusColor = 'text-purple-700 bg-purple-100'; statusText = 'เช็คอินแล้ว (รอคิว)'; }
+            if(b.status === 'in_progress') { statusColor = 'text-blue-700 bg-blue-100'; statusText = 'กำลังล้างรถ'; }
+            if(isCompleted) { statusColor = 'text-green-800 bg-green-200'; statusText = 'เสร็จสมบูรณ์ (รับรถได้เลย)'; }
+            
+            let checkInBtn = '';
+            // โชว์ปุ่มเช็คอินเฉพาะตอน pending หรือ confirmed
+            if(b.status === 'pending' || b.status === 'confirmed') {
+               checkInBtn = `<button onclick="checkIn('${b.bookingId}', '${b.branchId}')" class="w-full mt-3 bg-blue-100 text-blue-700 py-3 rounded-xl text-xs font-bold active:bg-blue-200 transition shadow-sm border border-blue-200"><i class="fa-solid fa-location-dot"></i> กดเช็คอินเมื่อถึงร้าน</button>`;
+            }
+
+            // 🌟 แถบสถานะที่อัปเดตให้รองรับตอนเสร็จสมบูรณ์
             let statusUI = '';
             if (isCheckedIn) {
-               const p1 = b.status === 'in_progress' ? 'bg-blue-600' : 'bg-gray-300';
-               const p2 = b.status === 'in_progress' ? 'text-blue-600' : 'text-gray-400';
+               const p1 = (b.status === 'in_progress' || isCompleted) ? 'bg-blue-600' : 'bg-gray-300';
+               const p2 = (b.status === 'in_progress' || isCompleted) ? 'text-blue-600' : 'text-gray-400';
+               const p3 = isCompleted ? 'bg-green-500' : 'bg-gray-300';
+               const p4 = isCompleted ? 'text-green-600' : 'text-gray-400';
+               let barWidth = b.status === 'checked_in' ? '0%' : (b.status === 'in_progress' ? '50%' : '100%');
+
                statusUI = `
                  <div class="mt-4 pt-3 border-t border-gray-200">
                    <p class="text-[10px] font-bold text-gray-500 mb-2 uppercase text-center">สถานะการให้บริการ</p>
                    <div class="flex items-center justify-between text-[9px] font-bold">
-                     <div class="flex flex-col items-center w-1/3 text-green-600"><div class="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mb-1"><i class="fa-solid fa-check"></i></div>รับรถแล้ว</div>
-                     <div class="h-1 w-full bg-gray-200 rounded-full mx-1"><div class="h-full ${p1} rounded-full" style="width: ${b.status==='in_progress'?'100%':'0%'}"></div></div>
+                     <div class="flex flex-col items-center w-1/3 text-green-600"><div class="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mb-1"><i class="fa-solid fa-check"></i></div>รับรถ</div>
+                     <div class="h-1 w-full bg-gray-200 rounded-full mx-1"><div class="h-full ${p1} rounded-full transition-all duration-500" style="width: ${barWidth}"></div></div>
                      <div class="flex flex-col items-center w-1/3 ${p2}"><div class="w-6 h-6 rounded-full ${b.status==='in_progress'?'bg-blue-100':'bg-gray-100'} flex items-center justify-center mb-1"><i class="fa-solid fa-hands-bubbles"></i></div>กำลังล้าง</div>
-                     <div class="h-1 w-full bg-gray-200 rounded-full mx-1"></div>
-                     <div class="flex flex-col items-center w-1/3 text-gray-400"><div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center mb-1"><i class="fa-solid fa-flag-checkered"></i></div>รอส่งมอบ</div>
+                     <div class="h-1 w-full bg-gray-200 rounded-full mx-1"><div class="h-full ${p3} rounded-full transition-all duration-500" style="width: ${isCompleted?'100%':'0%'}"></div></div>
+                     <div class="flex flex-col items-center w-1/3 ${p4}"><div class="w-6 h-6 rounded-full ${isCompleted?'bg-green-100':'bg-gray-100'} flex items-center justify-center mb-1"><i class="fa-solid fa-flag-checkered"></i></div>เสร็จสิ้น</div>
                    </div>
                  </div>
                `;
             }
 
-            let checkInBtn = '';
-            if(b.status === 'pending' || b.status === 'confirmed') {
-               checkInBtn = `<button onclick="checkIn('${b.bookingId}', '${b.branchId}')" class="w-full mt-3 bg-blue-100 text-blue-700 py-3 rounded-xl text-xs font-bold active:bg-blue-200 transition shadow-sm border border-blue-200"><i class="fa-solid fa-location-dot"></i> กดเช็คอินเมื่อถึงร้าน</button>`;
-            }
-
-            return `<div class="text-left bg-white p-4 rounded-2xl border ${isCheckedIn?'border-blue-200 shadow-md':'border-gray-100 shadow-sm'} mb-3 relative overflow-hidden">
-                ${isCheckedIn ? '<div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>' : '<div class="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>'}
+            return `<div class="text-left bg-white p-4 rounded-2xl border ${isCompleted?'border-green-300 shadow-md':(isCheckedIn?'border-blue-200 shadow-md':'border-gray-100 shadow-sm')} mb-3 relative overflow-hidden">
+                ${isCompleted ? '<div class="absolute top-0 left-0 w-1 h-full bg-green-500"></div>' : (isCheckedIn ? '<div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>' : '<div class="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>')}
                 <div class="flex justify-between items-start mb-2 ml-1">
                   <span class="text-[11px] font-bold text-gray-500"><i class="fa-regular fa-calendar text-blue-500"></i> ${dateShow}</span>
-                  <span class="text-[9px] font-bold px-2 py-1 rounded-full ${isCheckedIn?'text-blue-700 bg-blue-100':'text-orange-600 bg-orange-100 border border-orange-200'}">${isCheckedIn?'เข้ารับบริการแล้ว':'รอเช็คอินหน้าร้าน'}</span>
+                  <span class="text-[9px] font-bold px-2 py-1 rounded-full ${statusColor}">${statusText}</span>
                 </div>
                 <p class="font-bold text-gray-800 text-sm ml-1"><i class="fa-solid fa-car-side text-gray-400 mr-1"></i> ${plate}</p>
                 <p class="text-[10px] text-gray-500 mt-1 truncate ml-1"><i class="fa-solid fa-spray-can-sparkles text-gray-400 mr-1"></i> ${svcText}</p>
@@ -325,50 +323,29 @@
       } catch(e) { Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้: ' + e.message, 'error'); }
     }
 
-    // 📍 🚀 อัปเกรดฟังก์ชันเช็คอิน (มีระบบกันเช็คอินทิพย์ 200 เมตร)
     async function checkIn(bookingId, branchId) {
       if (!navigator.geolocation) return Swal.fire('ข้อผิดพลาด', 'อุปกรณ์ของคุณไม่รองรับ GPS', 'error');
-
-      // หาพิกัดสาขาที่จองไว้
       const branch = masterData.branches?.find(b => b.branch_id == branchId);
-      if(!branch || !branch.lat || !branch.lng) return Swal.fire('ข้อผิดพลาด', 'ไม่พบพิกัดสาขาในระบบ กรุณาติดต่อแอดมิน', 'error');
-
+      if(!branch || !branch.lat || !branch.lng) return Swal.fire('ข้อผิดพลาด', 'ไม่พบพิกัดสาขาในระบบ', 'error');
       Swal.fire({ title: 'กำลังตรวจสอบตำแหน่ง...', text: 'กรุณารอสักครู่', didOpen: () => Swal.showLoading() });
 
       navigator.geolocation.getCurrentPosition(async pos => {
-        const userLat = pos.coords.latitude;
-        const userLng = pos.coords.longitude;
-        const bLat = parseFloat(branch.lat);
-        const bLng = parseFloat(branch.lng);
-
-        // คำนวณระยะห่าง (กิโลเมตร)
-        const distanceKm = getDistanceFromLatLonInKm(userLat, userLng, bLat, bLng);
-        
-        // ถ้าระยะห่างมากกว่า 0.2 กม. (200 เมตร) บล็อกการเช็คอินทันที!
+        const distanceKm = getDistanceFromLatLonInKm(pos.coords.latitude, pos.coords.longitude, parseFloat(branch.lat), parseFloat(branch.lng));
         if (distanceKm > 0.2) {
-           return Swal.fire({
-             icon: 'warning',
-             title: 'คุณอยู่ไกลเกินไป!',
-             text: `ดูเหมือนคุณจะไม่ได้อยู่หน้าร้าน (ห่างออกไป ${(distanceKm*1000).toFixed(0)} เมตร) กรุณามาถึงหน้าร้านก่อนกดเช็คอินครับ`,
-             confirmButtonText: 'เข้าใจแล้ว'
-           });
+           return Swal.fire({ icon: 'warning', title: 'คุณอยู่ไกลเกินไป!', text: `ห่างจากร้าน ${(distanceKm*1000).toFixed(0)} เมตร`, confirmButtonText: 'เข้าใจแล้ว' });
         }
-
-        // ถ้าผ่านด่านระยะทาง ก็ส่งไปหลังบ้าน
-        const payload = new URLSearchParams({ action: 'checkIn', bookingId: bookingId, lat: userLat, lng: userLng });
+        const payload = new URLSearchParams({ action: 'checkIn', bookingId: bookingId, lat: pos.coords.latitude, lng: pos.coords.longitude });
         try {
-          const res = await fetch(API_URL, { method: 'POST', body: payload });
-          const data = await res.json();
-          if(data.status === 'success') { Swal.fire('เช็คอินสำเร็จ!', 'ขอบคุณครับ กรุณาส่งมอบกุญแจให้พนักงานได้เลย', 'success').then(() => refreshData()); }
+          const res = await fetch(API_URL, { method: 'POST', body: payload }); const data = await res.json();
+          if(data.status === 'success') { Swal.fire('เช็คอินสำเร็จ!', 'ขอบคุณครับ กรุณาส่งมอบกุญแจให้พนักงาน', 'success').then(() => refreshData()); }
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
-      }, () => { Swal.fire('ข้อผิดพลาด', 'กรุณาเปิดอนุญาต (Allow) ให้เข้าถึงตำแหน่ง GPS ก่อนครับ', 'error'); }, { enableHighAccuracy: true, timeout: 10000 });
+      }, () => { Swal.fire('ข้อผิดพลาด', 'กรุณาเปิดอนุญาตให้เข้าถึง GPS', 'error'); }, { enableHighAccuracy: true, timeout: 10000 });
     }
 
     function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active')); document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active'); window.scrollTo(0,0); }
     function navToBooking() { if(!masterData.vehicles || masterData.vehicles.length === 0) { Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section')); } else { showSection('booking-section'); } }
 
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => { e.preventDefault(); const payload = new URLSearchParams({ action: 'addVehicle', lineUid: userUid, uName: document.getElementById('uName').value, uPhone: document.getElementById('uPhone').value, uGender: document.getElementById('uGender').value, uAge: document.getElementById('uAge').value, licensePlate: document.getElementById('vPlate').value, province: document.getElementById('vProvince').value, brand: document.getElementById('vBrand').value, model: document.getElementById('vModel').value, color: document.getElementById('vColor').value, size: document.getElementById('vSize').value }); Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success'); e.target.reset(); await refreshData(); showSection('home-section'); } } catch(e) { Swal.fire('Error', e.message, 'error'); } });
-
     function selectLine(type) { document.getElementById('selectedLineType').value = type; document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)'; document.getElementById('btnLine1').classList.toggle('text-gray-800', type==='LINE1'); document.getElementById('btnLine1').classList.toggle('text-gray-400', type!=='LINE1'); document.getElementById('btnLine2').classList.toggle('text-gray-800', type==='LINE2'); document.getElementById('btnLine2').classList.toggle('text-gray-400', type!=='LINE2'); renderServices(); }
     function renderServices() { if(!masterData.services) return; const size = document.getElementById('carSizeSelect').value; const type = document.getElementById('selectedLineType').value; const container = document.getElementById('servicesContainer'); const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {}); let html = ''; for (const cat in grouped) { html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`; grouped[cat].forEach(s => { const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); const isQuick = s.service_name.includes('ด่วน'); const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน'); let auto = false, disabled = false; if (type==='LINE1') { if(isQuick) auto=true; if(isNormal) disabled=true; } else { if(isNormal) auto=true; if(isQuick) disabled=true; } html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2"> <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()"> <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]"> <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div> <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div> </div> </label>`; }); } container.innerHTML = html; updateSummary(); }
     function updateSummary() { const checked = document.querySelectorAll('.checkbox-custom:checked'); let totalP = 0, totalT = 0, html = ''; checked.forEach(cb => { totalP += parseInt(cb.dataset.price); totalT += parseInt(cb.dataset.time); html += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`; }); const fee = calculateDeliveryFee(); if(fee > 0) html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง</span><span>${fee}.-</span></div>`; document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ'; document.getElementById('sumTotal').innerText = (totalP + fee) + '.-'; currentTotalTime = totalT; document.getElementById('selectedTime').value = ''; document.getElementById('displaySelectedTime').innerText = '- - : - -'; }
