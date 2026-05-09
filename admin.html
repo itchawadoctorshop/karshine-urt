@@ -70,13 +70,13 @@
   <section id="walkin-section" class="section p-4 lg:p-6 max-w-2xl mx-auto">
     <div class="bg-white rounded-3xl p-6 shadow-sm border-t-4 border-green-500">
       <h2 class="font-bold text-xl text-gray-800 mb-2"><i class="fa-solid fa-car-burst text-green-500 mr-2"></i>รับรถ Walk-in (หน้าร้าน)</h2>
-      <p class="text-xs text-gray-500 mb-6 border-b pb-4">ระบบจะสร้างคิวและแทรกเวลาให้ทันที เพื่อป้องกันลูกค้าออนไลน์จองซ้อน</p>
+      <p class="text-xs text-gray-500 mb-6 border-b pb-4">ระบบจะค้นหาประวัติลูกค้าจากทะเบียน และสร้างคิวแทรกเวลาให้ทันที</p>
 
       <form id="walkInForm" class="space-y-5">
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="text-[10px] font-bold text-gray-500 uppercase">ทะเบียนรถ</label>
-            <input type="text" id="wiPlate" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-2 focus:ring-green-500" placeholder="ระบุทะเบียน" required>
+            <label class="text-[10px] font-bold text-gray-500 uppercase">ทะเบียนรถ <span class="text-red-500">*ค้นหาอัตโนมัติ</span></label>
+            <input type="text" id="wiPlate" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-2 focus:ring-green-500" placeholder="พิมพ์ทะเบียนแล้วกด Enter" required>
           </div>
           <div>
             <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถ</label>
@@ -89,8 +89,8 @@
         <div>
           <label class="text-[10px] font-bold text-gray-500 uppercase">ประเภทการล้าง</label>
           <div class="flex gap-2 mt-1">
-            <button type="button" onclick="setWiLine('LINE1')" id="wiBtnLine1" class="flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow">ล้างด่วน (เครื่อง)</button>
-            <button type="button" onclick="setWiLine('LINE2')" id="wiBtnLine2" class="flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold">ล้างปกติ (คนล้าง)</button>
+            <button type="button" onclick="setWiLine('LINE1')" id="wiBtnLine1" class="flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition">ล้างด่วน (เครื่อง)</button>
+            <button type="button" onclick="setWiLine('LINE2')" id="wiBtnLine2" class="flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition">ล้างปกติ (คนล้าง)</button>
           </div>
           <input type="hidden" id="wiLine" value="LINE1">
         </div>
@@ -98,8 +98,8 @@
         <div>
           <label class="text-[10px] font-bold text-gray-500 uppercase">แพ็กเกจบริการ</label>
           <select id="wiService" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 bg-gray-50" required>
-            <option value="">กำลังโหลดบริการ...</option>
-            </select>
+            <option value="">กรุณาเลือกรถและประเภทการล้างก่อน</option>
+          </select>
         </div>
 
         <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition mt-4 text-lg">
@@ -146,8 +146,13 @@
 
     // --- 📋 ระบบโหลดกระดาน Kanban ---
     async function loadAdminData() {
-      document.getElementById('loading').classList.remove('hidden');
-      document.getElementById('board').style.opacity = '0.5';
+      const loading = document.getElementById('loading');
+      const board = document.getElementById('board');
+      
+      if(loading && board) {
+        loading.classList.remove('hidden');
+        board.style.opacity = '0.5';
+      }
       
       try {
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
@@ -162,8 +167,10 @@
       } catch (e) {
         console.error('Connection Error:', e);
       } finally {
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('board').style.opacity = '1';
+        if(loading && board) {
+          loading.classList.add('hidden');
+          board.style.opacity = '1';
+        }
       }
     }
 
@@ -172,6 +179,8 @@
       const colCheckedIn = document.getElementById('colCheckedIn');
       const colInProgress = document.getElementById('colInProgress');
       
+      if(!colPending || !colCheckedIn || !colInProgress) return;
+
       colPending.innerHTML = ''; colCheckedIn.innerHTML = ''; colInProgress.innerHTML = '';
       let cPend = 0, cCheck = 0, cProg = 0;
 
@@ -190,7 +199,6 @@
             </div>
             <p class="text-[10px] text-gray-400 mb-1"><i class="fa-solid fa-car-side"></i> ${b.model}</p>
             <p class="text-xs text-blue-600 font-bold mb-4"><i class="fa-solid fa-spray-can-sparkles"></i> ${b.serviceText} <span class="text-[10px] font-normal text-gray-400">(${b.lineType})</span></p>
-            
             ${getActionButton(b)}
           </div>
         `;
@@ -241,33 +249,78 @@
           const result = await response.json();
           if(result.status === 'success') {
             Swal.close();
-            loadAdminData(); // รีเฟรชกระดานทันที
+            loadAdminData();
           } else throw new Error(result.message);
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
       }
     }
 
-    // --- ➕ ระบบฟอร์ม Walk-in (UI ไว้ก่อน เดี๋ยวเชื่อม API รอบหน้า) ---
+    // ==============================================
+    // 🔍 ระบบค้นหา Walk-in အัจฉริยะ 
+    // ==============================================
     function setWiLine(type) {
       document.getElementById('wiLine').value = type;
       if(type === 'LINE1') {
-        document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow";
-        document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold";
+        document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition";
+        document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition";
       } else {
-        document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow";
-        document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold";
+        document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition";
+        document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition";
       }
     }
 
+    // เมื่อแอดมินพิมพ์ทะเบียนเสร็จ (blur = กดออกนอกช่องกรอก)
+    document.getElementById('wiPlate').addEventListener('blur', async (e) => {
+      const plate = e.target.value;
+      if(plate.length < 3) return; // ทะเบียนสั้นไปไม่ต้องหา
+
+      Swal.fire({ title: 'กำลังค้นหาประวัติรถ...', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, didOpen: () => Swal.showLoading() });
+      
+      try {
+        const payload = new URLSearchParams({ action: 'searchWalkInVehicle', plate: plate });
+        const res = await fetch(API_URL, { method: 'POST', body: payload });
+        const result = await res.json();
+        
+        if(result.status === 'success') {
+          const v = result.data.vehicle;
+          // เจอรถ! อัปเดตขนาดรถอัตโนมัติ
+          document.getElementById('wiSize').value = v.size;
+          
+          Swal.fire({
+            icon: 'success',
+            title: 'พบข้อมูลลูกค้าเก่า!',
+            html: `<div class="text-sm text-left mt-2 bg-gray-50 p-3 rounded-lg border border-green-200">
+                     <b>ชื่อ:</b> ${result.data.ownerName}<br>
+                     <b>เบอร์โทร:</b> ${result.data.ownerPhone}<br>
+                     <b>รุ่นรถ:</b> ${v.brand} ${v.model} (${v.color})
+                   </div>
+                   <p class="text-xs text-red-500 mt-3 font-bold">*คุณสามารถกดสร้างคิวเพื่อสะสมแต้มให้ลูกค้าท่านนี้ได้เลย</p>`,
+            confirmButtonText: 'รับทราบ',
+            customClass: { confirmButton: 'bg-green-600' }
+          });
+          
+          // แอบซ่อนข้อมูลไว้ใช้ตอนกดสร้างคิว
+          document.getElementById('walkInForm').dataset.vid = v.vehicleId;
+          document.getElementById('walkInForm').dataset.uid = v.lineUid;
+        } else {
+          // ไม่เจอรถ
+          document.getElementById('walkInForm').dataset.vid = '';
+          document.getElementById('walkInForm').dataset.uid = 'WALKIN_NEW';
+          Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'ลูกค้าใหม่! กรุณาเลือกขนาดรถ', showConfirmButton: false, timer: 3000 });
+        }
+      } catch (err) { console.error('Search Error:', err); }
+    });
+
     document.getElementById('walkInForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      Swal.fire('Coming Soon', 'ระบบหลังบ้าน Walk-in จะพร้อมใช้งานในอัปเดตถัดไปครับ (ตอนนี้โครงสร้าง UI เสร็จแล้ว)', 'info');
+      // ลอจิกกดบันทึก Walk-in จะตามมาในเฟสถัดไปครับ
+      Swal.fire('ยอดเยี่ยม!', 'ระบบค้นหาทำงานสมบูรณ์ ขั้นตอนต่อไปเราจะยิงคิวนีเข้าตารางจองครับ', 'success');
     });
 
     // เริ่มทำงานเมื่อเปิดเว็บ
     document.addEventListener('DOMContentLoaded', () => {
-      loadAdminData();
-      setInterval(loadAdminData, 30000); // Auto Refresh ทุก 30 วิ
+      showSection('board-section'); // บังคับเปิดหน้าแรกเป็นกระดานคิว
+      setInterval(loadAdminData, 30000); // รีเฟรชอัตโนมัติทุก 30 วิ
     });
   </script>
 </body>
