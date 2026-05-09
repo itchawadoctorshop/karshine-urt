@@ -43,7 +43,7 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start" id="board">
       <div class="bg-gray-200 rounded-2xl p-4 shadow-inner min-h-[500px]">
         <h2 class="font-bold text-gray-600 mb-4 pb-2 border-b border-gray-300 flex justify-between items-center">
-          <span><i class="fa-regular fa-clock text-orange-500 mr-1"></i> รอเช็คอิน</span>
+          <span><i class="fa-regular fa-clock text-orange-500 mr-1"></i> รอเช็คอิน (ออนไลน์)</span>
           <span id="countPending" class="bg-gray-300 text-gray-700 px-2 rounded-full text-xs py-1">0</span>
         </h2>
         <div id="colPending" class="space-y-3"></div>
@@ -76,11 +76,11 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="text-[10px] font-bold text-gray-500 uppercase">ทะเบียนรถ <span class="text-red-500">*ค้นหาอัตโนมัติ</span></label>
-            <input type="text" id="wiPlate" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-2 focus:ring-green-500" placeholder="พิมพ์ทะเบียนแล้วกด Enter" required>
+            <input type="text" id="wiPlate" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-2 focus:ring-green-500" placeholder="พิมพ์ทะเบียนแล้วคลิกออก" required>
           </div>
           <div>
             <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถ</label>
-            <select id="wiSize" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 font-bold text-gray-700 bg-gray-50" required>
+            <select id="wiSize" onchange="renderWiServices()" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 font-bold text-gray-700 bg-gray-50" required>
               <option value="M">M</option><option value="L">L</option><option value="XL">XL</option>
             </select>
           </div>
@@ -98,12 +98,12 @@
         <div>
           <label class="text-[10px] font-bold text-gray-500 uppercase">แพ็กเกจบริการ</label>
           <select id="wiService" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 bg-gray-50" required>
-            <option value="">กรุณาเลือกรถและประเภทการล้างก่อน</option>
+            <option value="">กำลังโหลดข้อมูล...</option>
           </select>
         </div>
 
         <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition mt-4 text-lg">
-          <i class="fa-solid fa-plus-circle mr-1"></i> สร้างคิว Walk-in
+          <i class="fa-solid fa-plus-circle mr-1"></i> ยืนยันสร้างคิว Walk-in
         </button>
       </form>
     </div>
@@ -130,10 +130,10 @@
   </nav>
 
   <script>
-    // ⚠️ อย่าลืมแก้ API_URL เป็นของคุณโอม
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
+    
+    let adminServices = []; // 🌟 เก็บข้อมูลบริการไว้วาด Dropdown
 
-    // --- 🧭 ระบบนำทาง ---
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
@@ -141,20 +141,27 @@
       document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active');
       window.scrollTo(0,0);
       if(id === 'board-section') loadAdminData();
+      if(id === 'walkin-section') renderWiServices(); // วาดเมนูบริการใหม่ทุกครั้งที่เปิดหน้า Walk-in
     }
 
-    // --- 📋 ระบบกระดานคิว ---
     async function loadAdminData() {
       const loading = document.getElementById('loading');
       const board = document.getElementById('board');
-      
       if(loading && board) { loading.classList.remove('hidden'); board.style.opacity = '0.5'; }
       
       try {
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: payload });
         const result = await res.json();
-        if (result.status === 'success') renderBoard(result.data);
+        
+        if (result.status === 'success') {
+          renderBoard(result.data);
+          // 🌟 เก็บรายการบริการและวาด Dropdown
+          if(result.services) {
+             adminServices = result.services;
+             renderWiServices(); 
+          }
+        }
       } catch (e) { console.error('Connection Error:', e); } 
       finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
     }
@@ -163,7 +170,6 @@
       const colPending = document.getElementById('colPending');
       const colCheckedIn = document.getElementById('colCheckedIn');
       const colInProgress = document.getElementById('colInProgress');
-      
       if(!colPending || !colCheckedIn || !colInProgress) return;
 
       colPending.innerHTML = ''; colCheckedIn.innerHTML = ''; colInProgress.innerHTML = '';
@@ -203,13 +209,9 @@
     }
 
     function getActionButton(b) {
-      if(b.status === 'pending' || b.status === 'confirmed') {
-        return `<button onclick="updateStatus('${b.bookingId}', 'checked_in')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-3 rounded-xl text-xs font-bold transition border border-gray-200">ช่วยเหลือ: กดเช็คอินแทนลูกค้า</button>`;
-      } else if(b.status === 'checked_in') {
-        return `<button onclick="updateStatus('${b.bookingId}', 'in_progress')" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-play mr-1"></i> เลื่อนรถเข้าช่องล้าง</button>`;
-      } else if(b.status === 'in_progress') {
-        return `<button onclick="updateStatus('${b.bookingId}', 'completed')" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-check-double mr-1"></i> ล้างเสร็จสมบูรณ์</button>`;
-      }
+      if(b.status === 'pending' || b.status === 'confirmed') return `<button onclick="updateStatus('${b.bookingId}', 'checked_in')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-3 rounded-xl text-xs font-bold transition border border-gray-200">ช่วยเหลือ: กดเช็คอินแทนลูกค้า</button>`;
+      else if(b.status === 'checked_in') return `<button onclick="updateStatus('${b.bookingId}', 'in_progress')" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-play mr-1"></i> เลื่อนรถเข้าช่องล้าง</button>`;
+      else if(b.status === 'in_progress') return `<button onclick="updateStatus('${b.bookingId}', 'completed')" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-check-double mr-1"></i> ล้างเสร็จสมบูรณ์</button>`;
       return '';
     }
 
@@ -218,26 +220,45 @@
       if(newStatus === 'in_progress') confirmText = 'กำลังนำรถคันนี้เข้าช่องล้างใช่ไหม?';
       if(newStatus === 'completed') confirmText = 'ล้างรถเสร็จเรียบร้อยแล้ว เตรียมส่งมอบใช่ไหม?';
 
-      const res = await Swal.fire({
-        title: 'ยืนยันสถานะ', text: confirmText, icon: 'question',
-        showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก',
-        customClass: { confirmButton: 'bg-blue-600', cancelButton: 'bg-gray-400' }
-      });
-
+      const res = await Swal.fire({ title: 'ยืนยันสถานะ', text: confirmText, icon: 'question', showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก', customClass: { confirmButton: 'bg-blue-600', cancelButton: 'bg-gray-400' }});
       if(res.isConfirmed) {
         Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
         try {
           const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: newStatus });
           const response = await fetch(API_URL, { method: 'POST', body: payload });
           const result = await response.json();
-          if(result.status === 'success') {
-            Swal.close(); loadAdminData();
-          } else throw new Error(result.message);
+          if(result.status === 'success') { Swal.close(); loadAdminData(); } else throw new Error(result.message);
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
       }
     }
 
-    // --- ➕ ระบบค้นหา Walk-in ---
+    // --- ➕ ระบบสร้างคิว Walk-in ---
+    
+    // 🌟 วาด Dropdown เมนูบริการให้ตรงกับไซส์และไลน์
+    function renderWiServices() {
+      const size = document.getElementById('wiSize').value;
+      const line = document.getElementById('wiLine').value;
+      const sel = document.getElementById('wiService');
+      sel.innerHTML = '';
+      
+      if(adminServices.length === 0) { sel.innerHTML = '<option value="">กำลังโหลดข้อมูล...</option>'; return; }
+
+      adminServices.forEach(s => {
+        const price = size === 'M' ? s.priceM : (size === 'L' ? s.priceL : s.priceXL);
+        const isQuick = s.name.includes('ด่วน');
+        const isNormal = s.name.includes('ปกติ') || s.name.includes('ภายนอก') || s.name.includes('พนักงาน');
+        
+        let shouldShow = false;
+        if (line === 'LINE1' && isQuick) shouldShow = true;
+        if (line === 'LINE2' && isNormal) shouldShow = true;
+        if (!isQuick && !isNormal) shouldShow = true; // บริการทั่วไปโชว์หมด
+
+        if (shouldShow) {
+          sel.innerHTML += `<option value="${s.id}">${s.name} (${price}.-)</option>`;
+        }
+      });
+    }
+
     function setWiLine(type) {
       document.getElementById('wiLine').value = type;
       if(type === 'LINE1') {
@@ -247,15 +268,14 @@
         document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition";
         document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition";
       }
+      renderWiServices(); // กดเปลี่ยนไลน์ ก็โหลดแพ็กเกจใหม่
     }
 
-    // ตรวจจับเมื่อพิมพ์ทะเบียนเสร็จแล้วคลิกที่อื่น
     document.getElementById('wiPlate').addEventListener('blur', async (e) => {
       const plate = e.target.value;
-      if(plate.length < 3) return; // ไม่ค้นหาถ้าพิมพ์มาสั้นเกินไป
+      if(plate.length < 3) return;
 
       Swal.fire({ title: 'กำลังค้นหาประวัติรถ...', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, didOpen: () => Swal.showLoading() });
-      
       try {
         const payload = new URLSearchParams({ action: 'searchWalkInVehicle', plate: plate });
         const res = await fetch(API_URL, { method: 'POST', body: payload });
@@ -263,12 +283,8 @@
         
         if(result.status === 'success' && result.data.length > 0) {
           const matches = result.data;
-
-          if(matches.length === 1) {
-            // เจอคนเดียว โหลดข้อมูลอัตโนมัติ
-            selectWalkInVehicle(matches[0]);
-          } else {
-            // เจอหลายคน ให้แอดมินเลือก
+          if(matches.length === 1) { selectWalkInVehicle(matches[0]); } 
+          else {
             let optionsHtml = matches.map((v, idx) => `
               <label class="flex items-center p-3 border border-gray-200 rounded-xl mb-2 cursor-pointer hover:bg-blue-50 transition">
                 <input type="radio" name="selectOwner" value="${idx}" class="mr-3 w-5 h-5 text-blue-600">
@@ -281,54 +297,61 @@
 
             const swalRes = await Swal.fire({
               title: 'พบรายชื่อหลายท่าน',
-              html: `<p class="text-xs text-gray-500 mb-3">รถทะเบียนนี้ถูกลงทะเบียนไว้หลายบัญชี<br>กรุณาสอบถามลูกค้าว่าต้องการสะสมแต้มเข้าเบอร์ใดครับ</p>
-                     <div class="text-left max-h-48 overflow-y-auto">${optionsHtml}</div>`,
-              showCancelButton: true,
-              confirmButtonText: 'เลือกสะสมแต้มบัญชีนี้',
-              cancelButtonText: 'ยกเลิก',
+              html: `<div class="text-left max-h-48 overflow-y-auto">${optionsHtml}</div>`,
+              showCancelButton: true, confirmButtonText: 'เลือกบัญชีนี้', cancelButtonText: 'ยกเลิก',
               customClass: { confirmButton: 'bg-blue-600', cancelButton: 'bg-gray-400' },
               preConfirm: () => {
                 const selected = document.querySelector('input[name="selectOwner"]:checked');
-                if (!selected) Swal.showValidationMessage('กรุณาเลือกบัญชี 1 ท่านครับ');
+                if (!selected) Swal.showValidationMessage('กรุณาเลือก 1 ท่านครับ');
                 return selected ? selected.value : null;
               }
             });
-
             if(swalRes.isConfirmed) selectWalkInVehicle(matches[swalRes.value]);
           }
         } else {
-          // ไม่เจอเลย (ลูกค้าใหม่)
           document.getElementById('walkInForm').dataset.vid = '';
           document.getElementById('walkInForm').dataset.uid = 'WALKIN_NEW';
           Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'ลูกค้าใหม่! กรุณาเลือกขนาดรถด้วยตนเอง', showConfirmButton: false, timer: 3000 });
         }
-      } catch (err) { console.error('Search Error:', err); }
+      } catch (err) { console.error(err); }
     });
 
     function selectWalkInVehicle(v) {
       document.getElementById('wiSize').value = v.size;
-      Swal.fire({
-        icon: 'success',
-        title: 'ดึงข้อมูลสำเร็จ!',
-        html: `<div class="text-sm text-left mt-2 bg-gray-50 p-3 rounded-lg border border-green-200">
-                 <b>ชื่อ:</b> ${v.ownerName}<br>
-                 <b>เบอร์โทร:</b> ${v.ownerPhone}<br>
-                 <b>รถ:</b> ${v.brand} ${v.model} (${v.color})
-               </div>
-               <p class="text-[10px] text-blue-500 mt-3 font-bold">*คะแนนและแพ็กเกจจะถูกคำนวณเข้าบัญชี <b>${v.ownerName}</b></p>`,
-        confirmButtonText: 'เยี่ยมเลย',
-        customClass: { confirmButton: 'bg-green-600' }
-      });
+      renderWiServices(); // อัปเดตราคาแพ็กเกจตามไซส์รถ
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `พบข้อมูล: ${v.ownerName}`, showConfirmButton: false, timer: 2000 });
       document.getElementById('walkInForm').dataset.vid = v.vehicleId;
       document.getElementById('walkInForm').dataset.uid = v.lineUid;
     }
 
-    document.getElementById('walkInForm').addEventListener('submit', (e) => {
+    // 🌟 ยิงคิว Walk-in เข้ากระดาน
+    document.getElementById('walkInForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      Swal.fire('ยอดเยี่ยม!', 'ระบบค้นหาทำงานสมบูรณ์ ขั้นตอนต่อไปเราจะยิงคิวนี้เข้าตารางจองครับ', 'success');
+      
+      const payload = new URLSearchParams({
+        action: 'submitWalkIn',
+        plate: document.getElementById('wiPlate').value,
+        size: document.getElementById('wiSize').value,
+        lineType: document.getElementById('wiLine').value,
+        serviceId: document.getElementById('wiService').value,
+        vehicleId: document.getElementById('walkInForm').dataset.vid || '',
+        lineUid: document.getElementById('walkInForm').dataset.uid || 'WALKIN_NEW'
+      });
+
+      Swal.fire({ title: 'กำลังสร้างคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      try {
+        const res = await fetch(API_URL, { method: 'POST', body: payload });
+        const result = await res.json();
+        
+        if(result.status === 'success') {
+          Swal.fire('สำเร็จ!', 'สร้างคิว Walk-in เข้ากระดานเรียบร้อยแล้ว', 'success').then(() => {
+            document.getElementById('walkInForm').reset();
+            showSection('board-section'); // เด้งกลับไปหน้ากระดานให้เห็นคิวทันที
+          });
+        } else throw new Error(result.message);
+      } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
 
-    // เริ่มทำงานเมื่อโหลดเสร็จ
     document.addEventListener('DOMContentLoaded', () => {
       showSection('board-section'); 
       setInterval(loadAdminData, 30000); 
