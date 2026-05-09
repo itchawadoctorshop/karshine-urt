@@ -141,73 +141,37 @@
       <form id="addVehicleForm" class="space-y-5">
         <div class="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
           <h3 class="text-xs font-bold text-blue-600 uppercase border-b border-gray-200 pb-2"><i class="fa-solid fa-user"></i> ข้อมูลติดต่อ (จำเป็น)</h3>
-          <div>
-            <label class="text-[10px] font-bold text-gray-500 uppercase">ชื่อ - นามสกุล</label>
-            <input type="text" id="uName" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="ระบุชื่อผู้ติดต่อ" required>
-          </div>
-          <div>
-            <label class="text-[10px] font-bold text-gray-500 uppercase">เบอร์โทรศัพท์ (10 หลัก)</label>
-            <input type="tel" id="uPhone" maxlength="10" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เช่น 0812345678" required>
-          </div>
+          <div><label class="text-[10px] font-bold text-gray-500 uppercase">ชื่อ - นามสกุล</label><input type="text" id="uName" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" required></div>
+          <div><label class="text-[10px] font-bold text-gray-500 uppercase">เบอร์โทรศัพท์ (10 หลัก)</label><input type="tel" id="uPhone" maxlength="10" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" required></div>
           <div class="grid grid-cols-2 gap-3">
-             <div>
-                <label class="text-[10px] font-bold text-gray-400 uppercase">เพศ (ไม่บังคับ)</label>
-                <select id="uGender" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 text-gray-600">
-                  <option value="">ไม่ระบุ</option><option value="M">ชาย</option><option value="F">หญิง</option>
-                </select>
-             </div>
-             <div>
-                <label class="text-[10px] font-bold text-gray-400 uppercase">ช่วงอายุ (ไม่บังคับ)</label>
-                <select id="uAge" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 text-gray-600">
-                  <option value="">ไม่ระบุ</option><option value="<20">ต่ำกว่า 20 ปี</option><option value="20-30">20 - 30 ปี</option><option value="31-40">31 - 40 ปี</option><option value="41-50">41 - 50 ปี</option><option value=">50">50 ปีขึ้นไป</option>
-                </select>
-             </div>
+             <div><label class="text-[10px] font-bold text-gray-400 uppercase">เพศ (ไม่บังคับ)</label><select id="uGender" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 text-gray-600"><option value="">ไม่ระบุ</option><option value="M">ชาย</option><option value="F">หญิง</option></select></div>
+             <div><label class="text-[10px] font-bold text-gray-400 uppercase">ช่วงอายุ (ไม่บังคับ)</label><select id="uAge" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 text-gray-600"><option value="">ไม่ระบุ</option><option value="<20">ต่ำกว่า 20 ปี</option><option value="20-30">20-30 ปี</option><option value="31-40">31-40 ปี</option><option value="41-50">41-50 ปี</option><option value=">50">50 ปีขึ้นไป</option></select></div>
           </div>
         </div>
 
         <div class="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
           <h3 class="text-xs font-bold text-blue-600 uppercase border-b border-gray-200 pb-2"><i class="fa-solid fa-car"></i> ข้อมูลรถยนต์ (จำเป็น)</h3>
           <div class="grid grid-cols-2 gap-3">
-             <div>
-                <label class="text-[10px] font-bold text-gray-500 uppercase">ทะเบียนรถ</label>
-                <input type="text" id="vPlate" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เช่น กข 1234" required>
-             </div>
-             <div>
-                <label class="text-[10px] font-bold text-gray-500 uppercase">จังหวัด</label>
-                <input type="text" id="vProvince" list="provinceList" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="พิมพ์ชื่อจังหวัด" required autocomplete="off">
-                <datalist id="provinceList"></datalist>
-             </div>
+             <div><label class="text-[10px] font-bold text-gray-500 uppercase">ทะเบียนรถ</label><input type="text" id="vPlate" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" required></div>
+             <div><label class="text-[10px] font-bold text-gray-500 uppercase">จังหวัด</label><input type="text" id="vProvince" list="provinceList" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" autocomplete="off" required><datalist id="provinceList"></datalist></div>
           </div>
           <div class="grid grid-cols-2 gap-3">
-             <div>
-                <label class="text-[10px] font-bold text-gray-500 uppercase">ยี่ห้อรถ (Brand)</label>
-                <input type="text" id="vBrand" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เช่น Toyota, Honda" required>
-             </div>
-             <div>
-                <label class="text-[10px] font-bold text-gray-500 uppercase">รุ่นรถ (Model)</label>
-                <input type="text" id="vModel" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เช่น Civic, Fortuner" required>
-             </div>
+             <div><label class="text-[10px] font-bold text-gray-500 uppercase">ยี่ห้อรถ (Brand)</label><input type="text" id="vBrand" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" required></div>
+             <div><label class="text-[10px] font-bold text-gray-500 uppercase">รุ่นรถ (Model)</label><input type="text" id="vModel" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" required></div>
           </div>
           <div class="grid grid-cols-2 gap-3">
-             <div class="col-span-2">
-                <label class="text-[10px] font-bold text-gray-500 uppercase">สีรถ</label>
-                <input type="text" id="vColor" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" placeholder="เช่น ขาว, เทาด้าน" required>
-             </div>
+             <div class="col-span-2"><label class="text-[10px] font-bold text-gray-500 uppercase">สีรถ</label><input type="text" id="vColor" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" required></div>
              <div class="col-span-2 mt-2">
                 <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถเบื้องต้น (เพื่อประเมินราคา)</label>
                 <select id="vSize" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 font-bold text-blue-600 bg-blue-50 focus:ring-2 focus:ring-blue-500 shadow-sm" required>
-                  <option value="M">ขนาด M (รถเก๋งเล็ก / Eco Car)</option>
-                  <option value="L">ขนาด L (รถเก๋งใหญ่ / SUV)</option>
-                  <option value="XL">ขนาด XL (รถกระบะ / รถตู้ / PPV)</option>
+                  <option value="M">ขนาด M (รถเก๋งเล็ก / Eco Car)</option><option value="L">ขนาด L (รถเก๋งใหญ่ / SUV)</option><option value="XL">ขนาด XL (รถกระบะ / รถตู้ / PPV)</option>
                 </select>
                 <p class="text-[9px] text-red-500 mt-1.5 font-bold">* แอดมินจะตรวจสอบและยืนยันขนาดรถที่ถูกต้องอีกครั้งที่หน้าสาขา</p>
              </div>
           </div>
         </div>
 
-        <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition mt-2">
-          <i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกข้อมูล
-        </button>
+        <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition mt-2"><i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกข้อมูล</button>
       </form>
     </div>
   </section>
@@ -241,7 +205,6 @@
     let map, markerPickup, markerDropoff, activePin = 'pickup';
     let currentTotalTime = 0; 
 
-    // 🎯 ฐานข้อมูล 77 จังหวัด
     const thaiProvinces = ["กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พะเยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"];
 
     function parseTimeStringToMinutes(val, defaultMins) {
@@ -263,9 +226,7 @@
         document.getElementById('profileUid').textContent = "UID: " + userUid;
       } catch(e) { console.log('Test Mode'); document.getElementById('profileName').textContent = "โหมดทดสอบระบบ"; }
       
-      // นำจังหวัดไปใส่ใน Datalist
       document.getElementById('provinceList').innerHTML = thaiProvinces.map(p => `<option value="${p}">`).join('');
-      
       await refreshData();
       flatpickr("#inlineCalendar", { inline: true, locale: "th", minDate: "today", onChange: (d, str) => { document.getElementById('bookDate').value = str; document.getElementById('selectedTime').value=''; document.getElementById('displaySelectedTime').innerText='- - : - -'; openTimeSlotModal(); } });
       document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
@@ -310,14 +271,27 @@
             const svcText = svcs.length > 0 ? svcs.join(' + ') : 'บริการทั่วไป';
             let dateShow = b.bookingDate;
             if(b.bookingDate.includes('T')){ const pts = b.bookingDate.split('T'); dateShow = pts[0] + ' <i class="fa-regular fa-clock ml-1"></i> ' + pts[1] + ' น.'; }
-            const isConfirmed = b.status === 'confirmed';
-            const statusColor = isConfirmed ? 'text-green-700 bg-green-100' : 'text-orange-600 bg-orange-100 border border-orange-200';
-            const statusText = isConfirmed ? 'กำลังให้บริการ' : 'รอการยืนยัน';
+            
+            const isConfirmed = (b.status === 'confirmed' || b.status === 'checked_in');
+            const isCheckedIn = (b.status === 'checked_in');
+            
+            let statusColor = 'text-orange-600 bg-orange-100 border border-orange-200';
+            let statusText = 'รอการยืนยัน';
+            if(isConfirmed && !isCheckedIn) { statusColor = 'text-blue-700 bg-blue-100'; statusText = 'ยืนยันคิวแล้ว'; }
+            if(isCheckedIn) { statusColor = 'text-green-700 bg-green-100'; statusText = 'เช็คอินแล้ว'; }
+            
+            // 📍 ปุ่มเช็คอิน จะโชว์ก็ต่อเมื่อยังไม่เช็คอิน 
+            let checkInBtn = '';
+            if(b.status === 'pending' || b.status === 'confirmed') {
+               checkInBtn = `<button onclick="checkIn('${b.bookingId}')" class="w-full mt-3 bg-blue-100 text-blue-700 py-3 rounded-xl text-xs font-bold active:bg-blue-200 transition shadow-sm border border-blue-200"><i class="fa-solid fa-location-dot"></i> กดเช็คอินเมื่อถึงร้าน</button>`;
+            }
+
             return `<div class="text-left bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-3 shadow-sm relative overflow-hidden">
-                ${isConfirmed ? '<div class="absolute top-0 left-0 w-1 h-full bg-green-500"></div>' : '<div class="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>'}
+                ${isCheckedIn ? '<div class="absolute top-0 left-0 w-1 h-full bg-green-500"></div>' : '<div class="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>'}
                 <div class="flex justify-between items-start mb-2 ml-1"><span class="text-[11px] font-bold text-gray-500"><i class="fa-regular fa-calendar text-blue-500"></i> ${dateShow}</span><span class="text-[9px] font-bold px-2 py-1 rounded-full ${statusColor}">${statusText}</span></div>
                 <p class="font-bold text-gray-800 text-sm ml-1"><i class="fa-solid fa-car-side text-gray-400 mr-1"></i> ${plate}</p>
                 <p class="text-[10px] text-gray-500 mt-1 truncate ml-1"><i class="fa-solid fa-spray-can-sparkles text-gray-400 mr-1"></i> ${svcText}</p>
+                ${checkInBtn}
               </div>`;
           }).join('');
         } else { nextBookingEl.innerHTML = '<p class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</p>'; }
@@ -326,6 +300,21 @@
         selectLine('LINE1');
         document.getElementById('loading').style.display = 'none';
       } catch(e) { Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้: ' + e.message, 'error'); }
+    }
+
+    // 📍 ฟังก์ชันเช็คอินและส่งพิกัดไปหลังบ้าน
+    async function checkIn(bookingId) {
+      Swal.fire({ title: 'กำลังเช็คอินพิกัด...', didOpen: () => Swal.showLoading() });
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async pos => {
+          const payload = new URLSearchParams({ action: 'checkIn', bookingId: bookingId, lat: pos.coords.latitude, lng: pos.coords.longitude });
+          try {
+            const res = await fetch(API_URL, { method: 'POST', body: payload });
+            const data = await res.json();
+            if(data.status === 'success') { Swal.fire('เช็คอินสำเร็จ!', 'ขอบคุณครับ พนักงานกำลังเตรียมพร้อมให้บริการ', 'success').then(() => refreshData()); }
+          } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        }, () => { Swal.fire('ข้อผิดพลาด', 'กรุณาเปิดอนุญาตให้เข้าถึงตำแหน่ง GPS ของคุณเพื่อเช็คอินครับ', 'error'); });
+      } else { Swal.fire('ข้อผิดพลาด', 'อุปกรณ์ของคุณไม่รองรับ GPS', 'error'); }
     }
 
     function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active')); document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active'); window.scrollTo(0,0); }
@@ -346,7 +335,6 @@
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
 
-    // ส่วนของปฏิทิน การคำนวณราคา แผนที่ คิว ฯลฯ ยังอยู่เหมือนเดิมทุกประการ
     function selectLine(type) { document.getElementById('selectedLineType').value = type; document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)'; document.getElementById('btnLine1').classList.toggle('text-gray-800', type==='LINE1'); document.getElementById('btnLine1').classList.toggle('text-gray-400', type!=='LINE1'); document.getElementById('btnLine2').classList.toggle('text-gray-800', type==='LINE2'); document.getElementById('btnLine2').classList.toggle('text-gray-400', type!=='LINE2'); renderServices(); }
     function renderServices() { if(!masterData.services) return; const size = document.getElementById('carSizeSelect').value; const type = document.getElementById('selectedLineType').value; const container = document.getElementById('servicesContainer'); const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {}); let html = ''; for (const cat in grouped) { html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`; grouped[cat].forEach(s => { const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); const isQuick = s.service_name.includes('ด่วน'); const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน'); let auto = false, disabled = false; if (type==='LINE1') { if(isQuick) auto=true; if(isNormal) disabled=true; } else { if(isNormal) auto=true; if(isQuick) disabled=true; } html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2"> <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()"> <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]"> <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div> <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div> </div> </label>`; }); } container.innerHTML = html; updateSummary(); }
     function updateSummary() { const checked = document.querySelectorAll('.checkbox-custom:checked'); let totalP = 0, totalT = 0, html = ''; checked.forEach(cb => { totalP += parseInt(cb.dataset.price); totalT += parseInt(cb.dataset.time); html += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`; }); const fee = calculateDeliveryFee(); if(fee > 0) html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง</span><span>${fee}.-</span></div>`; document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ'; document.getElementById('sumTotal').innerText = (totalP + fee) + '.-'; currentTotalTime = totalT; document.getElementById('selectedTime').value = ''; document.getElementById('displaySelectedTime').innerText = '- - : - -'; }
