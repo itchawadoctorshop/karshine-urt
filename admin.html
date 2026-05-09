@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Karshine Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
+    body { font-family: 'Kanit', sans-serif; background-color: #f3f4f6; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); transition: all 0.2s; }
+  </style>
+</head>
+<body class="text-gray-800">
+
+  <header class="bg-gray-900 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <i class="fa-solid fa-car-on text-2xl text-blue-400"></i>
+      <h1 class="text-xl font-bold tracking-wider">Karshine URT <span class="text-sm font-normal text-gray-400 ml-2">| ระบบจัดการคิวหน้าร้าน</span></h1>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="loadAdminData()" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-sm font-bold shadow transition">
+        <i class="fa-solid fa-arrows-rotate mr-1"></i> รีเฟรชข้อมูล
+      </button>
+      <button onclick="addWalkIn()" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-bold shadow transition">
+        <i class="fa-solid fa-plus mr-1"></i> เพิ่ม Walk-in
+      </button>
+    </div>
+  </header>
+
+  <div class="p-6">
+    <div id="loading" class="text-center py-10 text-gray-500 hidden">
+      <i class="fa-solid fa-circle-notch fa-spin text-4xl mb-3 text-blue-500"></i><p>กำลังโหลดคิวงาน...</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start" id="board">
+      
+      <div class="bg-gray-200 rounded-2xl p-4 shadow-inner min-h-[500px]">
+        <h2 class="font-bold text-gray-600 mb-4 pb-2 border-b border-gray-300 flex justify-between">
+          <span><i class="fa-regular fa-clock text-orange-500"></i> รอเช็คอิน (ลูกค้ากำลังมา)</span>
+          <span id="countPending" class="bg-gray-300 text-gray-700 px-2 rounded-full text-xs py-1">0</span>
+        </h2>
+        <div id="colPending" class="space-y-3"></div>
+      </div>
+
+      <div class="bg-blue-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
+        <h2 class="font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200 flex justify-between">
+          <span><i class="fa-solid fa-location-dot text-blue-500"></i> รถจอดรอ (เช็คอินแล้ว)</span>
+          <span id="countCheckedIn" class="bg-blue-200 text-blue-800 px-2 rounded-full text-xs py-1">0</span>
+        </h2>
+        <div id="colCheckedIn" class="space-y-3"></div>
+      </div>
+
+      <div class="bg-green-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
+        <h2 class="font-bold text-green-800 mb-4 pb-2 border-b border-green-200 flex justify-between">
+          <span><i class="fa-solid fa-hands-bubbles text-green-500"></i> กำลังให้บริการ</span>
+          <span id="countInProgress" class="bg-green-200 text-green-800 px-2 rounded-full text-xs py-1">0</span>
+        </h2>
+        <div id="colInProgress" class="space-y-3"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ⚠️ อย่าลืมแก้ API_URL เป็นของคุณโอม
+    const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
+
+    async function loadAdminData() {
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('board').style.opacity = '0.5';
+      
+      try {
+        const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
+        const res = await fetch(API_URL, { method: 'POST', body: payload });
+        const result = await res.json();
+        
+        if (result.status === 'success') {
+          renderBoard(result.data);
+        } else {
+          Swal.fire('Error', result.message, 'error');
+        }
+      } catch (e) {
+        Swal.fire('Connection Error', e.message, 'error');
+      } finally {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('board').style.opacity = '1';
+      }
+    }
+
+    function renderBoard(bookings) {
+      const colPending = document.getElementById('colPending');
+      const colCheckedIn = document.getElementById('colCheckedIn');
+      const colInProgress = document.getElementById('colInProgress');
+      
+      colPending.innerHTML = ''; colCheckedIn.innerHTML = ''; colInProgress.innerHTML = '';
+      let cPend = 0, cCheck = 0, cProg = 0;
+
+      bookings.forEach(b => {
+        let timeStr = b.bookingDate;
+        if(b.bookingDate.includes('T')) {
+           const d = new Date(b.bookingDate);
+           timeStr = d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+        }
+
+        const cardHtml = `
+          <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 card-hover relative overflow-hidden">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-xl font-black text-gray-800">${b.plate}</span>
+              <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">${timeStr} น.</span>
+            </div>
+            <p class="text-[10px] text-gray-400 mb-1"><i class="fa-solid fa-car-side"></i> ${b.model}</p>
+            <p class="text-xs text-blue-600 font-bold mb-3"><i class="fa-solid fa-spray-can-sparkles"></i> ${b.serviceText} <span class="text-[10px] font-normal text-gray-400">(${b.lineType})</span></p>
+            
+            ${getActionButton(b)}
+          </div>
+        `;
+
+        if(b.status === 'pending' || b.status === 'confirmed') { colPending.innerHTML += cardHtml; cPend++; }
+        else if(b.status === 'checked_in') { colCheckedIn.innerHTML += cardHtml; cCheck++; }
+        else if(b.status === 'in_progress') { colInProgress.innerHTML += cardHtml; cProg++; }
+      });
+
+      if(cPend === 0) colPending.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">ว่าง</div>';
+      if(cCheck === 0) colCheckedIn.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">ว่าง</div>';
+      if(cProg === 0) colInProgress.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">ว่าง</div>';
+
+      document.getElementById('countPending').innerText = cPend;
+      document.getElementById('countCheckedIn').innerText = cCheck;
+      document.getElementById('countInProgress').innerText = cProg;
+    }
+
+    function getActionButton(b) {
+      if(b.status === 'pending' || b.status === 'confirmed') {
+        // ให้พนักงานกดเช็คอินแทนลูกค้าได้ เผื่อลูกค้าลืมมือถือ
+        return `<button onclick="updateStatus('${b.bookingId}', 'checked_in')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-2 rounded-lg text-xs font-bold transition">ช่วยลูกค้าเช็คอิน</button>`;
+      } 
+      else if(b.status === 'checked_in') {
+        return `<button onclick="updateStatus('${b.bookingId}', 'in_progress')" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-xs font-bold transition shadow"><i class="fa-solid fa-play"></i> เริ่มล้างรถ</button>`;
+      } 
+      else if(b.status === 'in_progress') {
+        return `<button onclick="updateStatus('${b.bookingId}', 'completed')" class="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg text-xs font-bold transition shadow"><i class="fa-solid fa-check-double"></i> งานเสร็จสิ้น</button>`;
+      }
+      return '';
+    }
+
+    async function updateStatus(bookingId, newStatus) {
+      let confirmText = '';
+      if(newStatus === 'in_progress') confirmText = 'ย้ายรถเข้าช่องล้างแล้วใช่ไหม?';
+      if(newStatus === 'completed') confirmText = 'ล้างรถเสร็จเรียบร้อยแล้วใช่ไหม?';
+
+      const res = await Swal.fire({
+        title: 'ยืนยันสถานะ', text: confirmText, icon: 'question',
+        showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก'
+      });
+
+      if(res.isConfirmed) {
+        Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
+        try {
+          const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: newStatus });
+          const response = await fetch(API_URL, { method: 'POST', body: payload });
+          const result = await response.json();
+          if(result.status === 'success') {
+            Swal.close();
+            loadAdminData(); // โหลดกระดานใหม่ทันที
+          } else throw new Error(result.message);
+        } catch(e) { Swal.fire('Error', e.message, 'error'); }
+      }
+    }
+
+    function addWalkIn() {
+      // (ลอจิก Walk-in จะใส่ในรอบหน้านะครับ ตอนนี้เอาจัดการคิวให้ลื่นก่อน)
+      Swal.fire('Coming Soon', 'ระบบ Walk-in จะตามมาในเร็วๆ นี้ครับ', 'info');
+    }
+
+    // โหลดข้อมูลเมื่อเปิดหน้าเว็บ
+    document.addEventListener('DOMContentLoaded', () => {
+      loadAdminData();
+      // ตั้งให้รีเฟรชกระดานอัตโนมัติทุกๆ 30 วินาที
+      setInterval(loadAdminData, 30000); 
+    });
+  </script>
+</body>
+</html>
