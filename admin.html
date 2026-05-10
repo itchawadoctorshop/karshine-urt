@@ -207,6 +207,7 @@
     // ⚠️ อย่าลืมแก้ API_URL เป็นของคุณโอม
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
     
+    // Global Data
     let adminServices = []; 
     let currentCrmUid = ""; 
     let configData = { services: [], packages: [], branches: [], payments: [] }; 
@@ -294,10 +295,12 @@
       for (const cat in grouped) {
         let optgroup = document.createElement('optgroup'); optgroup.label = `📍 ${cat}`; let hasItem = false;
         grouped[cat].forEach(s => {
-          const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); const time = s.std_time_mins || 0;
-          const isQuick = String(s.service_name).includes('ด่วน'); const isNormal = String(s.service_name).includes('ปกติ') || String(s.service_name).includes('ภายนอก') || String(s.service_name).includes('พนักงาน');
+          const price = size === 'M' ? (s.price_m || s.pricem) : (size === 'L' ? (s.price_l || s.pricel) : (s.price_xl || s.pricexl)); 
+          const time = s.std_time_mins || s.stdtime || s.std_time || 0;
+          const sName = s.service_name || s.name || '';
+          const isQuick = String(sName).includes('ด่วน'); const isNormal = String(sName).includes('ปกติ') || String(sName).includes('ภายนอก') || String(sName).includes('พนักงาน');
           let shouldShow = false; if (line === 'LINE1' && isQuick) shouldShow = true; if (line === 'LINE2' && isNormal) shouldShow = true; if (!isQuick && !isNormal) shouldShow = true; 
-          if (shouldShow) { hasItem = true; const opt = document.createElement('option'); opt.value = s.service_id; opt.textContent = `${s.service_name} | ⏱️ ${time} นาที | 💰 ${price}.-`; optgroup.appendChild(opt); }
+          if (shouldShow) { hasItem = true; const opt = document.createElement('option'); opt.value = s.service_id || s.id; opt.textContent = `${sName} | ⏱️ ${time} นาที | 💰 ${price}.-`; optgroup.appendChild(opt); }
         });
         if(hasItem) sel.appendChild(optgroup);
       }
@@ -404,9 +407,23 @@
         const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json();
         if(result.status === 'success') {
           if(result.data.vehicles.length > 0) { vList.innerHTML = result.data.vehicles.map(v => `<div class="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-200"><div><b class="text-sm text-gray-800">${v.plate}</b><br><span class="text-[10px] text-gray-500">${v.brand} ${v.model}</span></div><button onclick="deleteUserVehicle('${v.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition"><i class="fa-solid fa-trash"></i></button></div>`).join(''); } else { vList.innerHTML = '<p class="text-xs text-gray-400 italic">ไม่มีข้อมูลรถ</p>'; }
-          if(result.data.packages.length > 0) { pList.innerHTML = result.data.packages.map(p => { let expDate = p.expireDate; if(expDate && expDate.includes('T')) expDate = expDate.split('T')[0]; return `<div class="bg-orange-50 border border-orange-200 p-3 rounded-xl"><div class="flex justify-between mb-1"><b class="text-sm text-orange-800">${p.packageName}</b><span class="text-xs font-bold text-orange-600">เหลือ ${p.remaining} ครั้ง</span></div><p class="text-[10px] text-orange-500">หมดอายุ: ${expDate}</p></div>`; }).join(''); } else { pList.innerHTML = '<p class="text-xs text-gray-400 italic">ไม่มีแพ็กเกจคงเหลือ</p>'; }
+          
+          if(result.data.packages.length > 0) { 
+            pList.innerHTML = result.data.packages.map(p => { 
+              let expDate = p.expireDate; if(expDate && expDate.includes('T')) expDate = expDate.split('T')[0]; 
+              return `<div class="bg-orange-50 border border-orange-200 p-3 rounded-xl"><div class="flex justify-between mb-1"><b class="text-sm text-orange-800">${p.packageName}</b><span class="text-xs font-bold text-orange-600">เหลือ ${p.remaining} ครั้ง</span></div><p class="text-[10px] text-orange-500">หมดอายุ: ${expDate}</p></div>`; 
+            }).join(''); 
+          } else { pList.innerHTML = '<p class="text-xs text-gray-400 italic">ไม่มีแพ็กเกจคงเหลือ</p>'; }
+          
           const pkgSel = document.getElementById('crmAddPackageSelect');
-          if(result.data.masterPackages.length > 0) { pkgSel.innerHTML = result.data.masterPackages.map(mp => `<option value="${mp.id}" data-name="${mp.name}" data-amount="${mp.amount}">${mp.name} (${mp.amount} ครั้ง) - ${mp.price}.-</option>`).join(''); } else { pkgSel.innerHTML = '<option value="">ไม่มีแพ็กเกจเปิดขาย</option>'; }
+          if(result.data.masterPackages.length > 0) { 
+            pkgSel.innerHTML = result.data.masterPackages.map(mp => {
+              // 🌟 ดึงชื่อแพ็กเกจแบบฉลาด
+              const pName = mp.name || mp.pkg_name || mp.package_name || 'ไม่ระบุชื่อ';
+              const pId = mp.id || mp.master_id || mp.package_id;
+              return `<option value="${pId}" data-name="${pName}" data-amount="${mp.amount}">${pName} (${mp.amount} ครั้ง) - ${mp.price}.-</option>`;
+            }).join(''); 
+          } else { pkgSel.innerHTML = '<option value="">ไม่มีแพ็กเกจเปิดขาย</option>'; }
         } else throw new Error(result.message);
       } catch(e) { vList.innerHTML = `<p class="text-xs text-red-500">${e.message}</p>`; pList.innerHTML = `<p class="text-xs text-red-500">${e.message}</p>`; }
     }
@@ -470,43 +487,56 @@
 
           // Render Services
           if(configData.services && configData.services.length > 0) {
-            svcsContainer.innerHTML = configData.services.map(s => `
+            svcsContainer.innerHTML = configData.services.map(s => {
+              const sName = s.service_name || s.name;
+              const sId = s.service_id || s.id;
+              const pM = s.price_m || s.pricem || 0;
+              const pL = s.price_l || s.pricel || 0;
+              const pXL = s.price_xl || s.pricexl || 0;
+              const time = s.std_time_mins || s.stdtime || s.std_time || 0;
+              return `
               <div class="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex justify-between items-center">
                 <div>
-                  <span class="text-[9px] font-bold text-blue-500 uppercase tracking-widest">${s.category}</span>
-                  <h4 class="font-bold text-gray-800 text-sm mb-1">${s.service_name}</h4>
-                  <p class="text-[10px] text-gray-500">M: ${s.price_m}.- | L: ${s.price_l}.- | XL: ${s.price_xl}.- | ⏱️ ${s.std_time_mins} นาที</p>
+                  <span class="text-[9px] font-bold text-blue-500 uppercase tracking-widest">${s.category || 'ทั่วไป'}</span>
+                  <h4 class="font-bold text-gray-800 text-sm mb-1">${sName}</h4>
+                  <p class="text-[10px] text-gray-500">M: ${pM}.- | L: ${pL}.- | XL: ${pXL}.- | ⏱️ ${time} นาที</p>
                 </div>
                 <div class="flex gap-2">
                   <button onclick='openConfigModal("service", "edit", ${JSON.stringify(s)})' class="bg-white text-blue-500 hover:bg-blue-50 border border-blue-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
-                  <button onclick="deleteConfigData('Services', '${s.service_id}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+                  <button onclick="deleteConfigData('Services', '${sId}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
                 </div>
               </div>
-            `).join('');
+            `}).join('');
           } else { svcsContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีบริการในระบบ</div>'; }
 
-          // Render Packages
+          // 🌟 Render Packages (แก้ไขให้รับข้อมูลชื่อได้ฉลาดขึ้น)
           if(configData.masterPkgs && configData.masterPkgs.length > 0) {
-            pkgsContainer.innerHTML = configData.masterPkgs.map(p => `
+            pkgsContainer.innerHTML = configData.masterPkgs.map(p => {
+              const pName = p.name || p.pkg_name || p.package_name || 'ไม่ระบุชื่อแพ็กเกจ';
+              const pId = p.id || p.master_id || p.package_id;
+              return `
               <div class="bg-orange-50 border border-orange-200 rounded-2xl p-4 flex justify-between items-center">
                 <div>
-                  <h4 class="font-bold text-orange-800 text-sm mb-1">${p.package_name}</h4>
+                  <h4 class="font-bold text-orange-800 text-sm mb-1">${pName}</h4>
                   <p class="text-[10px] text-orange-600 font-bold">ได้ ${p.amount} ครั้ง | ราคา ${p.price}.-</p>
                 </div>
                 <div class="flex gap-2">
                   <button onclick='openConfigModal("package", "edit", ${JSON.stringify(p)})' class="bg-white text-orange-500 hover:bg-orange-100 border border-orange-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
-                  <button onclick="deleteConfigData('Master_Packages', '${p.package_id}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+                  <button onclick="deleteConfigData('Master_Packages', '${pId}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
                 </div>
               </div>
-            `).join('');
+            `}).join('');
           } else { pkgsContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีแพ็กเกจในระบบ</div>'; }
 
           // Render Branches
           if(configData.branches && configData.branches.length > 0) {
-            brContainer.innerHTML = configData.branches.map(b => `
+            brContainer.innerHTML = configData.branches.map(b => {
+              const bName = b.branch_name || b.name;
+              const bId = b.branch_id || b.id;
+              return `
               <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex justify-between items-start">
                 <div class="w-4/5">
-                  <h4 class="font-bold text-blue-800 text-sm mb-1">${b.branch_name}</h4>
+                  <h4 class="font-bold text-blue-800 text-sm mb-1">${bName}</h4>
                   <div class="text-[10px] text-gray-600 space-y-1">
                     <div><i class="fa-regular fa-clock"></i> ${formatTime(b.open_time)} - ${formatTime(b.close_time)} น.</div>
                     <div><i class="fa-solid fa-car-side"></i> ${b.bay_capacity} ช่อง | พัก ${b.buffer_time} นาที</div>
@@ -515,26 +545,29 @@
                 </div>
                 <div class="flex gap-2 flex-col">
                   <button onclick='editBranch(${JSON.stringify(b)})' class="bg-white text-blue-500 hover:bg-blue-100 border border-blue-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
-                  <button onclick="deleteConfigData('Branches', '${b.branch_id}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+                  <button onclick="deleteConfigData('Branches', '${bId}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
                 </div>
               </div>
-            `).join('');
+            `}).join('');
           } else { brContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีสาขาในระบบ</div>'; }
 
           // Render Payments
           if(configData.payments && configData.payments.length > 0) {
-            payContainer.innerHTML = configData.payments.map(p => `
+            payContainer.innerHTML = configData.payments.map(p => {
+              const pName = p.pay_name || p.name;
+              const pId = p.pay_id || p.id;
+              return `
               <div class="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex justify-between items-center">
                 <div class="w-4/5">
-                  <h4 class="font-bold text-purple-800 text-sm mb-1">${p.pay_name}</h4>
+                  <h4 class="font-bold text-purple-800 text-sm mb-1">${pName}</h4>
                   <p class="text-[10px] text-gray-600">${p.details}</p>
                 </div>
                 <div class="flex gap-2">
                   <button onclick='editPayment(${JSON.stringify(p)})' class="bg-white text-purple-500 hover:bg-purple-100 border border-purple-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
-                  <button onclick="deleteConfigData('Payment_Methods', '${p.pay_id}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+                  <button onclick="deleteConfigData('Payment_Methods', '${pId}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
                 </div>
               </div>
-            `).join('');
+            `}).join('');
           } else { payContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีวิธีชำระเงิน</div>'; }
 
         }
@@ -546,23 +579,24 @@
       if (type === 'service') {
         document.getElementById('svcModalTitle').innerText = action === 'add' ? 'เพิ่มบริการล้างรถใหม่' : 'แก้ไขบริการ';
         if (action === 'edit') {
-          document.getElementById('svcId').value = data.service_id;
-          document.getElementById('svcCategory').value = data.category;
-          document.getElementById('svcName').value = data.service_name;
-          document.getElementById('svcPriceM').value = data.price_m;
-          document.getElementById('svcPriceL').value = data.price_l;
-          document.getElementById('svcPriceXL').value = data.price_xl;
-          document.getElementById('svcTime').value = data.std_time_mins;
-          document.getElementById('svcDetail').value = data.details || '';
+          document.getElementById('svcId').value = data.service_id || data.id;
+          document.getElementById('svcCategory').value = data.category || '';
+          document.getElementById('svcName').value = data.service_name || data.name || '';
+          document.getElementById('svcPriceM').value = data.price_m || data.pricem || 0;
+          document.getElementById('svcPriceL').value = data.price_l || data.pricel || 0;
+          document.getElementById('svcPriceXL').value = data.price_xl || data.pricexl || 0;
+          document.getElementById('svcTime').value = data.std_time_mins || data.stdtime || data.std_time || 0;
+          document.getElementById('svcDetail').value = data.details || data.detail || '';
         } else { document.getElementById('svcForm').reset(); document.getElementById('svcId').value = 'SVC-' + Date.now(); }
         document.getElementById('serviceModal').classList.remove('hidden');
       } else if (type === 'package') {
         document.getElementById('pkgModalTitle').innerText = action === 'add' ? 'สร้างแพ็กเกจใหม่' : 'แก้ไขแพ็กเกจ';
         if (action === 'edit') {
-          document.getElementById('pkgId').value = data.package_id;
-          document.getElementById('pkgName').value = data.package_name;
-          document.getElementById('pkgAmount').value = data.amount;
-          document.getElementById('pkgPrice').value = data.price;
+          // 🌟 รับค่าแบบฉลาด
+          document.getElementById('pkgId').value = data.package_id || data.master_id || data.id;
+          document.getElementById('pkgName').value = data.package_name || data.pkg_name || data.name || '';
+          document.getElementById('pkgAmount').value = data.amount || 0;
+          document.getElementById('pkgPrice').value = data.price || 0;
         } else { document.getElementById('pkgForm').reset(); document.getElementById('pkgId').value = 'PKG-M' + Date.now(); }
         document.getElementById('packageModal').classList.remove('hidden');
       }
@@ -615,7 +649,7 @@
           <div class="space-y-3">
             <div>
               <div class="text-left text-xs font-bold text-gray-500 mb-1 ml-1"><i class="fa-solid fa-location-dot"></i> ข้อมูลทั่วไป</div>
-              <input id="b-name" class="swal2-input !w-full !m-0" placeholder="ชื่อสาขา" value="${data.branch_name||''}">
+              <input id="b-name" class="swal2-input !w-full !m-0" placeholder="ชื่อสาขา" value="${data.branch_name || data.name || ''}">
             </div>
             <div class="grid grid-cols-2 gap-2">
               <input id="b-lat" class="swal2-input !w-full !m-0 text-sm" placeholder="Latitude" value="${data.lat||''}">
@@ -645,7 +679,7 @@
           </div>
         `,
         preConfirm: () => ({
-          id: action === 'add' ? 'BR-' + Date.now() : data.branch_id,
+          id: action === 'add' ? 'BR-' + Date.now() : (data.branch_id || data.id),
           name: document.getElementById('b-name').value, lat: document.getElementById('b-lat').value || 0, lng: document.getElementById('b-lng').value || 0,
           openTime: document.getElementById('b-open').value || '08:00', closeTime: document.getElementById('b-close').value || '18:00',
           bayCapacity: document.getElementById('b-cap').value || 1, bufferTime: document.getElementById('b-buf').value || 10,
@@ -670,8 +704,8 @@
     async function showPaymentForm(action, data) {
       const { value: v } = await Swal.fire({ 
         title: action==='add'?'เพิ่มวิธีชำระเงิน':'แก้ไขวิธีชำระเงิน', 
-        html: `<div class="space-y-3"><input id="pay-name" class="swal2-input !w-full !m-0" placeholder="ชื่อช่องทาง" value="${data.pay_name||''}"><textarea id="pay-info" class="swal2-textarea !w-full !m-0" placeholder="รายละเอียด" rows="2">${data.details||''}</textarea></div>`, 
-        preConfirm: () => ({ id: action==='add'?'PAY-'+Date.now():data.pay_id, name: document.getElementById('pay-name').value, details: document.getElementById('pay-info').value }) 
+        html: `<div class="space-y-3"><input id="pay-name" class="swal2-input !w-full !m-0" placeholder="ชื่อช่องทาง" value="${data.pay_name || data.name || ''}"><textarea id="pay-info" class="swal2-textarea !w-full !m-0" placeholder="รายละเอียด" rows="2">${data.details||''}</textarea></div>`, 
+        preConfirm: () => ({ id: action==='add'?'PAY-'+Date.now() : (data.pay_id || data.id), name: document.getElementById('pay-name').value, details: document.getElementById('pay-info').value }) 
       });
       if (v && v.name) {
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
