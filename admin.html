@@ -713,28 +713,45 @@
       } catch(err) { Swal.fire('Error', err.message, 'error'); }
     });
 
-    // 🌟 Submit Packages Form (อัปเดตใหม่ รองรับการดึงข้อมูลหลายบริการ)
+    // 🌟 Submit Packages Form (แก้ไขให้ส่ง key ตรงกับ Code.gs)
     document.getElementById('pkgForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const sIds = Array.from(document.querySelectorAll('.pkg-svc-select')).map(el => el.value).join(',');
-      const amts = Array.from(document.querySelectorAll('.pkg-amt-input')).map(el => el.value).join(',');
+      const amts = Array.from(document.querySelectorAll('.pkg-amt-input')).map(el => {
+        // ถ้าเป็นบุฟเฟต์ ให้ส่งเลข 999 ไปที่หลังบ้าน
+        return el.value === '∞' ? '999' : el.value;
+      }).join(',');
 
       Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+      
+      // ใช้ URLSearchParams เพื่อส่งข้อมูลแบบฟอร์มให้ Apps Script รับง่ายที่สุด
       const payload = new URLSearchParams({
-        action: 'manageData', target: 'Master_Packages', actionType: currentManageAction,
+        action: 'manageData', 
+        target: 'Master_Packages', 
+        actionType: currentManageAction,
         id: document.getElementById('pkgId').value,
         name: document.getElementById('pkgName').value,
         type: document.getElementById('pkgType').value,
         serviceIds: sIds,
         amounts: amts,
         price: document.getElementById('pkgPrice').value,
-        validDays: document.getElementById('pkgValidDays').value
+        validDays: document.getElementById('pkgValidDays').value || '365'
       });
+
       try {
-        await fetch(API_URL, { method: 'POST', body: payload });
-        closeConfigModals(); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกแพ็กเกจเรียบร้อย', 'success');
-      } catch(err) { Swal.fire('Error', err.message, 'error'); }
+        const response = await fetch(API_URL, { method: 'POST', body: payload });
+        const result = await response.json();
+        if(result.status === 'success') {
+          closeConfigModals(); 
+          loadStoreConfig(); 
+          Swal.fire('สำเร็จ', 'บันทึกแพ็กเกจเรียบร้อย', 'success');
+        } else {
+          throw new Error(result.message);
+        }
+      } catch(err) { 
+        Swal.fire('Error', err.message, 'error'); 
+      }
     });
 
     // Branch Settings
