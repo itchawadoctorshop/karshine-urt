@@ -225,12 +225,50 @@
   <script>
     // ⚠️ อย่าลืมแก้ API_URL เป็นของคุณโอม
     const API_URL = "https://script.google.com/macros/s/AKfycbyTgEm-fiGqCe-aeYPjbizXPMbIKfxQM0_jQHwZK97j3-7eApuhP0S_f9zmlpsrJ5yF/exec";
-    
+
     // Global Data
-    let adminServices = []; 
-    let currentCrmUid = ""; 
-    let configData = { services: [], packages: [], branches: [], payments: [] }; 
+    let adminServices = [];
+    let currentCrmUid = "";
+    let configData = { services: [], packages: [], branches: [], payments: [] };
     let currentManageAction = 'add';
+
+    // 🔒 ESCAPE: กันค่าที่ลูกค้าหรือแอดมินใส่ลง innerHTML แล้วโดน XSS
+    function esc(v) {
+      if (v === null || v === undefined) return '';
+      return String(v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // 🔑 ADMIN TOKEN: เก็บใน localStorage ของเครื่องแอดมิน
+    // ครั้งแรกที่เปิดหน้านี้ จะถามรหัสผ่าน — ใช้ค่าเดียวกับที่ตั้งใน Apps Script (ADMIN_TOKEN)
+    function getAdminToken() {
+      let t = localStorage.getItem('admin_token') || '';
+      if (!t) {
+        t = window.prompt('กรอกรหัสแอดมิน (ตั้งครั้งแรกครั้งเดียว):') || '';
+        if (t) localStorage.setItem('admin_token', t);
+      }
+      return t;
+    }
+    function clearAdminToken() {
+      localStorage.removeItem('admin_token');
+      window.location.reload();
+    }
+
+    // 🔧 helper: ใส่ adminToken เข้า payload เดิมโดยไม่ต้อง rewrite ทุก fetch
+    function withAuth(payload) {
+      payload.append('adminToken', getAdminToken());
+      return payload;
+    }
+    // เช็คคำตอบจาก server ว่าโดน Unauthorized มั้ย — ถ้าใช่ เคลียร์รหัสแล้วถามใหม่
+    function handleAuthError(result) {
+      if (result && result.status === 'error' && /Unauthorized/i.test(result.message || '')) {
+        Swal.fire({ icon: 'error', title: 'รหัสไม่ถูกต้อง', text: 'กรุณากรอกรหัสแอดมินใหม่' })
+            .then(() => clearAdminToken());
+        return true;
+      }
+      return false;
+    }
 
     function formatTime(val) {
       if (!val) return '00:00';
@@ -261,7 +299,7 @@
       if(loading && board) { loading.classList.remove('hidden'); board.style.opacity = '0.5'; }
       try {
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
-        const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json();
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
         if (result.status === 'success') { renderBoard(result.data); if(result.services) { adminServices = result.services; renderWiServices(); } }
       } catch (e) { console.error(e); } 
       finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
@@ -274,7 +312,7 @@
       let cPend = 0, cCheck = 0, cProg = 0;
       bookings.forEach(b => {
         let timeStr = b.bookingDate; if(b.bookingDate.includes('T')) { const d = new Date(b.bookingDate); timeStr = d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}); }
-        const cardHtml = `<div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 card-hover relative overflow-hidden"><div class="flex justify-between items-start mb-2"><span class="text-xl font-black text-gray-800">${b.plate}</span><span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">${timeStr} น.</span></div><p class="text-[10px] text-gray-400 mb-1"><i class="fa-solid fa-car-side"></i> ${b.model}</p><p class="text-xs text-blue-600 font-bold mb-4"><i class="fa-solid fa-spray-can-sparkles"></i> ${b.serviceText} <span class="text-[10px] font-normal text-gray-400">(${b.lineType})</span></p>${getActionButton(b)}</div>`;
+        const cardHtml = `<div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 card-hover relative overflow-hidden"><div class="flex justify-between items-start mb-2"><span class="text-xl font-black text-gray-800">${esc(b.plate)}</span><span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">${esc(timeStr)} น.</span></div><p class="text-[10px] text-gray-400 mb-1"><i class="fa-solid fa-car-side"></i> ${esc(b.model)}</p><p class="text-xs text-blue-600 font-bold mb-4"><i class="fa-solid fa-spray-can-sparkles"></i> ${esc(b.serviceText)} <span class="text-[10px] font-normal text-gray-400">(${esc(b.lineType)})</span></p>${getActionButton(b)}</div>`;
         if(b.status === 'pending' || b.status === 'confirmed') { colPending.innerHTML += cardHtml; cPend++; } else if(b.status === 'checked_in') { colCheckedIn.innerHTML += cardHtml; cCheck++; } else if(b.status === 'in_progress') { colInProgress.innerHTML += cardHtml; cProg++; }
       });
       if(cPend === 0) colPending.innerHTML = '<div class="text-center text-gray-400 text-sm py-8 border-2 border-dashed border-gray-300 rounded-xl">ว่าง</div>';
@@ -284,9 +322,10 @@
     }
 
     function getActionButton(b) {
-      if(b.status === 'pending' || b.status === 'confirmed') return `<button onclick="updateStatus('${b.bookingId}', 'checked_in')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-3 rounded-xl text-xs font-bold transition border border-gray-200">ช่วยเหลือ: กดเช็คอินแทนลูกค้า</button>`;
-      else if(b.status === 'checked_in') return `<button onclick="updateStatus('${b.bookingId}', 'in_progress')" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-play mr-1"></i> เลื่อนรถเข้าช่องล้าง</button>`;
-      else if(b.status === 'in_progress') return `<button onclick="updateStatus('${b.bookingId}', 'completed')" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-check-double mr-1"></i> ล้างเสร็จสมบูรณ์ (บวกแต้ม)</button>`;
+      const bid = esc(b.bookingId); // 🔒 escape เพื่อกัน XSS ใน onclick
+      if(b.status === 'pending' || b.status === 'confirmed') return `<button onclick="updateStatus('${bid}', 'checked_in')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-3 rounded-xl text-xs font-bold transition border border-gray-200">ช่วยเหลือ: กดเช็คอินแทนลูกค้า</button>`;
+      else if(b.status === 'checked_in') return `<button onclick="updateStatus('${bid}', 'in_progress')" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-play mr-1"></i> เลื่อนรถเข้าช่องล้าง</button>`;
+      else if(b.status === 'in_progress') return `<button onclick="updateStatus('${bid}', 'completed')" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-check-double mr-1"></i> ล้างเสร็จสมบูรณ์ (บวกแต้ม)</button>`;
       return '';
     }
 
@@ -297,7 +336,7 @@
         Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
         try {
           const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: newStatus });
-          const response = await fetch(API_URL, { method: 'POST', body: payload }); const result = await response.json();
+          const response = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await response.json();
           if(result.status === 'success') { Swal.close(); loadAdminData(); } else throw new Error(result.message);
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
       }
@@ -337,12 +376,12 @@
       Swal.fire({ title: 'กำลังค้นหา...', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, didOpen: () => Swal.showLoading() });
       try {
         const payload = new URLSearchParams({ action: 'searchWalkInVehicle', plate: plate });
-        const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json();
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
         if(result.status === 'success' && result.data.length > 0) {
           const matches = result.data;
           if(matches.length === 1) { selectWalkInVehicle(matches[0]); } 
           else {
-            let optionsHtml = matches.map((v, idx) => ` <label class="flex items-center p-3 border border-gray-200 rounded-xl mb-2 cursor-pointer hover:bg-blue-50 transition"> <input type="radio" name="selectOwner" value="${idx}" class="mr-3 w-5 h-5 text-blue-600"> <div class="text-left"> <b class="text-sm text-gray-800">${v.ownerName}</b> <span class="text-xs text-gray-500">(${v.ownerPhone})</span><br> <span class="text-xs text-blue-600 font-bold">${v.brand} ${v.model} (${v.color})</span> </div> </label> `).join('');
+            let optionsHtml = matches.map((v, idx) => ` <label class="flex items-center p-3 border border-gray-200 rounded-xl mb-2 cursor-pointer hover:bg-blue-50 transition"> <input type="radio" name="selectOwner" value="${idx}" class="mr-3 w-5 h-5 text-blue-600"> <div class="text-left"> <b class="text-sm text-gray-800">${esc(v.ownerName)}</b> <span class="text-xs text-gray-500">(${esc(v.ownerPhone)})</span><br> <span class="text-xs text-blue-600 font-bold">${esc(v.brand)} ${esc(v.model)} (${esc(v.color)})</span> </div> </label> `).join('');
             const swalRes = await Swal.fire({ title: 'พบรายชื่อหลายท่าน', html: `<div class="text-left max-h-48 overflow-y-auto">${optionsHtml}</div>`, showCancelButton: true, confirmButtonText: 'เลือกบัญชีนี้', cancelButtonText: 'ยกเลิก', customClass: { confirmButton: 'bg-blue-600', cancelButton: 'bg-gray-400' }, preConfirm: () => { const selected = document.querySelector('input[name="selectOwner"]:checked'); if (!selected) Swal.showValidationMessage('กรุณาเลือก 1 ท่านครับ'); return selected ? selected.value : null; }});
             if(swalRes.isConfirmed) selectWalkInVehicle(matches[swalRes.value]);
           }
@@ -366,7 +405,7 @@
       const payload = new URLSearchParams({ action: 'submitWalkIn', plate: document.getElementById('wiPlate').value, size: document.getElementById('wiSize').value, lineType: document.getElementById('wiLine').value, serviceId: serviceId, vehicleId: document.getElementById('walkInForm').dataset.vid || '', lineUid: document.getElementById('walkInForm').dataset.uid || 'WALKIN_NEW' });
       Swal.fire({ title: 'กำลังสร้างคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
-        const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json();
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
         if(result.status === 'success') { Swal.fire('สำเร็จ!', 'สร้างคิว Walk-in เรียบร้อย', 'success').then(() => { document.getElementById('walkInForm').reset(); document.getElementById('walkInForm').dataset.vid = ''; document.getElementById('walkInForm').dataset.uid = ''; showSection('board-section'); }); } else throw new Error(result.message);
       } catch(e) { Swal.fire('Error', e.message, 'error'); }
     });
@@ -381,26 +420,29 @@
       resContainer.innerHTML = '<div class="text-center py-6 text-gray-500"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-blue-500"></i><p>กำลังค้นหา...</p></div>';
       try {
         const payload = new URLSearchParams({ action: 'searchUser', keyword: keyword });
-        const res = await fetch(API_URL, { method: 'POST', body: payload });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if(result.status === 'success') {
-          resContainer.innerHTML = result.data.map(u => `
+          resContainer.innerHTML = result.data.map(u => {
+            // 🔒 escape ทุกค่าก่อนเอาไปแปะใน HTML/onclick
+            const _name = esc(u.name), _phone = esc(u.phone), _uid = esc(u.uid), _pts = Number(u.points)||0;
+            return `
             <div class="bg-gray-50 border border-gray-200 rounded-2xl p-5 shadow-sm">
               <div class="flex justify-between items-start mb-4">
                 <div>
-                  <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-user-circle text-gray-400 mr-1"></i> ${u.name}</h3>
-                  <p class="text-sm text-gray-500"><i class="fa-solid fa-phone text-gray-400 mr-1"></i> ${u.phone}</p>
+                  <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-user-circle text-gray-400 mr-1"></i> ${_name}</h3>
+                  <p class="text-sm text-gray-500"><i class="fa-solid fa-phone text-gray-400 mr-1"></i> ${_phone}</p>
                 </div>
-                <div class="text-right bg-blue-100 px-4 py-2 rounded-xl border border-blue-200 cursor-pointer hover:bg-blue-200 transition" onclick="editPoints('${u.uid}', '${u.name}', ${u.points})">
+                <div class="text-right bg-blue-100 px-4 py-2 rounded-xl border border-blue-200 cursor-pointer hover:bg-blue-200 transition" onclick="editPoints('${_uid}', '${_name}', ${_pts})">
                   <p class="text-[10px] font-bold text-blue-600 uppercase mb-1">แต้มสะสม <i class="fa-solid fa-pen text-[8px]"></i></p>
-                  <p class="text-xl font-black text-blue-700 leading-none">${u.points} <span class="text-xs font-normal">Pts</span></p>
+                  <p class="text-xl font-black text-blue-700 leading-none">${_pts} <span class="text-xs font-normal">Pts</span></p>
                 </div>
               </div>
-              <button onclick="openCrmModal('${u.uid}', '${u.name}')" class="w-full bg-gray-800 hover:bg-gray-700 text-white py-3 rounded-xl text-sm font-bold transition shadow-sm">
+              <button onclick="openCrmModal('${_uid}', '${_name}')" class="w-full bg-gray-800 hover:bg-gray-700 text-white py-3 rounded-xl text-sm font-bold transition shadow-sm">
                 <i class="fa-solid fa-gears mr-1"></i> จัดการรถและแพ็กเกจ
               </button>
             </div>
-          `).join('');
+          `;}).join('');
         } else { resContainer.innerHTML = `<div class="text-center text-red-400 text-sm py-8 border-2 border-dashed border-red-200 rounded-xl bg-red-50"><i class="fa-solid fa-circle-exclamation text-2xl mb-2 block"></i> ${result.message}</div>`; }
       } catch(e) { resContainer.innerHTML = `<div class="text-center text-red-500 text-sm">${e.message}</div>`; }
     });
@@ -411,7 +453,7 @@
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
         try {
           const payload = new URLSearchParams({ action: 'updateUserPoints', uid: uid, newPoints: newPoints });
-          const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json();
+          const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
           if(result.status === 'success') { Swal.fire('สำเร็จ', `อัปเดตเป็น ${newPoints} แต้มเรียบร้อย`, 'success').then(() => { document.getElementById('crmSearchForm').dispatchEvent(new Event('submit')); }); } else throw new Error(result.message);
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
       }
@@ -423,15 +465,15 @@
       vList.innerHTML = '<p class="text-xs text-gray-400">กำลังโหลด...</p>'; pList.innerHTML = '<p class="text-xs text-gray-400">กำลังโหลด...</p>';
       try {
         const payload = new URLSearchParams({ action: 'getUserCrmData', uid: uid });
-        const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json();
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
         if(result.status === 'success') {
-          if(result.data.vehicles.length > 0) { vList.innerHTML = result.data.vehicles.map(v => `<div class="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-200"><div><b class="text-sm text-gray-800">${v.plate}</b><br><span class="text-[10px] text-gray-500">${v.brand} ${v.model}</span></div><button onclick="deleteUserVehicle('${v.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition"><i class="fa-solid fa-trash"></i></button></div>`).join(''); } else { vList.innerHTML = '<p class="text-xs text-gray-400 italic">ไม่มีข้อมูลรถ</p>'; }
+          if(result.data.vehicles.length > 0) { vList.innerHTML = result.data.vehicles.map(v => `<div class="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-200"><div><b class="text-sm text-gray-800">${esc(v.plate)}</b><br><span class="text-[10px] text-gray-500">${esc(v.brand)} ${esc(v.model)}</span></div><button onclick="deleteUserVehicle('${esc(v.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition"><i class="fa-solid fa-trash"></i></button></div>`).join(''); } else { vList.innerHTML = '<p class="text-xs text-gray-400 italic">ไม่มีข้อมูลรถ</p>'; }
           
-          if(result.data.packages.length > 0) { 
-            pList.innerHTML = result.data.packages.map(p => { 
-              let expDate = p.expireDate; if(expDate && expDate.includes('T')) expDate = expDate.split('T')[0]; 
-              return `<div class="bg-orange-50 border border-orange-200 p-3 rounded-xl"><div class="flex justify-between mb-1"><b class="text-sm text-orange-800">${p.packageName}</b><span class="text-xs font-bold text-orange-600">เหลือ ${p.remaining} ครั้ง</span></div><p class="text-[10px] text-orange-500">หมดอายุ: ${expDate}</p></div>`; 
-            }).join(''); 
+          if(result.data.packages.length > 0) {
+            pList.innerHTML = result.data.packages.map(p => {
+              let expDate = p.expireDate; if(expDate && expDate.includes('T')) expDate = expDate.split('T')[0];
+              return `<div class="bg-orange-50 border border-orange-200 p-3 rounded-xl"><div class="flex justify-between mb-1"><b class="text-sm text-orange-800">${esc(p.packageName)}</b><span class="text-xs font-bold text-orange-600">เหลือ ${esc(p.remaining)} ครั้ง</span></div><p class="text-[10px] text-orange-500">หมดอายุ: ${esc(expDate)}</p></div>`;
+            }).join('');
           } else { pList.innerHTML = '<p class="text-xs text-gray-400 italic">ไม่มีแพ็กเกจคงเหลือ</p>'; }
           
           const pkgSel = document.getElementById('crmAddPackageSelect');
@@ -453,7 +495,7 @@
       if(res.isConfirmed) {
         Swal.fire({ title: 'กำลังลบ...', didOpen: () => Swal.showLoading() });
         const payload = new URLSearchParams({ action: 'deleteVehicle', vehicleId: vid, lineUid: currentCrmUid });
-        await fetch(API_URL, { method: 'POST', body: payload }); Swal.fire('สำเร็จ', 'ลบรถเรียบร้อย', 'success'); openCrmModal(currentCrmUid, document.getElementById('crmModalTitle').innerText); 
+        await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); Swal.fire('สำเร็จ', 'ลบรถเรียบร้อย', 'success'); openCrmModal(currentCrmUid, document.getElementById('crmModalTitle').innerText); 
       }
     }
 
@@ -465,7 +507,7 @@
       if(res.isConfirmed) {
         Swal.fire({ title: 'กำลังเพิ่มแพ็กเกจ...', didOpen: () => Swal.showLoading() });
         const payload = new URLSearchParams({ action: 'addPackageToUser', uid: currentCrmUid, pkgId: opt.value, pkgName: pkgName, amount: amount });
-        await fetch(API_URL, { method: 'POST', body: payload }); Swal.fire('สำเร็จ', 'เพิ่มแพ็กเกจให้ลูกค้าเรียบร้อย', 'success'); openCrmModal(currentCrmUid, document.getElementById('crmModalTitle').innerText);
+        await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); Swal.fire('สำเร็จ', 'เพิ่มแพ็กเกจให้ลูกค้าเรียบร้อย', 'success'); openCrmModal(currentCrmUid, document.getElementById('crmModalTitle').innerText);
       }
     }
 
@@ -497,7 +539,7 @@
 
       try {
         const payload = new URLSearchParams({ action: 'getAdminSettings' });
-        const res = await fetch(API_URL, { method: 'POST', body: payload });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         
         if(result.status === 'success') {
@@ -708,7 +750,7 @@
         stdTime: document.getElementById('svcTime').value, detail: document.getElementById('svcDetail').value
       });
       try {
-        await fetch(API_URL, { method: 'POST', body: payload });
+        await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         closeConfigModals(); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกบริการเรียบร้อย', 'success');
       } catch(err) { Swal.fire('Error', err.message, 'error'); }
     });
@@ -740,7 +782,7 @@
       });
 
       try {
-        const response = await fetch(API_URL, { method: 'POST', body: payload });
+        const response = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await response.json();
         if(result.status === 'success') {
           closeConfigModals(); 
@@ -808,7 +850,7 @@
           id: v.id, name: v.name, lat: v.lat, lng: v.lng, openTime: v.openTime, closeTime: v.closeTime,
           bayCapacity: v.bayCapacity, bufferTime: v.bufferTime, freeKm: v.freeKm, feePerKm: v.feePerKm
         });
-        try { await fetch(API_URL, { method: 'POST', body: payload }); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกข้อมูลสาขาเรียบร้อย', 'success'); } 
+        try { await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกข้อมูลสาขาเรียบร้อย', 'success'); } 
         catch(err) { Swal.fire('Error', err.message, 'error'); }
       }
     }
@@ -825,7 +867,7 @@
       if (v && v.name) {
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
         const payload = new URLSearchParams({ action: 'manageData', target: 'Payment_Methods', actionType: action, id: v.id, name: v.name, details: v.details });
-        try { await fetch(API_URL, { method: 'POST', body: payload }); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกวิธีชำระเงินเรียบร้อย', 'success'); } 
+        try { await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); loadStoreConfig(); Swal.fire('สำเร็จ', 'บันทึกวิธีชำระเงินเรียบร้อย', 'success'); } 
         catch(err) { Swal.fire('Error', err.message, 'error'); }
       }
     }
@@ -836,7 +878,7 @@
       if(res.isConfirmed) {
         Swal.fire({ title: 'กำลังลบ...', didOpen: () => Swal.showLoading() });
         const payload = new URLSearchParams({ action: 'manageData', target: target, actionType: 'delete', id: id });
-        try { await fetch(API_URL, { method: 'POST', body: payload }); loadStoreConfig(); Swal.fire('สำเร็จ', 'ลบข้อมูลเรียบร้อย', 'success'); } 
+        try { await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); loadStoreConfig(); Swal.fire('สำเร็จ', 'ลบข้อมูลเรียบร้อย', 'success'); } 
         catch(err) { Swal.fire('Error', err.message, 'error'); }
       }
     }
