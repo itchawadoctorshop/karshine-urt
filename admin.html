@@ -668,7 +668,16 @@
       
       const type = document.getElementById('pkgType').value;
       const btnRemove = type === 'combo' ? `<button type="button" onclick="document.getElementById('${rowId}').remove()" class="text-red-400 p-1 w-6"><i class="fa-solid fa-times"></i></button>` : `<div class="w-6"></div>`;
-      let options = adminServices.map(s => `<option value="${s.service_id || s.id}" ${sId == (s.service_id || s.id) ? 'selected' : ''}>${s.service_name || s.name}</option>`).join('');
+      // 🆕 โชว์ราคา M / L / XL ในแต่ละตัวเลือก ให้แอดมินเห็นชัดตอนสร้างแพ็กเกจ
+      let options = adminServices.map(s => {
+        const _id = s.service_id || s.id;
+        const _name = esc(s.service_name || s.name || '');
+        const _pM = Number(s.price_m || s.pricem || 0);
+        const _pL = Number(s.price_l || s.pricel || 0);
+        const _pXL = Number(s.price_xl || s.pricexl || 0);
+        const _sel = (sId == _id) ? 'selected' : '';
+        return `<option value="${esc(_id)}" ${_sel}>${_name}  💰 M:${_pM} / L:${_pL} / XL:${_pXL}</option>`;
+      }).join('');
       
       div.innerHTML = `
         <select class="pkg-svc-select flex-1 p-2 border border-gray-300 rounded-lg text-[11px]" required>
