@@ -200,8 +200,17 @@
     const LIFF_ID = "2009981892-1HxmA42h"; 
     
     let masterData = {};
-    let userUid = "U825fa531ed42d452068d034671e8c2e2"; 
+    let userUid = ""; // 🔧 FIX: ห้าม default เป็น UID ของแอดมิน — เริ่มต้นว่าง รอ LIFF ส่งมา
     let map, markerPickup, markerDropoff, activePin = 'pickup';
+
+    // 🔒 helper: escape ข้อความก่อนเอาไปแปะใน innerHTML (ป้องกัน XSS)
+    // ใช้กับทุกค่าที่มาจากผู้ใช้/หลังบ้าน เช่น ชื่อรถ, สี, ชื่อแพ็กเกจ ฯลฯ
+    function esc(v) {
+      if (v === null || v === undefined) return '';
+      return String(v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
     let currentTotalTime = 0; 
     const thaiProvinces = ["กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พะเยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"];
 
@@ -215,11 +224,17 @@
         const profile = await liff.getProfile();
         userUid = profile.userId;
         document.getElementById('profileImg').src = document.getElementById('profileImgBig').src = profile.pictureUrl || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-        document.getElementById('profileName').textContent = document.getElementById('profileNameBig').textContent = profile.displayName;
-        document.getElementById('profileUid').textContent = "UID: " + userUid;
-      } catch(e) { console.log('Test Mode'); document.getElementById('profileName').textContent = "โหมดทดสอบระบบ"; }
-      
-      document.getElementById('provinceList').innerHTML = thaiProvinces.map(p => `<option value="${p}">`).join('');
+        document.getElementById('profileName').textContent = document.getElementById('profileNameBig').textContent = esc(profile.displayName);
+        document.getElementById('profileUid').textContent = "UID: " + esc(userUid);
+      } catch(e) {
+        console.error('LIFF init failed:', e);
+        // 🔧 FIX: เดิมตก fallback เป็น UID ของแอดมินเลยอันตราย — ตอนนี้บล็อกการใช้งาน
+        document.getElementById('profileName').textContent = "โปรดเปิดในแอป LINE";
+        document.getElementById('loading').innerHTML = '<p class="text-red-500 font-bold">ไม่สามารถเริ่มต้นระบบได้ กรุณาเปิดลิงก์นี้ใน LINE เท่านั้น</p>';
+        return; // หยุดไม่ให้ดึงข้อมูล
+      }
+
+      document.getElementById('provinceList').innerHTML = thaiProvinces.map(p => `<option value="${esc(p)}">`).join('');
       await refreshData();
       flatpickr("#inlineCalendar", { inline: true, locale: "th", minDate: "today", onChange: (d, str) => { document.getElementById('bookDate').value = str; document.getElementById('selectedTime').value=''; document.getElementById('displaySelectedTime').innerText='- - : - -'; openTimeSlotModal(); } });
       document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
@@ -256,16 +271,16 @@
             return `
               <div class="p-4 border border-blue-100 rounded-2xl bg-blue-50 shadow-sm relative overflow-hidden">
                 <div class="flex justify-between items-start mb-2">
-                  <h3 class="font-bold text-blue-900 text-sm">${pkg.packageName}</h3>
+                  <h3 class="font-bold text-blue-900 text-sm">${esc(pkg.packageName)}</h3>
                   ${statusBadge}
                 </div>
-                <p class="text-[10px] text-gray-500 mb-3">หมดอายุ: ${expDate}</p>
+                <p class="text-[10px] text-gray-500 mb-3">หมดอายุ: ${esc(expDate)}</p>
                 <div class="w-full bg-gray-200 rounded-full h-2 mb-1 overflow-hidden">
-                  <div class="bg-blue-500 h-full rounded-full transition-all" style="width: ${percentUsed}%"></div>
+                  <div class="bg-blue-500 h-full rounded-full transition-all" style="width: ${Number(percentUsed)||0}%"></div>
                 </div>
                 <div class="flex justify-between text-[10px] text-gray-600 font-bold mt-1">
-                  <span>ใช้ไป: ${pkg.used}</span>
-                  <span class="text-blue-700">คงเหลือ: <span class="text-sm">${pkg.remaining}</span> / ${pkg.total}</span>
+                  <span>ใช้ไป: ${esc(pkg.used)}</span>
+                  <span class="text-blue-700">คงเหลือ: <span class="text-sm">${esc(pkg.remaining)}</span> / ${esc(pkg.total)}</span>
                 </div>
               </div>
             `;
@@ -280,9 +295,9 @@
         if(masterData.vehicles && masterData.vehicles.length > 0) {
           carList.innerHTML = masterData.vehicles.map(v => `<div class="p-4 bg-gray-50 rounded-2xl flex items-center gap-3 border border-gray-100 relative">
             <div class="bg-red-100 p-2 rounded-lg text-red-500"><i class="fa-solid fa-car"></i></div>
-            <div class="flex-1"><b class="text-gray-800">${v.plate} ${v.province ? `จ.${v.province}` : ''}</b><br><span class="text-[10px] text-gray-400">${v.brand} ${v.model} (${v.color})</span></div>
+            <div class="flex-1"><b class="text-gray-800">${esc(v.plate)} ${v.province ? `จ.${esc(v.province)}` : ''}</b><br><span class="text-[10px] text-gray-400">${esc(v.brand)} ${esc(v.model)} (${esc(v.color)})</span></div>
           </div>`).join('');
-          vSel.innerHTML = masterData.vehicles.map(v => `<option value="${v.id}">${v.plate} - ${v.model}</option>`).join('');
+          vSel.innerHTML = masterData.vehicles.map(v => `<option value="${esc(v.id)}">${esc(v.plate)} - ${esc(v.model)}</option>`).join('');
           if(masterData.profile) { document.getElementById('uName').value = masterData.profile.name || ''; document.getElementById('uPhone').value = masterData.profile.phone || ''; }
         } else {
           carList.innerHTML = '<p class="text-center text-gray-400 py-4 italic text-sm">ยังไม่มีข้อมูลรถ</p>';
@@ -320,7 +335,9 @@
             
             let checkInBtn = '';
             if(b.status === 'pending' || b.status === 'confirmed') {
-               checkInBtn = `<button onclick="checkIn('${b.bookingId}', '${b.branchId}')" class="w-full mt-3 bg-blue-100 text-blue-700 py-3 rounded-xl text-xs font-bold active:bg-blue-200 transition shadow-sm border border-blue-200"><i class="fa-solid fa-location-dot"></i> กดเช็คอินเมื่อถึงร้าน</button>`;
+               // 🔒 escape ค่าก่อนเอาไปใส่ใน onclick (ป้องกัน XSS)
+               const _bid = esc(b.bookingId), _br = esc(b.branchId);
+               checkInBtn = `<button onclick="checkIn('${_bid}', '${_br}')" class="w-full mt-3 bg-blue-100 text-blue-700 py-3 rounded-xl text-xs font-bold active:bg-blue-200 transition shadow-sm border border-blue-200"><i class="fa-solid fa-location-dot"></i> กดเช็คอินเมื่อถึงร้าน</button>`;
             }
 
             let statusUI = '';
@@ -351,15 +368,15 @@
                   <span class="text-[11px] font-bold text-gray-500"><i class="fa-regular fa-calendar text-blue-500"></i> ${dateShow}</span>
                   <span class="text-[9px] font-bold px-2 py-1 rounded-full ${statusColor}">${statusText}</span>
                 </div>
-                <p class="font-bold text-gray-800 text-sm ml-1"><i class="fa-solid fa-car-side text-gray-400 mr-1"></i> ${plate}</p>
-                <p class="text-[10px] text-gray-500 mt-1 truncate ml-1"><i class="fa-solid fa-spray-can-sparkles text-gray-400 mr-1"></i> ${svcText}</p>
+                <p class="font-bold text-gray-800 text-sm ml-1"><i class="fa-solid fa-car-side text-gray-400 mr-1"></i> ${esc(plate)}</p>
+                <p class="text-[10px] text-gray-500 mt-1 truncate ml-1"><i class="fa-solid fa-spray-can-sparkles text-gray-400 mr-1"></i> ${esc(svcText)}</p>
                 ${checkInBtn}
                 ${statusUI}
               </div>`;
           }).join('');
         } else { nextBookingEl.innerHTML = '<p class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</p>'; }
 
-        if(masterData.branches) document.getElementById('branchSelect').innerHTML = masterData.branches.map(b => `<option value="${b.branch_id}">${b.branch_name}</option>`).join('');
+        if(masterData.branches) document.getElementById('branchSelect').innerHTML = masterData.branches.map(b => `<option value="${esc(b.branch_id)}">${esc(b.branch_name)}</option>`).join('');
         selectLine('LINE1');
         document.getElementById('loading').style.display = 'none';
       } catch(e) { Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้: ' + e.message, 'error'); }
@@ -396,7 +413,16 @@
     function toggleDelivery() { const v = document.getElementById('deliverySelect').value; const mapDiv = document.getElementById('mapContainer'); if (v === 'none') { mapDiv.classList.add('hidden'); updateSummary(); return; } mapDiv.classList.remove('hidden'); document.getElementById('markerToggle').classList.toggle('hidden', v !== 'roundtrip_diff'); if(!map) initMap(); if(v === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); } else if(v === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); setActivePin('dropoff'); } else if(v === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); } else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); } updateSummary(); }
     function setActivePin(type) { activePin = type; const bp = document.getElementById('btnPinPickup'), bd = document.getElementById('btnPinDropoff'); if(type === 'pickup') { bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow border-2 border-green-600"; bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent"; } else { bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-red-500 text-white shadow border-2 border-red-600"; bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent"; } }
     function initMap() { const bLat = 9.143, bLng = 99.330; map = L.map('map').setView([bLat, bLng], 13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); const gI = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] }); const rI = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] }); markerPickup = L.marker([bLat+0.005, bLng], {draggable: true, icon: gI}).addTo(map); markerDropoff = L.marker([bLat-0.005, bLng], {draggable: true, icon: rI}).addTo(map); savePin(markerPickup.getLatLng(), 'pickup'); savePin(markerDropoff.getLatLng(), 'dropoff'); markerPickup.on('dragend', (e) => savePin(e.target.getLatLng(), 'pickup')); markerDropoff.on('dragend', (e) => savePin(e.target.getLatLng(), 'dropoff')); map.on('click', (e) => { if(activePin==='pickup') { markerPickup.setLatLng(e.latlng); savePin(e.latlng,'pickup'); } else { markerDropoff.setLatLng(e.latlng); savePin(e.latlng,'dropoff'); } }); }
-    function savePin(ll, type) { document.getElementById(`${type}Lat`).value = ll.lat; document.getElementById(`${type}Lng`).value = ll.lng; if(document.getElementById('deliverySelect').value === 'roundtrip_same') { document.getElementById('dropoffLat').value = ll.lat; document.getElementById('dropoffLat').value = ll.lat; document.getElementById('dropoffLng').value = ll.lng; } updateSummary(); }
+    function savePin(ll, type) {
+      // 🔧 FIX: เดิมมีบรรทัดซ้ำ (dropoffLat ถูกเซ็ตซ้ำ) — เคลียร์ให้สะอาด
+      document.getElementById(`${type}Lat`).value = ll.lat;
+      document.getElementById(`${type}Lng`).value = ll.lng;
+      if (document.getElementById('deliverySelect').value === 'roundtrip_same') {
+        document.getElementById('dropoffLat').value = ll.lat;
+        document.getElementById('dropoffLng').value = ll.lng;
+      }
+      updateSummary();
+    }
     function getCurrentGPS() { if(navigator.geolocation) { Swal.fire({ title: 'กำลังหาตำแหน่ง...', didOpen: () => Swal.showLoading() }); navigator.geolocation.getCurrentPosition(pos => { const ll = [pos.coords.latitude, pos.coords.longitude]; map.flyTo(ll, 16); if(activePin==='pickup') { markerPickup.setLatLng(ll); savePin({lat:ll[0], lng:ll[1]}, 'pickup'); } else { markerDropoff.setLatLng(ll); savePin({lat:ll[0], lng:ll[1]}, 'dropoff'); } Swal.close(); }); } }
     function calculateDeliveryFee() { const v = document.getElementById('deliverySelect').value; if(v==='none') return 0; const b = masterData.branches?.find(br => br.branch_id == document.getElementById('branchSelect').value); if(!b) return 0; const R = 6371; const deg2rad = (deg) => deg * (Math.PI/180); const getDist = (lat1, lon1, lat2, lon2) => { const dLat = deg2rad(lat2-lat1), dLon = deg2rad(lon2-lon1); const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(deg2rad(lat1))*Math.cos(deg2rad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2); return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }; const bL = [parseFloat(b.lat), parseFloat(b.lng)]; const pL = [parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value)]; const dL = [parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value)]; let total = 0; if(v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], pL[0], pL[1]) - (b.free_km||0)) * (b.fee_per_km||0); if(v === 'dropoff' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], dL[0], dL[1]) - (b.free_km||0)) * (b.fee_per_km||0); if(v === 'roundtrip_same') total *= 2; return Math.round(total); }
     async function submitBooking() { const time = document.getElementById('selectedTime').value; if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจองก่อนครับ', 'warning'); const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(','); const payload = new URLSearchParams({ action: 'submitBooking', lineUid: userUid, vehicleId: document.getElementById('vehicleSelect').value, serviceType: svcs, bookingDate: document.getElementById('bookDate').value + 'T' + time, deliveryType: document.getElementById('deliverySelect').value, extraFee: calculateDeliveryFee(), branchId: document.getElementById('branchSelect').value, lineType: document.getElementById('selectedLineType').value, pickupLat: document.getElementById('pickupLat').value, pickupLng: document.getElementById('pickupLng').value, dropoffLat: document.getElementById('dropoffLat').value, dropoffLng: document.getElementById('dropoffLng').value }); Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success').then(() => window.location.reload()); } } catch(e) { Swal.fire('Error', e.message, 'error'); } }
