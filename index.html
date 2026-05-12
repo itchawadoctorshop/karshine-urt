@@ -13,8 +13,26 @@
   <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- 🗺️ Google Maps loader — API key มาจาก Script Properties (ใส่ครั้งเดียวที่ฝั่งเซิร์ฟเวอร์) -->
+  <script>
+    window._GMAPS_API_KEY = "<?= getMapsApiKeyForTemplate_() ?>";
+    window._gmReady = false;
+    function onGoogleMapsReady() { window._gmReady = true; }
+  </script>
+  <script>
+    (function loadGoogleMaps() {
+      const k = window._GMAPS_API_KEY;
+      if (!k) {
+        console.warn('GOOGLE_MAPS_API_KEY not set — แมพจะใช้งานไม่ได้จนกว่าจะตั้งค่าใน Script Properties');
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(k) + '&libraries=places&callback=onGoogleMapsReady&language=th&region=TH&v=weekly';
+      s.async = true; s.defer = true;
+      document.head.appendChild(s);
+    })();
+  </script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
@@ -111,10 +129,34 @@
           <option value="roundtrip_diff">รับ-ส่ง คนละจุด (ระบุในแผนที่)</option>
         </select>
         <div id="mapContainer" class="hidden space-y-3 pt-2">
-          <div id="markerToggle" class="hidden flex gap-2"><button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow-sm border-2 border-green-600 transition">📍 จุดรับรถ</button><button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent transition">📍 จุดส่งรถ</button></div>
+          <div id="markerToggle" class="hidden flex gap-2">
+            <button type="button" id="btnPinPickup" onclick="setActivePin('pickup')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow-sm border-2 border-green-600 transition">📍 จุดรับรถ</button>
+            <button type="button" id="btnPinDropoff" onclick="setActivePin('dropoff')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent transition">📍 จุดส่งรถ</button>
+          </div>
+
+          <!-- 🔍 Search boxes (Google Places Autocomplete) -->
+          <div id="searchBoxPickup" class="relative">
+            <input type="text" id="pickupSearch" placeholder="🔍 ค้นหาจุดรับรถ (ชื่อสถานที่/หมู่บ้าน)"
+                   class="w-full p-3 border border-green-200 rounded-2xl bg-green-50 text-sm focus:outline-none focus:border-green-500" />
+          </div>
+          <div id="searchBoxDropoff" class="relative hidden">
+            <input type="text" id="dropoffSearch" placeholder="🔍 ค้นหาจุดส่งรถ"
+                   class="w-full p-3 border border-red-200 rounded-2xl bg-red-50 text-sm focus:outline-none focus:border-red-500" />
+          </div>
+
           <div id="map"></div>
-          <button type="button" onclick="getCurrentGPS()" class="w-full py-3 bg-blue-100 text-blue-600 rounded-xl text-xs font-bold active:bg-blue-200 transition"><i class="fa-solid fa-location-crosshairs"></i> ใช้พิกัดปัจจุบันของฉัน</button>
-          <input type="hidden" id="pickupLat"><input type="hidden" id="pickupLng"><input type="hidden" id="dropoffLat"><input type="hidden" id="dropoffLng">
+
+          <!-- 📏 Route summary — Google Directions API result -->
+          <div id="routeSummary" class="bg-gray-50 border border-gray-200 rounded-2xl p-3 text-xs space-y-1">
+            <div class="text-[11px] text-gray-400 italic">ลากหมุดหรือค้นหาสถานที่เพื่อดูเส้นทาง</div>
+          </div>
+
+          <button type="button" onclick="getCurrentGPS()" class="w-full py-3 bg-blue-100 text-blue-600 rounded-xl text-xs font-bold active:bg-blue-200 transition">
+            <i class="fa-solid fa-location-crosshairs"></i> ใช้พิกัดปัจจุบันของฉัน
+          </button>
+
+          <input type="hidden" id="pickupLat"><input type="hidden" id="pickupLng">
+          <input type="hidden" id="dropoffLat"><input type="hidden" id="dropoffLng">
         </div>
       </div>
     </div>
@@ -201,7 +243,24 @@
     
     let masterData = {};
     let userUid = ""; // 🔧 FIX: ห้าม default เป็น UID ของแอดมิน — เริ่มต้นว่าง รอ LIFF ส่งมา
-    let map, markerPickup, markerDropoff, activePin = 'pickup';
+
+    // 🗺️ Google Maps state — แทน Leaflet ทั้งหมด
+    const gmState = {
+      map: null,
+      branchMarker: null,
+      markerPickup: null,
+      markerDropoff: null,
+      activePin: 'pickup',
+      directionsService: null,
+      rendererPickup: null,
+      rendererDropoff: null,
+      acPickup: null,
+      acDropoff: null,
+      pickupRoadKm: null,    // ระยะถนนจริง (กม.) จาก Directions API
+      dropoffRoadKm: null,
+      pickupRoadMin: null,   // เวลาเดินทาง (นาที)
+      dropoffRoadMin: null,
+    };
 
     // 🔒 helper: escape ข้อความก่อนเอาไปแปะใน innerHTML (ป้องกัน XSS)
     // ใช้กับทุกค่าที่มาจากผู้ใช้/หลังบ้าน เช่น ชื่อรถ, สี, ชื่อแพ็กเกจ ฯลฯ
@@ -417,24 +476,408 @@
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => { e.preventDefault(); const payload = new URLSearchParams({ action: 'addVehicle', lineUid: userUid, uName: document.getElementById('uName').value, uPhone: document.getElementById('uPhone').value, uGender: document.getElementById('uGender').value, uAge: document.getElementById('uAge').value, licensePlate: document.getElementById('vPlate').value, province: document.getElementById('vProvince').value, brand: document.getElementById('vBrand').value, model: document.getElementById('vModel').value, color: document.getElementById('vColor').value, size: document.getElementById('vSize').value }); Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success'); e.target.reset(); await refreshData(); showSection('home-section'); } } catch(e) { Swal.fire('Error', e.message, 'error'); } });
     function selectLine(type) { document.getElementById('selectedLineType').value = type; document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)'; document.getElementById('btnLine1').classList.toggle('text-gray-800', type==='LINE1'); document.getElementById('btnLine1').classList.toggle('text-gray-400', type!=='LINE1'); document.getElementById('btnLine2').classList.toggle('text-gray-800', type==='LINE2'); document.getElementById('btnLine2').classList.toggle('text-gray-400', type!=='LINE2'); renderServices(); }
     function renderServices() { if(!masterData.services) return; const size = document.getElementById('carSizeSelect').value; const type = document.getElementById('selectedLineType').value; const container = document.getElementById('servicesContainer'); const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {}); let html = ''; for (const cat in grouped) { html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`; grouped[cat].forEach(s => { const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); const isQuick = s.service_name.includes('ด่วน'); const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน'); let auto = false, disabled = false; if (type==='LINE1') { if(isQuick) auto=true; if(isNormal) disabled=true; } else { if(isNormal) auto=true; if(isQuick) disabled=true; } html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2"> <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()"> <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]"> <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div> <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div> </div> </label>`; }); } container.innerHTML = html; updateSummary(); }
-    function updateSummary() { const checked = document.querySelectorAll('.checkbox-custom:checked'); let totalP = 0, totalT = 0, html = ''; checked.forEach(cb => { totalP += parseInt(cb.dataset.price); totalT += parseInt(cb.dataset.time); html += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`; }); const fee = calculateDeliveryFee(); if(fee > 0) html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง</span><span>${fee}.-</span></div>`; document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ'; document.getElementById('sumTotal').innerText = (totalP + fee) + '.-'; currentTotalTime = totalT; document.getElementById('selectedTime').value = ''; document.getElementById('displaySelectedTime').innerText = '- - : - -'; }
+    // 🔧 FIX 3.1: ไม่ reset selectedTime ทุกครั้ง — reset เฉพาะเมื่อเวลาบริการ (currentTotalTime) เปลี่ยน
+    //   เดิม: updateSummary() ล้างเวลาทุกครั้งที่ถูกเรียก → กดเลือกสถานที่/Valet ก็ล้างเวลา
+    //   ใหม่: ล้างเฉพาะเมื่อ totalT ใหม่ ≠ currentTotalTime (เพราะ slot time ขึ้นกับ duration)
+    function updateSummary() {
+      const checked = document.querySelectorAll('.checkbox-custom:checked');
+      let totalP = 0, totalT = 0, html = '';
+      checked.forEach(cb => {
+        totalP += parseInt(cb.dataset.price);
+        totalT += parseInt(cb.dataset.time);
+        html += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`;
+      });
+      const fee = calculateDeliveryFee();
+      if (fee > 0) html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง</span><span>${fee}.-</span></div>`;
+      document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ';
+      document.getElementById('sumTotal').innerText = (totalP + fee) + '.-';
+
+      // ⏰ ล้างเวลาเฉพาะเมื่อ duration เปลี่ยน (= เลือก/ยกเลิก service)
+      // ถ้าแค่ขยับ pin / เปลี่ยน delivery type → เวลาเดิมยังใช้ได้ ไม่ต้องเลือกใหม่
+      if (totalT !== currentTotalTime) {
+        currentTotalTime = totalT;
+        document.getElementById('selectedTime').value = '';
+        document.getElementById('displaySelectedTime').innerText = '- - : - -';
+      }
+    }
     function openTimeSlotModal() { const branchId = document.getElementById('branchSelect').value; const type = document.getElementById('selectedLineType').value; const totalT = currentTotalTime; const date = document.getElementById('bookDate').value; if(!branchId || totalT === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการในขั้นตอนที่ 2 ก่อนครับ', 'warning'); const branch = masterData.branches.find(b => b.branch_id == branchId); if(!branch) return Swal.fire('Error', 'ไม่พบข้อมูลสาขา', 'error'); let curr = parseTimeStringToMinutes(branch.open_time, 8 * 60); const end = parseTimeStringToMinutes(branch.close_time, 18 * 60); let tl1 = new Array(1440).fill(0), tl2 = new Array(1440).fill(0); if(masterData.activeBookings) { masterData.activeBookings.forEach(b => { if(b.branchId != branchId || !b.bookingDate.startsWith(date)) return; const timePart = b.bookingDate.split('T')[1]; if(!timePart) return; const start = parseTimeStringToMinutes(timePart, 0); let bDuration = 30; if (b.serviceType) { bDuration = 0; b.serviceType.split(',').forEach(id => { const s = masterData.services.find(svc => svc.service_id == id); if(s) bDuration += parseInt(s.std_time_mins) || 0; }); if(bDuration === 0) bDuration = 30; } if(b.lineType==='LINE1') { for(let i=start; i<start+10; i++) if(i<1440) tl1[i]++; if(bDuration > 10) { for(let i=start+10; i<start+10+(bDuration-10+parseInt(branch.buffer_time||10)); i++) if(i<1440) tl2[i]++; } } else { for(let i=start; i<start+bDuration+parseInt(branch.buffer_time||10); i++) if(i<1440) tl2[i]++; } }); } let html = '<div class="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto p-2">'; const localNow = new Date(new Date().getTime() + 7*3600*1000); const minStart = (date === localNow.toISOString().split('T')[0]) ? (localNow.getUTCHours()*60 + localNow.getUTCMinutes() + 20) : 0; /* 🔧 จองล่วงหน้าอย่างน้อย 20 นาที (เผื่อแจ้งเตือน T-15) */ const stepMin = type === 'LINE1' ? 10 : 30; const capL1 = 1; const capL2 = parseInt(branch.bay_capacity) || 1; let slotsFound = false; while(curr + totalT <= end) { const timeStr = `${Math.floor(curr/60).toString().padStart(2,'0')}:${(curr%60).toString().padStart(2,'0')}`; let avail = curr >= minStart; let reason = "เลยเวลา"; if(avail) { if (type === 'LINE1') { for(let i=curr; i<curr+10; i++) if(tl1[i]>=capL1) { avail=false; reason="เต็ม"; break; } if(avail && totalT > 10) { for(let i=curr+10; i<curr+10+(totalT-10+parseInt(branch.buffer_time||10)); i++) { if(tl2[i]>=capL2) { avail=false; reason="เต็ม"; break; } } } } else { for(let i=curr; i<curr+totalT+parseInt(branch.buffer_time||10); i++) { if(tl2[i]>=capL2) { avail=false; reason="เต็ม"; break; } } } } slotsFound = true; html += avail ? `<button onclick="confirmTime('${timeStr}')" class="p-3 border border-blue-200 rounded-xl font-bold text-sm bg-white hover:bg-blue-600 hover:text-white transition shadow-sm text-gray-700">${timeStr}</button>` : `<div class="p-3 bg-gray-100 text-gray-400 rounded-xl text-[10px] flex flex-col items-center justify-center font-bold leading-tight border border-gray-200"><span class="line-through">${timeStr}</span><span class="text-[8px] font-normal mt-1">${reason}</span></div>`; curr += stepMin; } html += '</div>'; if(!slotsFound) html = '<p class="text-center text-gray-500 py-6 text-sm font-bold">คิวเต็ม หรือปิดทำการในวันนี้</p>'; Swal.fire({ title: 'เลือกเวลาจอง', html: html, showConfirmButton: false, customClass: { popup: 'rounded-3xl' } }); }
     function confirmTime(t) { document.getElementById('selectedTime').value = t; document.getElementById('displaySelectedTime').innerText = t + ' น.'; Swal.close(); }
-    function toggleDelivery() { const v = document.getElementById('deliverySelect').value; const mapDiv = document.getElementById('mapContainer'); if (v === 'none') { mapDiv.classList.add('hidden'); updateSummary(); return; } mapDiv.classList.remove('hidden'); document.getElementById('markerToggle').classList.toggle('hidden', v !== 'roundtrip_diff'); if(!map) initMap(); if(v === 'pickup') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); } else if(v === 'dropoff') { activePin = 'dropoff'; markerPickup.setOpacity(0); markerDropoff.setOpacity(1); setActivePin('dropoff'); } else if(v === 'roundtrip_same') { activePin = 'pickup'; markerPickup.setOpacity(1); markerDropoff.setOpacity(0); setActivePin('pickup'); } else { markerPickup.setOpacity(1); markerDropoff.setOpacity(1); setActivePin('pickup'); } updateSummary(); }
-    function setActivePin(type) { activePin = type; const bp = document.getElementById('btnPinPickup'), bd = document.getElementById('btnPinDropoff'); if(type === 'pickup') { bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow border-2 border-green-600"; bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent"; } else { bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-red-500 text-white shadow border-2 border-red-600"; bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent"; } }
-    function initMap() { const bLat = 9.143, bLng = 99.330; map = L.map('map').setView([bLat, bLng], 13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); const gI = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] }); const rI = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] }); markerPickup = L.marker([bLat+0.005, bLng], {draggable: true, icon: gI}).addTo(map); markerDropoff = L.marker([bLat-0.005, bLng], {draggable: true, icon: rI}).addTo(map); savePin(markerPickup.getLatLng(), 'pickup'); savePin(markerDropoff.getLatLng(), 'dropoff'); markerPickup.on('dragend', (e) => savePin(e.target.getLatLng(), 'pickup')); markerDropoff.on('dragend', (e) => savePin(e.target.getLatLng(), 'dropoff')); map.on('click', (e) => { if(activePin==='pickup') { markerPickup.setLatLng(e.latlng); savePin(e.latlng,'pickup'); } else { markerDropoff.setLatLng(e.latlng); savePin(e.latlng,'dropoff'); } }); }
-    function savePin(ll, type) {
-      // 🔧 FIX: เดิมมีบรรทัดซ้ำ (dropoffLat ถูกเซ็ตซ้ำ) — เคลียร์ให้สะอาด
-      document.getElementById(`${type}Lat`).value = ll.lat;
-      document.getElementById(`${type}Lng`).value = ll.lng;
-      if (document.getElementById('deliverySelect').value === 'roundtrip_same') {
-        document.getElementById('dropoffLat').value = ll.lat;
-        document.getElementById('dropoffLng').value = ll.lng;
+    // ==========================================
+    // 🗺️ Google Maps Integration — แทน Leaflet
+    // ==========================================
+    function toggleDelivery() {
+      const v = document.getElementById('deliverySelect').value;
+      const mapDiv = document.getElementById('mapContainer');
+      if (v === 'none') {
+        mapDiv.classList.add('hidden');
+        updateSummary();
+        return;
       }
+      mapDiv.classList.remove('hidden');
+
+      // ปุ่มสลับ pin (เฉพาะกรณีรับ-ส่งคนละจุด)
+      document.getElementById('markerToggle').classList.toggle('hidden', v !== 'roundtrip_diff');
+
+      // search box: แสดงทั้งสองเฉพาะ roundtrip_diff, อื่นๆ ใช้กล่องเดียวตามจุด
+      const sPickup = document.getElementById('searchBoxPickup');
+      const sDropoff = document.getElementById('searchBoxDropoff');
+      sPickup.classList.toggle('hidden', v === 'dropoff');
+      sDropoff.classList.toggle('hidden', v !== 'dropoff' && v !== 'roundtrip_diff');
+
+      // โหลดแมพถ้ายังไม่โหลด (รอจน google.maps พร้อม)
+      ensureMapReady_().then(() => {
+        // จัดการ visibility ของ marker
+        if (v === 'pickup') {
+          gmState.markerPickup.setVisible(true);
+          gmState.markerDropoff.setVisible(false);
+          setActivePin('pickup');
+        } else if (v === 'dropoff') {
+          gmState.markerPickup.setVisible(false);
+          gmState.markerDropoff.setVisible(true);
+          setActivePin('dropoff');
+        } else if (v === 'roundtrip_same') {
+          gmState.markerPickup.setVisible(true);
+          gmState.markerDropoff.setVisible(false);
+          setActivePin('pickup');
+        } else { // roundtrip_diff
+          gmState.markerPickup.setVisible(true);
+          gmState.markerDropoff.setVisible(true);
+          setActivePin('pickup');
+        }
+        recalcRoute_();
+        updateSummary();
+      }).catch(err => {
+        Swal.fire('แผนที่ยังไม่พร้อม', err.message || 'กรุณารอสักครู่แล้วลองใหม่ — ตรวจสอบว่า GOOGLE_MAPS_API_KEY ตั้งใน Script Properties แล้ว', 'warning');
+      });
+    }
+
+    function setActivePin(type) {
+      gmState.activePin = type;
+      const bp = document.getElementById('btnPinPickup');
+      const bd = document.getElementById('btnPinDropoff');
+      if (type === 'pickup') {
+        bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-white shadow border-2 border-green-600";
+        bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent";
+      } else {
+        bd.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-red-500 text-white shadow border-2 border-red-600";
+        bp.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 border-2 border-transparent";
+      }
+    }
+
+    // รอจน Google Maps script โหลดเสร็จ + init map ครั้งเดียว
+    function ensureMapReady_() {
+      return new Promise((resolve, reject) => {
+        let tries = 0;
+        const tick = () => {
+          if (window._gmReady && window.google && window.google.maps) {
+            try { initMap_(); resolve(); } catch (e) { reject(e); }
+            return;
+          }
+          if (++tries > 40) { // รอ ~8 วินาที
+            reject(new Error('Google Maps ไม่โหลด — ตรวจสอบ API Key หรือเชื่อมต่ออินเทอร์เน็ต'));
+            return;
+          }
+          setTimeout(tick, 200);
+        };
+        tick();
+      });
+    }
+
+    function initMap_() {
+      if (gmState.map) return; // init ครั้งเดียวพอ
+
+      const branch = masterData.branches?.find(b => b.branch_id == document.getElementById('branchSelect').value);
+      const bLat = branch ? parseFloat(branch.lat) : 9.143;
+      const bLng = branch ? parseFloat(branch.lng) : 99.330;
+
+      gmState.map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: bLat, lng: bLng },
+        zoom: 14,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        gestureHandling: 'greedy',
+      });
+
+      // 🏠 marker ของสาขา (ไม่ลาก) — สีน้ำเงิน
+      gmState.branchMarker = new google.maps.Marker({
+        position: { lat: bLat, lng: bLng },
+        map: gmState.map,
+        title: branch ? branch.branch_name : 'สาขา',
+        label: { text: '🏠', fontSize: '20px' },
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 18, fillColor: '#2563EB', fillOpacity: 0.9, strokeColor: '#FFFFFF', strokeWeight: 3 },
+      });
+
+      // 📍 จุดรับ (เขียว) ลากได้
+      gmState.markerPickup = new google.maps.Marker({
+        position: { lat: bLat + 0.005, lng: bLng },
+        map: gmState.map, draggable: true, title: 'จุดรับรถ',
+        icon: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+      });
+      gmState.markerPickup.addListener('dragend', e => savePin(e.latLng, 'pickup'));
+
+      // 📍 จุดส่ง (แดง) ลากได้
+      gmState.markerDropoff = new google.maps.Marker({
+        position: { lat: bLat - 0.005, lng: bLng },
+        map: gmState.map, draggable: true, title: 'จุดส่งรถ', visible: false,
+        icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+      });
+      gmState.markerDropoff.addListener('dragend', e => savePin(e.latLng, 'dropoff'));
+
+      // คลิกที่แมพ → ย้าย active pin
+      gmState.map.addListener('click', e => {
+        if (gmState.activePin === 'pickup') {
+          gmState.markerPickup.setPosition(e.latLng);
+          savePin(e.latLng, 'pickup');
+        } else {
+          gmState.markerDropoff.setPosition(e.latLng);
+          savePin(e.latLng, 'dropoff');
+        }
+      });
+
+      // 🗺️ Directions service + renderers (เส้นเขียวสำหรับ pickup, แดงสำหรับ dropoff)
+      gmState.directionsService = new google.maps.DirectionsService();
+      gmState.rendererPickup = new google.maps.DirectionsRenderer({
+        suppressMarkers: true, preserveViewport: true,
+        polylineOptions: { strokeColor: '#10B981', strokeWeight: 5, strokeOpacity: 0.75 },
+      });
+      gmState.rendererDropoff = new google.maps.DirectionsRenderer({
+        suppressMarkers: true, preserveViewport: true,
+        polylineOptions: { strokeColor: '#EF4444', strokeWeight: 5, strokeOpacity: 0.75 },
+      });
+      gmState.rendererPickup.setMap(gmState.map);
+      gmState.rendererDropoff.setMap(gmState.map);
+
+      // 🔍 Places Autocomplete (ค้นชื่อสถานที่ — ไม่ต้องลากหมุดเอง)
+      const pInp = document.getElementById('pickupSearch');
+      if (pInp) {
+        gmState.acPickup = new google.maps.places.Autocomplete(pInp, {
+          componentRestrictions: { country: 'th' },
+          fields: ['geometry', 'formatted_address', 'name'],
+        });
+        gmState.acPickup.addListener('place_changed', () => {
+          const place = gmState.acPickup.getPlace();
+          if (place && place.geometry && place.geometry.location) {
+            const loc = place.geometry.location;
+            gmState.markerPickup.setPosition(loc);
+            gmState.markerPickup.setVisible(true);
+            gmState.map.panTo(loc);
+            savePin(loc, 'pickup');
+          }
+        });
+      }
+      const dInp = document.getElementById('dropoffSearch');
+      if (dInp) {
+        gmState.acDropoff = new google.maps.places.Autocomplete(dInp, {
+          componentRestrictions: { country: 'th' },
+          fields: ['geometry', 'formatted_address', 'name'],
+        });
+        gmState.acDropoff.addListener('place_changed', () => {
+          const place = gmState.acDropoff.getPlace();
+          if (place && place.geometry && place.geometry.location) {
+            const loc = place.geometry.location;
+            gmState.markerDropoff.setPosition(loc);
+            gmState.markerDropoff.setVisible(true);
+            gmState.map.panTo(loc);
+            savePin(loc, 'dropoff');
+          }
+        });
+      }
+
+      // init coordinates ครั้งแรก
+      savePin(gmState.markerPickup.getPosition(), 'pickup');
+      savePin(gmState.markerDropoff.getPosition(), 'dropoff');
+    }
+
+    function savePin(latLng, type) {
+      const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
+      const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
+      document.getElementById(`${type}Lat`).value = lat;
+      document.getElementById(`${type}Lng`).value = lng;
+
+      // ถ้าเป็น "รับ-ส่งจุดเดียวกัน" → ก็อปจุดรับไปยังจุดส่งด้วย
+      if (document.getElementById('deliverySelect').value === 'roundtrip_same' && type === 'pickup') {
+        document.getElementById('dropoffLat').value = lat;
+        document.getElementById('dropoffLng').value = lng;
+        if (gmState.markerDropoff) gmState.markerDropoff.setPosition({ lat: lat, lng: lng });
+      }
+      recalcRoute_();
       updateSummary();
     }
-    function getCurrentGPS() { if(navigator.geolocation) { Swal.fire({ title: 'กำลังหาตำแหน่ง...', didOpen: () => Swal.showLoading() }); navigator.geolocation.getCurrentPosition(pos => { const ll = [pos.coords.latitude, pos.coords.longitude]; map.flyTo(ll, 16); if(activePin==='pickup') { markerPickup.setLatLng(ll); savePin({lat:ll[0], lng:ll[1]}, 'pickup'); } else { markerDropoff.setLatLng(ll); savePin({lat:ll[0], lng:ll[1]}, 'dropoff'); } Swal.close(); }); } }
-    function calculateDeliveryFee() { const v = document.getElementById('deliverySelect').value; if(v==='none') return 0; const b = masterData.branches?.find(br => br.branch_id == document.getElementById('branchSelect').value); if(!b) return 0; const R = 6371; const deg2rad = (deg) => deg * (Math.PI/180); const getDist = (lat1, lon1, lat2, lon2) => { const dLat = deg2rad(lat2-lat1), dLon = deg2rad(lon2-lon1); const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(deg2rad(lat1))*Math.cos(deg2rad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2); return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }; const bL = [parseFloat(b.lat), parseFloat(b.lng)]; const pL = [parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value)]; const dL = [parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value)]; let total = 0; if(v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], pL[0], pL[1]) - (b.free_km||0)) * (b.fee_per_km||0); if(v === 'dropoff' || v === 'roundtrip_diff') total += Math.max(0, getDist(bL[0], bL[1], dL[0], dL[1]) - (b.free_km||0)) * (b.fee_per_km||0); if(v === 'roundtrip_same') total *= 2; return Math.round(total); }
+
+    // 🛣️ คำนวณเส้นทางจริงด้วย Google Directions + วาดเส้น + อัปเดตระยะ
+    function recalcRoute_() {
+      if (!gmState.directionsService) { renderRouteSummary_(); return; }
+      const branch = masterData.branches?.find(b => b.branch_id == document.getElementById('branchSelect').value);
+      if (!branch) { renderRouteSummary_(); return; }
+      const v = document.getElementById('deliverySelect').value;
+      const bLatLng = { lat: parseFloat(branch.lat), lng: parseFloat(branch.lng) };
+
+      const drawPickup  = (v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff');
+      const drawDropoff = (v === 'dropoff' || v === 'roundtrip_diff');
+
+      // เคลียร์เส้นที่ไม่ใช้
+      if (!drawPickup)  { gmState.rendererPickup.set('directions', null);  gmState.pickupRoadKm = null;  gmState.pickupRoadMin = null;  }
+      if (!drawDropoff) { gmState.rendererDropoff.set('directions', null); gmState.dropoffRoadKm = null; gmState.dropoffRoadMin = null; }
+
+      const requests = [];
+      if (drawPickup) {
+        const pLat = parseFloat(document.getElementById('pickupLat').value);
+        const pLng = parseFloat(document.getElementById('pickupLng').value);
+        if (!isNaN(pLat) && !isNaN(pLng)) {
+          requests.push(new Promise(resolve => {
+            gmState.directionsService.route({
+              origin: bLatLng, destination: { lat: pLat, lng: pLng },
+              travelMode: google.maps.TravelMode.DRIVING
+            }, (res, status) => {
+              if (status === 'OK' && res.routes.length) {
+                gmState.rendererPickup.setDirections(res);
+                const leg = res.routes[0].legs[0];
+                gmState.pickupRoadKm = leg.distance.value / 1000;
+                gmState.pickupRoadMin = leg.duration.value / 60;
+              } else {
+                gmState.pickupRoadKm = null; gmState.pickupRoadMin = null;
+              }
+              resolve();
+            });
+          }));
+        }
+      }
+      if (drawDropoff) {
+        const dLat = parseFloat(document.getElementById('dropoffLat').value);
+        const dLng = parseFloat(document.getElementById('dropoffLng').value);
+        if (!isNaN(dLat) && !isNaN(dLng)) {
+          requests.push(new Promise(resolve => {
+            gmState.directionsService.route({
+              origin: bLatLng, destination: { lat: dLat, lng: dLng },
+              travelMode: google.maps.TravelMode.DRIVING
+            }, (res, status) => {
+              if (status === 'OK' && res.routes.length) {
+                gmState.rendererDropoff.setDirections(res);
+                const leg = res.routes[0].legs[0];
+                gmState.dropoffRoadKm = leg.distance.value / 1000;
+                gmState.dropoffRoadMin = leg.duration.value / 60;
+              } else {
+                gmState.dropoffRoadKm = null; gmState.dropoffRoadMin = null;
+              }
+              resolve();
+            });
+          }));
+        }
+      }
+
+      Promise.all(requests).then(() => { renderRouteSummary_(); updateSummary(); });
+    }
+
+    // 📏 แสดงสรุประยะทาง + เวลาเดินทาง + ค่าใช้จ่ายโดยประมาณ
+    function renderRouteSummary_() {
+      const el = document.getElementById('routeSummary');
+      if (!el) return;
+      const v = document.getElementById('deliverySelect').value;
+      if (v === 'none') { el.innerHTML = ''; return; }
+
+      const branch = masterData.branches?.find(b => b.branch_id == document.getElementById('branchSelect').value);
+      const freeKm = branch ? (parseFloat(branch.free_km) || 0) : 0;
+      const feePerKm = branch ? (parseFloat(branch.fee_per_km) || 0) : 0;
+
+      const parts = [];
+      const fmtKm = (km) => km != null ? km.toFixed(1) + ' กม.' : '-';
+      const fmtMin = (m) => m != null ? '~' + Math.ceil(m) + ' นาที' : '-';
+      const chargedKm = (km) => km != null ? Math.ceil(Math.max(0, km - freeKm)) : 0;
+
+      if ((v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') && gmState.pickupRoadKm != null) {
+        const ck = chargedKm(gmState.pickupRoadKm);
+        const cost = ck * feePerKm;
+        parts.push(`
+          <div class="flex justify-between items-center">
+            <span class="text-green-700"><span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>รับรถ → สาขา</span>
+            <span class="font-bold text-gray-800">${fmtKm(gmState.pickupRoadKm)} <span class="text-gray-400 font-normal">${fmtMin(gmState.pickupRoadMin)}</span></span>
+          </div>
+          <div class="text-[10px] text-gray-500 ml-4">ฟรี ${freeKm} กม. + เกิน ${ck} กม. × ${feePerKm} = <b class="text-blue-600">${cost} บ.</b></div>
+        `);
+      }
+      if ((v === 'dropoff' || v === 'roundtrip_diff') && gmState.dropoffRoadKm != null) {
+        const ck = chargedKm(gmState.dropoffRoadKm);
+        const cost = ck * feePerKm;
+        parts.push(`
+          <div class="flex justify-between items-center">
+            <span class="text-red-700"><span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>สาขา → ส่งรถ</span>
+            <span class="font-bold text-gray-800">${fmtKm(gmState.dropoffRoadKm)} <span class="text-gray-400 font-normal">${fmtMin(gmState.dropoffRoadMin)}</span></span>
+          </div>
+          <div class="text-[10px] text-gray-500 ml-4">ฟรี ${freeKm} กม. + เกิน ${ck} กม. × ${feePerKm} = <b class="text-blue-600">${cost} บ.</b></div>
+        `);
+      }
+      if (v === 'roundtrip_same' && gmState.pickupRoadKm != null) {
+        parts.push(`<div class="text-[10px] text-blue-600 italic mt-1 border-t border-gray-200 pt-1">* ค่าบริการคิด 2 เที่ยว (ไป-กลับ)</div>`);
+      }
+
+      el.innerHTML = parts.length ? parts.join('') : '<div class="text-[11px] text-gray-400 italic">ลากหมุดหรือค้นหาสถานที่เพื่อดูเส้นทาง</div>';
+    }
+
+    function getCurrentGPS() {
+      if (!navigator.geolocation) return Swal.fire('ข้อผิดพลาด', 'อุปกรณ์ของคุณไม่รองรับ GPS', 'error');
+      if (!gmState.map) return Swal.fire('แผนที่ยังไม่พร้อม', 'กรุณารอสักครู่', 'warning');
+      Swal.fire({ title: 'กำลังหาตำแหน่ง...', didOpen: () => Swal.showLoading() });
+      navigator.geolocation.getCurrentPosition(pos => {
+        const ll = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        if (gmState.activePin === 'pickup') {
+          gmState.markerPickup.setPosition(ll);
+          gmState.markerPickup.setVisible(true);
+          savePin(ll, 'pickup');
+        } else {
+          gmState.markerDropoff.setPosition(ll);
+          gmState.markerDropoff.setVisible(true);
+          savePin(ll, 'dropoff');
+        }
+        gmState.map.panTo(ll);
+        gmState.map.setZoom(16);
+        Swal.close();
+      }, err => {
+        Swal.fire('ข้อผิดพลาด', 'ไม่สามารถระบุตำแหน่งได้ — ' + (err.message || 'กรุณาอนุญาตการเข้าถึง GPS'), 'error');
+      }, { enableHighAccuracy: true, timeout: 10000 });
+    }
+    // 🔧 FIX 3.2: ปัดขึ้นเป็น "กิโลถัดไป" ตามที่เจ้าของร้านระบุ
+    //   เช่น ฟรี 5 กม. × 10 บาท/กม., ระยะ 10.2 กม. → ส่วนเกิน 5.2 กม. → ปัดขึ้นเป็น 6 กม. → 60 บาท
+    //   เดิม: 5.2 × 10 = 52 บาท (คิดตามทศนิยมจริง — ไม่ตรงกับสูตรร้านล้างรถทั่วไป)
+    //
+    //   💡 หมายเหตุ: ตอนนี้ใช้ระยะทาง air distance (เส้นตรง) ก่อน — ถ้าเปิด Google Maps Directions
+    //   แล้วจะเรียก updateDistanceFromGoogle() เพื่อเอาระยะถนนจริงมาแทน (ดูในส่วน Google Maps)
+    function _chargedKm(distanceKm, freeKm) {
+      // ปัดขึ้นเฉพาะส่วนที่เกินฟรี
+      const over = Math.max(0, distanceKm - (freeKm || 0));
+      return Math.ceil(over);
+    }
+    function calculateDeliveryFee() {
+      const v = document.getElementById('deliverySelect').value;
+      if (v === 'none') return 0;
+      const b = masterData.branches?.find(br => br.branch_id == document.getElementById('branchSelect').value);
+      if (!b) return 0;
+
+      // ใช้ระยะถนน Google ถ้ามี (จาก state .pickupRoadKm/dropoffRoadKm) — fallback air distance
+      const pickupRoadKm  = (typeof gmState !== 'undefined' && gmState.pickupRoadKm  != null) ? gmState.pickupRoadKm  : null;
+      const dropoffRoadKm = (typeof gmState !== 'undefined' && gmState.dropoffRoadKm != null) ? gmState.dropoffRoadKm : null;
+
+      const getAirKm = (lat1, lon1, lat2, lon2) => getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2);
+
+      const bL = [parseFloat(b.lat), parseFloat(b.lng)];
+      const pL = [parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value)];
+      const dL = [parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value)];
+
+      const freeKm = parseFloat(b.free_km) || 0;
+      const feePerKm = parseFloat(b.fee_per_km) || 0;
+
+      let total = 0;
+      if (v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') {
+        const km = pickupRoadKm != null ? pickupRoadKm : getAirKm(bL[0], bL[1], pL[0], pL[1]);
+        total += _chargedKm(km, freeKm) * feePerKm;
+      }
+      if (v === 'dropoff' || v === 'roundtrip_diff') {
+        const km = dropoffRoadKm != null ? dropoffRoadKm : getAirKm(bL[0], bL[1], dL[0], dL[1]);
+        total += _chargedKm(km, freeKm) * feePerKm;
+      }
+      if (v === 'roundtrip_same') total *= 2;
+      return Math.round(total);
+    }
     async function submitBooking() { const time = document.getElementById('selectedTime').value; if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจองก่อนครับ', 'warning'); const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(','); const payload = new URLSearchParams({ action: 'submitBooking', lineUid: userUid, vehicleId: document.getElementById('vehicleSelect').value, serviceType: svcs, bookingDate: document.getElementById('bookDate').value + 'T' + time, deliveryType: document.getElementById('deliverySelect').value, extraFee: calculateDeliveryFee(), branchId: document.getElementById('branchSelect').value, lineType: document.getElementById('selectedLineType').value, pickupLat: document.getElementById('pickupLat').value, pickupLng: document.getElementById('pickupLng').value, dropoffLat: document.getElementById('dropoffLat').value, dropoffLng: document.getElementById('dropoffLng').value }); Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success').then(() => window.location.reload()); } } catch(e) { Swal.fire('Error', e.message, 'error'); } }
 
     document.addEventListener('DOMContentLoaded', init);
