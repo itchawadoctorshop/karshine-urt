@@ -40,27 +40,55 @@
   </div>
 
   <section id="board-section" class="section active p-4 lg:p-6">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start" id="board">
-      <div class="bg-gray-200 rounded-2xl p-4 shadow-inner min-h-[500px]">
-        <h2 class="font-bold text-gray-600 mb-4 pb-2 border-b border-gray-300 flex justify-between items-center">
-          <span><i class="fa-regular fa-clock text-orange-500 mr-1"></i> รอเช็คอิน (ออนไลน์)</span>
-          <span id="countPending" class="bg-gray-300 text-gray-700 px-2 rounded-full text-xs py-1">0</span>
-        </h2>
-        <div id="colPending" class="space-y-3"></div>
-      </div>
-      <div class="bg-blue-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
-        <h2 class="font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200 flex justify-between items-center">
-          <span><i class="fa-solid fa-location-dot text-blue-500 mr-1"></i> รถจอดรอคิว</span>
-          <span id="countCheckedIn" class="bg-blue-200 text-blue-800 px-2 rounded-full text-xs py-1">0</span>
-        </h2>
-        <div id="colCheckedIn" class="space-y-3"></div>
-      </div>
-      <div class="bg-green-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
-        <h2 class="font-bold text-green-800 mb-4 pb-2 border-b border-green-200 flex justify-between items-center">
-          <span><i class="fa-solid fa-hands-bubbles text-green-500 mr-1"></i> กำลังให้บริการ</span>
-          <span id="countInProgress" class="bg-green-200 text-green-800 px-2 rounded-full text-xs py-1">0</span>
-        </h2>
-        <div id="colInProgress" class="space-y-3"></div>
+    <!-- 🚗 F0.2 Valet: ขยายเป็น 5 swim lanes (scroll ซ้าย-ขวาบนมือถือ) -->
+    <div class="overflow-x-auto pb-2">
+      <div class="grid gap-4 items-start" style="grid-template-columns: repeat(5, minmax(220px, 1fr)); min-width: 1100px;" id="board">
+
+        <!-- Lane 1: 🚗 ต้องไปรับ (valet_pickup_pending) -->
+        <div class="bg-orange-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-orange-400">
+          <h2 class="font-bold text-orange-800 mb-4 pb-2 border-b border-orange-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-car-on text-orange-500 mr-1"></i> ต้องไปรับ</span>
+            <span id="countValetPickup" class="bg-orange-200 text-orange-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colValetPickup" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 2: รอเช็คอิน (pending / confirmed) -->
+        <div class="bg-gray-200 rounded-2xl p-4 shadow-inner min-h-[500px]">
+          <h2 class="font-bold text-gray-600 mb-4 pb-2 border-b border-gray-300 flex justify-between items-center">
+            <span><i class="fa-regular fa-clock text-orange-500 mr-1"></i> รอเช็คอิน</span>
+            <span id="countPending" class="bg-gray-300 text-gray-700 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colPending" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 3: รถจอดรอคิว (checked_in) -->
+        <div class="bg-blue-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
+          <h2 class="font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-location-dot text-blue-500 mr-1"></i> รถจอดรอคิว</span>
+            <span id="countCheckedIn" class="bg-blue-200 text-blue-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colCheckedIn" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 4: กำลังให้บริการ (in_progress) -->
+        <div class="bg-green-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
+          <h2 class="font-bold text-green-800 mb-4 pb-2 border-b border-green-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-hands-bubbles text-green-500 mr-1"></i> กำลังให้บริการ</span>
+            <span id="countInProgress" class="bg-green-200 text-green-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colInProgress" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 5: 📦 รอส่งกลับ (valet_dropoff_pending) -->
+        <div class="bg-purple-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-purple-400">
+          <h2 class="font-bold text-purple-800 mb-4 pb-2 border-b border-purple-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-truck-fast text-purple-500 mr-1"></i> รอส่งกลับ</span>
+            <span id="countValetDropoff" class="bg-purple-200 text-purple-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colValetDropoff" class="space-y-3"></div>
+        </div>
+
       </div>
     </div>
   </section>
@@ -306,31 +334,138 @@
     }
 
     function renderBoard(bookings) {
-      const colPending = document.getElementById('colPending'); const colCheckedIn = document.getElementById('colCheckedIn'); const colInProgress = document.getElementById('colInProgress');
-      if(!colPending || !colCheckedIn || !colInProgress) return;
-      colPending.innerHTML = ''; colCheckedIn.innerHTML = ''; colInProgress.innerHTML = '';
-      let cPend = 0, cCheck = 0, cProg = 0;
+      const colValetPickup  = document.getElementById('colValetPickup');
+      const colPending      = document.getElementById('colPending');
+      const colCheckedIn    = document.getElementById('colCheckedIn');
+      const colInProgress   = document.getElementById('colInProgress');
+      const colValetDropoff = document.getElementById('colValetDropoff');
+      if (!colPending || !colCheckedIn || !colInProgress) return;
+
+      colValetPickup.innerHTML  = '';
+      colPending.innerHTML      = '';
+      colCheckedIn.innerHTML    = '';
+      colInProgress.innerHTML   = '';
+      colValetDropoff.innerHTML = '';
+      let cValetPick = 0, cPend = 0, cCheck = 0, cProg = 0, cValetDrop = 0;
+
       bookings.forEach(b => {
-        let timeStr = b.bookingDate; if(b.bookingDate.includes('T')) { const d = new Date(b.bookingDate); timeStr = d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}); }
-        const cardHtml = `<div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 card-hover relative overflow-hidden"><div class="flex justify-between items-start mb-2"><span class="text-xl font-black text-gray-800">${esc(b.plate)}</span><span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">${esc(timeStr)} น.</span></div><p class="text-[10px] text-gray-400 mb-1"><i class="fa-solid fa-car-side"></i> ${esc(b.model)}</p><p class="text-xs text-blue-600 font-bold mb-4"><i class="fa-solid fa-spray-can-sparkles"></i> ${esc(b.serviceText)} <span class="text-[10px] font-normal text-gray-400">(${esc(b.lineType)})</span></p>${getActionButton(b)}</div>`;
-        if(b.status === 'pending' || b.status === 'confirmed') { colPending.innerHTML += cardHtml; cPend++; } else if(b.status === 'checked_in') { colCheckedIn.innerHTML += cardHtml; cCheck++; } else if(b.status === 'in_progress') { colInProgress.innerHTML += cardHtml; cProg++; }
+        // แสดงเวลา
+        let timeStr = b.bookingDate;
+        if (b.bookingDate && b.bookingDate.includes('T')) {
+          const d = new Date(b.bookingDate);
+          timeStr = d.toLocaleTimeString('th-TH', {hour: '2-digit', minute: '2-digit'});
+        }
+
+        // 🚗 badge Valet สำหรับการ์ดที่มี delivery
+        const isValet = b.deliveryType && b.deliveryType !== 'none';
+        const valetBadge = isValet
+          ? `<span class="inline-block text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-md mr-1">🚗 VALET</span>`
+          : '';
+
+        const cardHtml = `
+          <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 card-hover relative overflow-hidden">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-xl font-black text-gray-800">${esc(b.plate)}</span>
+              <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">${esc(timeStr)} น.</span>
+            </div>
+            <p class="text-[10px] text-gray-400 mb-1"><i class="fa-solid fa-car-side"></i> ${esc(b.model)}</p>
+            <p class="text-xs text-blue-600 font-bold mb-3">
+              <i class="fa-solid fa-spray-can-sparkles"></i> ${esc(b.serviceText)}
+              <span class="text-[10px] font-normal text-gray-400">(${esc(b.lineType)})</span>
+            </p>
+            <div class="mb-1">${valetBadge}</div>
+            ${getActionButton(b)}
+          </div>`;
+
+        // 🚗 Routing: valet statuses → lanes ใหม่, statuses เดิม → lanes เดิม
+        if (b.status === 'valet_pickup_pending') {
+          colValetPickup.innerHTML += cardHtml; cValetPick++;
+        } else if (b.status === 'pending' || b.status === 'confirmed') {
+          colPending.innerHTML += cardHtml; cPend++;
+        } else if (b.status === 'checked_in') {
+          colCheckedIn.innerHTML += cardHtml; cCheck++;
+        } else if (b.status === 'in_progress') {
+          colInProgress.innerHTML += cardHtml; cProg++;
+        } else if (b.status === 'valet_dropoff_pending') {
+          colValetDropoff.innerHTML += cardHtml; cValetDrop++;
+        }
       });
-      if(cPend === 0) colPending.innerHTML = '<div class="text-center text-gray-400 text-sm py-8 border-2 border-dashed border-gray-300 rounded-xl">ว่าง</div>';
-      if(cCheck === 0) colCheckedIn.innerHTML = '<div class="text-center text-blue-300 text-sm py-8 border-2 border-dashed border-blue-200 rounded-xl">ว่าง</div>';
-      if(cProg === 0) colInProgress.innerHTML = '<div class="text-center text-green-300 text-sm py-8 border-2 border-dashed border-green-200 rounded-xl">ว่าง</div>';
-      document.getElementById('countPending').innerText = cPend; document.getElementById('countCheckedIn').innerText = cCheck; document.getElementById('countInProgress').innerText = cProg;
+
+      if (cValetPick === 0)  colValetPickup.innerHTML  = '<div class="text-center text-orange-300 text-sm py-8 border-2 border-dashed border-orange-200 rounded-xl">ว่าง</div>';
+      if (cPend === 0)       colPending.innerHTML      = '<div class="text-center text-gray-400 text-sm py-8 border-2 border-dashed border-gray-300 rounded-xl">ว่าง</div>';
+      if (cCheck === 0)      colCheckedIn.innerHTML    = '<div class="text-center text-blue-300 text-sm py-8 border-2 border-dashed border-blue-200 rounded-xl">ว่าง</div>';
+      if (cProg === 0)       colInProgress.innerHTML   = '<div class="text-center text-green-300 text-sm py-8 border-2 border-dashed border-green-200 rounded-xl">ว่าง</div>';
+      if (cValetDrop === 0)  colValetDropoff.innerHTML = '<div class="text-center text-purple-300 text-sm py-8 border-2 border-dashed border-purple-200 rounded-xl">ว่าง</div>';
+
+      document.getElementById('countValetPickup').innerText  = cValetPick;
+      document.getElementById('countPending').innerText      = cPend;
+      document.getElementById('countCheckedIn').innerText    = cCheck;
+      document.getElementById('countInProgress').innerText   = cProg;
+      document.getElementById('countValetDropoff').innerText = cValetDrop;
     }
 
     function getActionButton(b) {
       const bid = esc(b.bookingId); // 🔒 escape เพื่อกัน XSS ใน onclick
-      if(b.status === 'pending' || b.status === 'confirmed') return `<button onclick="updateStatus('${bid}', 'checked_in')" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-3 rounded-xl text-xs font-bold transition border border-gray-200">ช่วยเหลือ: กดเช็คอินแทนลูกค้า</button>`;
-      else if(b.status === 'checked_in') return `<button onclick="updateStatus('${bid}', 'in_progress')" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-play mr-1"></i> เลื่อนรถเข้าช่องล้าง</button>`;
-      else if(b.status === 'in_progress') return `<button onclick="updateStatus('${bid}', 'completed')" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95"><i class="fa-solid fa-check-double mr-1"></i> ล้างเสร็จสมบูรณ์ (บวกแต้ม)</button>`;
+
+      // 🚗 F0.2 Valet statuses
+      if (b.status === 'valet_pickup_pending') {
+        // Lane 1: ต้องไปรับ → ปุ่ม "ออกไปรับแล้ว"
+        return `<button onclick="updateStatus('${bid}','checked_in')"
+          class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95">
+          <i class="fa-solid fa-car-side mr-1"></i> ออกไปรับแล้ว (แจ้ง LINE)
+        </button>`;
+      }
+
+      if (b.status === 'valet_dropoff_pending') {
+        // Lane 5: รอส่งกลับ → ปุ่ม "ส่งมอบรถแล้ว"
+        return `<button onclick="updateStatus('${bid}','completed')"
+          class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95">
+          <i class="fa-solid fa-flag-checkered mr-1"></i> ส่งมอบรถแล้ว (บวกแต้ม)
+        </button>`;
+      }
+
+      // สถานะปกติ
+      if (b.status === 'pending' || b.status === 'confirmed') {
+        return `<button onclick="updateStatus('${bid}','checked_in')"
+          class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-3 rounded-xl text-xs font-bold transition border border-gray-200">
+          ช่วยเหลือ: กดเช็คอินแทนลูกค้า
+        </button>`;
+      }
+
+      if (b.status === 'checked_in') {
+        return `<button onclick="updateStatus('${bid}','in_progress')"
+          class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95">
+          <i class="fa-solid fa-play mr-1"></i> เลื่อนรถเข้าช่องล้าง
+        </button>`;
+      }
+
+      if (b.status === 'in_progress') {
+        // 🚗 ถ้า Valet ที่ต้องส่งกลับ → เปลี่ยนเป็น valet_dropoff_pending
+        const needsDropoff = b.deliveryType && ['dropoff','roundtrip_same','roundtrip_diff'].includes(b.deliveryType);
+        if (needsDropoff) {
+          return `<button onclick="updateStatus('${bid}','valet_dropoff_pending')"
+            class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95">
+            <i class="fa-solid fa-truck-fast mr-1"></i> ล้างเสร็จ → เตรียมส่งกลับ (แจ้ง LINE)
+          </button>`;
+        }
+        return `<button onclick="updateStatus('${bid}','completed')"
+          class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition shadow-md active:scale-95">
+          <i class="fa-solid fa-check-double mr-1"></i> ล้างเสร็จสมบูรณ์ (บวกแต้ม)
+        </button>`;
+      }
+
       return '';
     }
 
     async function updateStatus(bookingId, newStatus) {
-      let confirmText = 'ยืนยันการทำรายการใช่ไหม?'; if(newStatus === 'in_progress') confirmText = 'กำลังนำรถคันนี้เข้าช่องล้างใช่ไหม?'; if(newStatus === 'completed') confirmText = 'ล้างรถเสร็จเรียบร้อย ระบบจะบวกแต้มให้ลูกค้าอัตโนมัติ ยืนยันใช่ไหม?';
+      // 🚗 F0.2 เพิ่ม confirm text สำหรับ valet statuses
+      const confirmTexts = {
+        'in_progress':           'กำลังนำรถคันนี้เข้าช่องล้างใช่ไหม?',
+        'completed':             'ล้างรถเสร็จเรียบร้อย ระบบจะบวกแต้มให้ลูกค้าอัตโนมัติ ยืนยันใช่ไหม?',
+        'checked_in':            'ยืนยันการทำรายการใช่ไหม?',
+        'valet_dropoff_pending': 'ล้างเสร็จแล้ว กำลังส่งรถกลับ? ระบบจะแจ้ง LINE ลูกค้าทันที',
+      };
+      let confirmText = confirmTexts[newStatus] || 'ยืนยันการทำรายการใช่ไหม?';
       const res = await Swal.fire({ title: 'ยืนยันสถานะ', text: confirmText, icon: 'question', showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก', customClass: { confirmButton: 'bg-blue-600', cancelButton: 'bg-gray-400' }});
       if(res.isConfirmed) {
         Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
