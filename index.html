@@ -14,9 +14,12 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
 
-  <!-- 🗺️ Google Maps loader — API key มาจาก Script Properties (ใส่ครั้งเดียวที่ฝั่งเซิร์ฟเวอร์) -->
+  <!-- 🗺️ Google Maps loader
+       🔑 API Key hardcoded ที่นี่ (เพราะหน้าอยู่บน GitHub Pages ไม่ใช่ Apps Script template)
+       ✅ ปลอดภัยเพราะมี HTTP referrer restriction ใน Cloud Console — domain อื่นใช้ไม่ได้
+       💡 ถ้าจะเปลี่ยน key ในอนาคต: แก้บรรทัดด้านล่างนี้ + push ขึ้น GitHub -->
   <script>
-    window._GMAPS_API_KEY = "<?= getMapsApiKeyForTemplate_() ?>";
+    window._GMAPS_API_KEY = "AIzaSyDX_vMqkDGHglWeUNqPUBXm8EOwSyT4zTE";
     window._gmReady = false;
     function onGoogleMapsReady() { window._gmReady = true; }
   </script>
