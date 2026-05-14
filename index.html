@@ -121,9 +121,11 @@
           <p class="text-[10px] text-blue-400 mt-1 uppercase font-bold">กดเพื่อเลือกเวลา</p>
         </div>
       </div>
-      <hr class="my-6 border-dashed">
-      <div class="space-y-3">
+      <!-- 🚗 Valet section — ซ่อนเมื่อเลือก LINE1 (ล้างด่วน เครื่อง) เพราะลูกค้าขับมาเอง -->
+      <hr id="valetDivider" class="my-6 border-dashed">
+      <div id="valetSection" class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">4. บริการรับ-ส่ง (Valet)</label>
+        <p class="text-[10px] text-gray-400 italic ml-1 -mt-1">เฉพาะล้างปกติ — ล้างด่วน (เครื่อง) ลูกค้าขับมาเองครับ</p>
         <select id="deliverySelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="toggleDelivery()">
           <option value="none">ขับรถมาเองที่ร้าน</option>
           <option value="pickup">ให้ร้านไปรับรถ (ขาเดียว)</option>
@@ -477,7 +479,30 @@
     function navToBooking() { if(!masterData.vehicles || masterData.vehicles.length === 0) { Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section')); } else { showSection('booking-section'); } }
 
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => { e.preventDefault(); const payload = new URLSearchParams({ action: 'addVehicle', lineUid: userUid, uName: document.getElementById('uName').value, uPhone: document.getElementById('uPhone').value, uGender: document.getElementById('uGender').value, uAge: document.getElementById('uAge').value, licensePlate: document.getElementById('vPlate').value, province: document.getElementById('vProvince').value, brand: document.getElementById('vBrand').value, model: document.getElementById('vModel').value, color: document.getElementById('vColor').value, size: document.getElementById('vSize').value }); Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success'); e.target.reset(); await refreshData(); showSection('home-section'); } } catch(e) { Swal.fire('Error', e.message, 'error'); } });
-    function selectLine(type) { document.getElementById('selectedLineType').value = type; document.getElementById('lineBg').style.transform = type==='LINE1'?'translateX(0)':'translateX(100%)'; document.getElementById('btnLine1').classList.toggle('text-gray-800', type==='LINE1'); document.getElementById('btnLine1').classList.toggle('text-gray-400', type!=='LINE1'); document.getElementById('btnLine2').classList.toggle('text-gray-800', type==='LINE2'); document.getElementById('btnLine2').classList.toggle('text-gray-400', type!=='LINE2'); renderServices(); }
+    function selectLine(type) {
+      document.getElementById('selectedLineType').value = type;
+      document.getElementById('lineBg').style.transform = type==='LINE1' ? 'translateX(0)' : 'translateX(100%)';
+      document.getElementById('btnLine1').classList.toggle('text-gray-800', type==='LINE1');
+      document.getElementById('btnLine1').classList.toggle('text-gray-400', type!=='LINE1');
+      document.getElementById('btnLine2').classList.toggle('text-gray-800', type==='LINE2');
+      document.getElementById('btnLine2').classList.toggle('text-gray-400', type!=='LINE2');
+
+      // 🚗 LINE1 → ไม่มี valet (ลูกค้าขับมาเอง) → ซ่อน section + reset เป็น none
+      const valetSection = document.getElementById('valetSection');
+      const valetDivider = document.getElementById('valetDivider');
+      const deliverySelect = document.getElementById('deliverySelect');
+      if (type === 'LINE1') {
+        // reset valet → none + ซ่อน map
+        deliverySelect.value = 'none';
+        document.getElementById('mapContainer').classList.add('hidden');
+        valetSection.classList.add('hidden');
+        valetDivider.classList.add('hidden');
+      } else {
+        valetSection.classList.remove('hidden');
+        valetDivider.classList.remove('hidden');
+      }
+      renderServices();
+    }
     function renderServices() { if(!masterData.services) return; const size = document.getElementById('carSizeSelect').value; const type = document.getElementById('selectedLineType').value; const container = document.getElementById('servicesContainer'); const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {}); let html = ''; for (const cat in grouped) { html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`; grouped[cat].forEach(s => { const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); const isQuick = s.service_name.includes('ด่วน'); const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน'); let auto = false, disabled = false; if (type==='LINE1') { if(isQuick) auto=true; if(isNormal) disabled=true; } else { if(isNormal) auto=true; if(isQuick) disabled=true; } html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2"> <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()"> <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]"> <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div> <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div> </div> </label>`; }); } container.innerHTML = html; updateSummary(); }
     // 🔧 FIX 3.1: ไม่ reset selectedTime ทุกครั้ง — reset เฉพาะเมื่อเวลาบริการ (currentTotalTime) เปลี่ยน
     //   เดิม: updateSummary() ล้างเวลาทุกครั้งที่ถูกเรียก → กดเลือกสถานที่/Valet ก็ล้างเวลา
