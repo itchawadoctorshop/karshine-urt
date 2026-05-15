@@ -906,7 +906,50 @@
       if (v === 'roundtrip_same') total *= 2;
       return Math.round(total);
     }
-    async function submitBooking() { const time = document.getElementById('selectedTime').value; if(!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจองก่อนครับ', 'warning'); const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(','); const payload = new URLSearchParams({ action: 'submitBooking', lineUid: userUid, vehicleId: document.getElementById('vehicleSelect').value, serviceType: svcs, bookingDate: document.getElementById('bookDate').value + 'T' + time, deliveryType: document.getElementById('deliverySelect').value, extraFee: calculateDeliveryFee(), branchId: document.getElementById('branchSelect').value, lineType: document.getElementById('selectedLineType').value, pickupLat: document.getElementById('pickupLat').value, pickupLng: document.getElementById('pickupLng').value, dropoffLat: document.getElementById('dropoffLat').value, dropoffLng: document.getElementById('dropoffLng').value }); Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success').then(() => window.location.reload()); } } catch(e) { Swal.fire('Error', e.message, 'error'); } }
+    async function submitBooking() {
+      const time = document.getElementById('selectedTime').value;
+      if (!time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกเวลาจองก่อนครับ', 'warning');
+
+      const deliveryType = document.getElementById('deliverySelect').value;
+      const bookDate = document.getElementById('bookDate').value;
+      const bookingDateTime = bookDate + 'T' + time;
+
+      // 🛡️ T2: Valet ต้องจองล่วงหน้าอย่างน้อย 30 นาที — ให้พนักงานเตรียมตัว
+      if (deliveryType !== 'none') {
+        const bookingMs = new Date(bookingDateTime).getTime();
+        const leadMs = bookingMs - Date.now();
+        if (leadMs < 30 * 60000) {
+          return Swal.fire('แจ้งเตือน',
+            'บริการรับ-ส่งต้องจองล่วงหน้าอย่างน้อย 30 นาที — กรุณาเลือกเวลาอื่นหรือเปลี่ยนเป็นขับมาเอง',
+            'warning');
+        }
+      }
+
+      const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(',');
+      const payload = new URLSearchParams({
+        action: 'submitBooking', lineUid: userUid,
+        vehicleId: document.getElementById('vehicleSelect').value,
+        serviceType: svcs, bookingDate: bookingDateTime,
+        deliveryType: deliveryType,
+        extraFee: calculateDeliveryFee(),
+        branchId: document.getElementById('branchSelect').value,
+        lineType: document.getElementById('selectedLineType').value,
+        pickupLat: document.getElementById('pickupLat').value, pickupLng: document.getElementById('pickupLng').value,
+        dropoffLat: document.getElementById('dropoffLat').value, dropoffLng: document.getElementById('dropoffLng').value
+      });
+      Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      try {
+        const res = await fetch(API_URL, { method: 'POST', body: payload });
+        const result = await res.json();
+        if (result.status === 'success') {
+          Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success')
+              .then(() => window.location.reload());
+        } else {
+          // แสดง error message จาก server (เช่น "เวลาเต็ม", "ต้องจองล่วงหน้า 30 นาที")
+          Swal.fire('ไม่สามารถจองได้', result.message || 'เกิดข้อผิดพลาด', 'warning');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    }
 
     document.addEventListener('DOMContentLoaded', init);
   </script>
