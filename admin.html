@@ -950,29 +950,68 @@
     // เปิด slot picker เหมือนฝั่งลูกค้า แต่:
     //   - skipMinStart = true (เห็น slot ตอนนี้+ใกล้นี้)
     //   - allowPast    = true (เห็น slot ในอดีต — สำหรับ back-fill)
-    function openWiSlotModal() {
+    async function openWiSlotModal() {
       const date = document.getElementById('wiDate').value;
       const totalT = _wiGetTotalTime();
       const type = document.getElementById('wiLine').value;
       if (!date) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ก่อน', 'warning');
 
-      // ใช้ adminBookings (จาก getAdminData) เป็น source ของ active slots
-      const branchId = 'BR-01'; // default — ปรับได้ถ้ามีหลายสาขา
-      const branch = (configData && configData.branches || []).find(b => (b.branch_id||b.id) == branchId);
+      // 🆕 (Bug A3+A4): บังคับ refresh ข้อมูลทั้ง booking + branch config ก่อนเปิด slot picker
+      //   กัน cache stale → conflict check แม่นยำเสมอ
+      Swal.fire({ title: 'กำลังโหลดข้อมูล...', didOpen: () => Swal.showLoading() });
+      try {
+        // โหลดคู่ขนาน — booking สดล่าสุด + branch config
+        await Promise.all([
+          loadAdminData(),
+          (!configData.branches || configData.branches.length === 0) ? loadStoreConfig() : Promise.resolve()
+        ]);
+        Swal.close();
+      } catch (e) {
+        Swal.close();
+        console.error('Slot picker preload error:', e);
+      }
+
+      // 🆕 (Bug A3+A4 hotfix3): ใช้ branch แรกใน config เป็น default + ไม่ filter cache by branch
+      //   เพราะร้านสาขาเดียว ทุก booking ควรนับ conflict ทั้งหมด
+      const branches = (configData && configData.branches) || [];
+      const branch = branches[0] || null;
+      const branchId = branch ? (branch.branch_id || branch.id || 'BR-01') : 'BR-01';
+      const isMultiBranch = branches.length > 1;
+      window._wiBranchId = branchId; // เก็บไว้ส่งใน submit
+
+      // 🔍 Debug
+      const cachedCount = (window.adminBookingsCache || []).length;
+      const sameDayCount = (window.adminBookingsCache || []).filter(b => (b.bookingDate||'').startsWith(date)).length;
+      const branchIdsInCache = [...new Set((window.adminBookingsCache || []).map(b => b.branchId || '(empty)'))];
+      console.log(`[WiSlotPicker] cache: ${cachedCount} total, ${sameDayCount} same-day (${date}), using branchId=${branchId}, multi-branch=${isMultiBranch}`);
+      console.log(`[WiSlotPicker] booking branchIds in cache:`, branchIdsInCache);
+      console.log(`[WiSlotPicker] configData.branches:`, branches);
+      if (cachedCount === 0) {
+        console.warn('[WiSlotPicker] ⚠️ adminBookingsCache empty — เปิด board section หรือกด อัปเดต ก่อน');
+      }
       const openMin  = _parseTimeMin(branch ? branch.open_time : '08:00', 8*60);
       const closeMin = _parseTimeMin(branch ? branch.close_time : '18:00', 18*60);
       const buffer = parseInt((branch && branch.buffer_time) || 10);
       const capL1 = 1;
       const capL2 = parseInt((branch && branch.bay_capacity) || 1);
+      console.log(`[WiSlotPicker] branch ${branchId}: ${Math.floor(openMin/60)}:${String(openMin%60).padStart(2,'0')} - ${Math.floor(closeMin/60)}:${String(closeMin%60).padStart(2,'0')}, bay=${capL2}, buffer=${buffer}`);
+      if (!branch) {
+        console.warn('[WiSlotPicker] ⚠️ ไม่พบ branch config — ใช้ default 8:00-18:00 (เช็คชีต Branches?)');
+      }
 
-      // 🆕 (Bug A4): Build tl1/tl2 จาก adminBookings ของวันและสาขาเดียวกัน — ใช้ raw IDs
+      // 🆕 (Bug A4 hotfix3): Build tl1/tl2 — ร้านสาขาเดียวไม่ filter by branch
+      //   เพราะ branch_id ในชีตอาจไม่ตรงกับที่ walk-in ใช้
       const tl1 = new Array(1440).fill(0);
       const tl2 = new Array(1440).fill(0);
+      let skippedByBranch = 0;
       (window.adminBookingsCache || []).forEach(b => {
         const bDate = (b.bookingDate || '').split('T')[0];
         if (bDate !== date) return;
-        // filter branch (ถ้าระบุ branch — ถ้าไม่ระบุก็เอาทุก booking)
-        if (branchId && b.branchId && String(b.branchId) !== String(branchId)) return;
+        // 🔧 Filter branch เฉพาะกรณีมีหลายสาขาเท่านั้น (ป้องกัน mismatch ของสาขาเดียว)
+        if (isMultiBranch && branchId && b.branchId && String(b.branchId) !== String(branchId)) {
+          skippedByBranch++;
+          return;
+        }
         const BLOCK = ['pending','confirmed','checked_in','in_progress','valet_pickup_pending','valet_going_pickup'];
         if (!BLOCK.includes(b.status)) return;
         const timePart = (b.bookingDate || '').split('T')[1] || '00:00';
@@ -988,10 +1027,17 @@
         if (b.lineTypeRaw === 'LINE1') {
           for (let i = start; i < start + 10 && i < 1440; i++) tl1[i]++;
           if (bDur > 10) for (let i = start+10; i < start+10+(bDur-10+buffer) && i < 1440; i++) tl2[i]++;
+          console.log(`[WiSlotPicker]   → LINE1 booking @ ${timePart} dur=${bDur}min → tl1[${start}-${start+10}] + tl2[${start+10}-${start+10+(bDur-10+buffer)}]`);
         } else {
           for (let i = start; i < start + bDur + buffer && i < 1440; i++) tl2[i]++;
+          console.log(`[WiSlotPicker]   → LINE2 booking @ ${timePart} dur=${bDur}min → tl2[${start}-${start+bDur+buffer}]`);
         }
       });
+
+      // 🔍 Summary log
+      const tl1Marked = tl1.filter(x => x > 0).length;
+      const tl2Marked = tl2.filter(x => x > 0).length;
+      console.log(`[WiSlotPicker] ✓ Built timeline: tl1=${tl1Marked}min marked, tl2=${tl2Marked}min marked${skippedByBranch ? ', skipped='+skippedByBranch+' by branch filter' : ''}`);
 
       // สร้างปุ่ม slot ทุกอันทั้งวัน
       const stepMin = type === 'LINE1' ? 10 : 30;
@@ -1091,6 +1137,7 @@
     // 🆕 (Bug A4): เก็บ admin bookings ไว้ใช้ใน slot picker — ใช้ raw IDs เพื่อคำนวน duration ถูกต้อง
     function _cacheAdminBookings(bookings) {
       window.adminBookingsCache = bookings.map(b => ({
+        bookingId:   b.bookingId,                  // 🆕 ใช้ใน reschedule (ข้ามตัวเอง)
         bookingDate: b.bookingDate,
         status:      b.status,
         serviceIds:  b.serviceIds || '',          // raw IDs จาก server (สำหรับ duration)
@@ -1111,6 +1158,11 @@
       const bookingDateTime = date + 'T' + time;
       const status = (document.getElementById('wiStatusBadge').dataset.status) || '';
 
+      // 🆕 (Bug A3+A4 hotfix2): ใช้ branchId เดียวกับที่ slot picker ใช้ — ไม่ hardcode
+      const submitBranchId = window._wiBranchId
+                          || ((configData.branches && configData.branches[0])
+                              ? (configData.branches[0].branch_id || configData.branches[0].id)
+                              : 'BR-01');
       const payload = new URLSearchParams({
         action: 'submitWalkIn',
         plate: document.getElementById('wiPlate').value,
@@ -1121,7 +1173,7 @@
         lineUid: document.getElementById('walkInForm').dataset.uid || 'WALKIN_NEW',
         bookingDate: bookingDateTime,
         status: status,
-        branchId: 'BR-01'
+        branchId: submitBranchId
       });
       Swal.fire({ title: 'กำลังสร้างคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
