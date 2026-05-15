@@ -48,6 +48,9 @@
     .section.active { display: block; animation: fadeIn 0.3s ease-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .checkbox-custom:checked + div { border-color: #2563eb; background-color: #eff6ff; }
+    /* 🚫 F0.6: วันปิดร้าน — แสดงเป็นพื้นแดงอ่อน */
+    .flatpickr-day.closed-day { background-color: #FEE2E2 !important; color: #DC2626 !important; text-decoration: line-through; opacity: 0.7; }
+    .flatpickr-day.closed-day:hover { background-color: #FECACA !important; cursor: not-allowed; }
   </style>
 </head>
 <body class="bg-gray-50 pb-24">
@@ -300,8 +303,63 @@
 
       document.getElementById('provinceList').innerHTML = thaiProvinces.map(p => `<option value="${esc(p)}">`).join('');
       await refreshData();
-      flatpickr("#inlineCalendar", { inline: true, locale: "th", minDate: "today", onChange: (d, str) => { document.getElementById('bookDate').value = str; document.getElementById('selectedTime').value=''; document.getElementById('displaySelectedTime').innerText='- - : - -'; openTimeSlotModal(); } });
+
+      // 🚫 F0.6: รวมวันปิดร้านจาก server → ใส่ใน flatpickr disable
+      const closures = (masterData.closures || []);
+      const disabledDates = closures.map(c => c.date);
+
+      flatpickr("#inlineCalendar", {
+        inline: true,
+        locale: "th",
+        minDate: "today",
+        disable: disabledDates,    // 🚫 วันที่ปิดร้านจะกดไม่ได้
+        onChange: (d, str) => {
+          document.getElementById('bookDate').value = str;
+          document.getElementById('selectedTime').value = '';
+          document.getElementById('displaySelectedTime').innerText = '- - : - -';
+          openTimeSlotModal();
+        },
+        onDayCreate: (dObj, dStr, fp, dayElem) => {
+          // hover แสดงเหตุผลว่าวันนี้ปิดทำไม
+          const ymd = fp.formatDate(dayElem.dateObj, "Y-m-d");
+          const c = closures.find(x => x.date === ymd);
+          if (c) {
+            dayElem.title = '🚫 ' + c.reason;
+            dayElem.classList.add('closed-day');
+          }
+        }
+      });
+
+      // แสดงรายการวันปิดล่วงหน้าใต้ปฏิทิน
+      renderClosureNotice_(closures);
+
       document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
+    }
+
+    // 🚫 F0.6: แสดงรายการวันปิดให้ลูกค้าเห็นชัดเจน
+    function renderClosureNotice_(closures) {
+      const calendarParent = document.getElementById('inlineCalendar').parentElement;
+      if (!calendarParent) return;
+      // ลบ notice เก่า (ถ้ามี)
+      const old = document.getElementById('closureNotice');
+      if (old) old.remove();
+      if (!closures || closures.length === 0) return;
+
+      // กรองเฉพาะวันในอนาคต (รวมวันนี้)
+      const today = new Date().toISOString().split('T')[0];
+      const upcoming = closures.filter(c => c.date >= today).sort((a,b) => a.date.localeCompare(b.date));
+      if (upcoming.length === 0) return;
+
+      const notice = document.createElement('div');
+      notice.id = 'closureNotice';
+      notice.className = 'mt-3 p-3 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700';
+      notice.innerHTML = '<b>🚫 วันปิดทำการ:</b><br>' +
+        upcoming.slice(0, 5).map(c => {
+          const d = c.date.split('-');
+          return `• ${d[2]}/${d[1]}/${d[0]} — ${esc(c.reason)}`;
+        }).join('<br>') +
+        (upcoming.length > 5 ? `<br><i>...และอีก ${upcoming.length - 5} วัน</i>` : '');
+      calendarParent.appendChild(notice);
     }
 
     async function refreshData() {
