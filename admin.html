@@ -40,6 +40,30 @@
   </div>
 
   <section id="board-section" class="section active p-4 lg:p-6">
+    <!-- 📊 F0.4 Mini Dashboard — สรุปยอดวันนี้ (รีเฟรชพร้อม Kanban) -->
+    <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <p class="text-[10px] text-gray-400 font-bold uppercase">📋 คิววันนี้</p>
+        <p class="text-2xl font-bold text-gray-800 mt-1"><span id="dsQueueToday">-</span></p>
+        <p class="text-[10px] text-gray-400 mt-1">เสร็จแล้ว <span id="dsCompletedToday">-</span></p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <p class="text-[10px] text-gray-400 font-bold uppercase">💰 ยอดวันนี้</p>
+        <p class="text-2xl font-bold text-green-600 mt-1"><span id="dsRevenueToday">-</span><span class="text-sm text-gray-400">.-</span></p>
+        <p class="text-[10px] text-gray-400 mt-1">เฉลี่ย/บิล <span id="dsAvgPerBill">-</span>.-</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <p class="text-[10px] text-gray-400 font-bold uppercase">🆕 ลูกค้าใหม่</p>
+        <p class="text-2xl font-bold text-blue-600 mt-1"><span id="dsNewUsers">-</span> <span class="text-sm text-gray-400">คน</span></p>
+        <p class="text-[10px] text-gray-400 mt-1">ลูกค้าทั้งหมดวันนี้ <span id="dsUniqueCustomers">-</span></p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <p class="text-[10px] text-gray-400 font-bold uppercase">📅 วันที่</p>
+        <p class="text-2xl font-bold text-gray-800 mt-1"><span id="dsDate">-</span></p>
+        <p class="text-[10px] text-gray-400 mt-1">อัปเดตล่าสุด <span id="dsUpdatedAt">-</span></p>
+      </div>
+    </div>
+
     <!-- 🚗 F0.2 Valet: ขยายเป็น 5 swim lanes (scroll ซ้าย-ขวาบนมือถือ) -->
     <div class="overflow-x-auto pb-2">
       <div class="grid gap-4 items-start" style="grid-template-columns: repeat(5, minmax(220px, 1fr)); min-width: 1100px;" id="board">
@@ -382,8 +406,33 @@
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
         if (result.status === 'success') { renderBoard(result.data); if(result.services) { adminServices = result.services; renderWiServices(); } }
-      } catch (e) { console.error(e); } 
+      } catch (e) { console.error(e); }
       finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
+
+      // 📊 F0.4 Dashboard — โหลดคู่กัน (ไม่ block board)
+      loadDashboardSummary();
+    }
+
+    // 📊 F0.4 Mini Dashboard
+    async function loadDashboardSummary() {
+      try {
+        const payload = new URLSearchParams({ action: 'getDashboardSummary', t: Date.now() });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status === 'success' && result.data) {
+          const d = result.data;
+          const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+          setText('dsQueueToday',        d.queueToday || 0);
+          setText('dsCompletedToday',    (d.completedToday || 0) + ' คิว');
+          setText('dsRevenueToday',      (d.revenueToday || 0).toLocaleString());
+          setText('dsAvgPerBill',        (d.avgPerBill || 0).toLocaleString());
+          setText('dsNewUsers',          d.newUsersToday || 0);
+          setText('dsUniqueCustomers',   (d.uniqueCustomersToday || 0) + ' คน');
+          setText('dsDate',              d.date ? d.date.split('-').reverse().join('/') : '-');
+          const now = new Date();
+          setText('dsUpdatedAt', now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0'));
+        }
+      } catch (e) { console.error('Dashboard load error:', e); }
     }
 
     function renderBoard(bookings) {
