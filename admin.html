@@ -579,6 +579,15 @@
           ? `<span class="inline-block text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-md">🚗 VALET</span>`
           : '');
 
+        // 🆕 (Bug A1): ปุ่ม "เลื่อน" + "ลบ" (เฉพาะ status ที่ยังจัดการได้)
+        const canReschedule = ['pending', 'confirmed', 'valet_pickup_pending'].includes(b.status);
+        const canCancel = !['completed', 'cancelled', 'cancelled_noshow'].includes(b.status);
+        const adminActionBtns = (canReschedule || canCancel) ? `
+          <div class="flex gap-1 mt-2 pt-2 border-t border-gray-100">
+            ${canReschedule ? `<button onclick="openRescheduleModal('${esc(b.bookingId)}','${esc(b.bookingDate)}','${esc(b.lineTypeRaw)}','${esc(b.serviceIds)}','${esc(b.branchId)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition font-bold"><i class="fa-solid fa-clock-rotate-left"></i> เลื่อนเวลา</button>` : ''}
+            ${canCancel ? `<button onclick="confirmCancelBooking('${esc(b.bookingId)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition font-bold"><i class="fa-solid fa-trash"></i> ลบคิว</button>` : ''}
+          </div>` : '';
+
         const cardHtml = `
           <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 card-hover relative overflow-hidden">
             <div class="flex justify-between items-start mb-2">
@@ -592,6 +601,7 @@
             </p>
             <div class="mb-1">${valetBadge}</div>
             ${getActionButton(b)}
+            ${adminActionBtns}
           </div>`;
 
         // 🚗 Routing: valet statuses → lanes ใหม่, statuses เดิม → lanes เดิม
@@ -720,6 +730,8 @@
     // ==============================================
     function renderWiServices() {
       const size = document.getElementById('wiSize').value; const line = document.getElementById('wiLine').value; const sel = document.getElementById('wiService');
+      // 🆕 (Bug A5): จำค่าที่เลือกไว้ก่อน rebuild — restore กลับหลังถ้ายังมีใน options
+      const prevValue = sel.value;
       sel.innerHTML = '<option value="" disabled selected>-- กรุณาเลือกแพ็กเกจบริการ --</option>';
       if(adminServices.length === 0) return;
       const grouped = adminServices.reduce((acc, obj) => { const k = obj.category || 'บริการทั่วไป'; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {});
@@ -734,6 +746,11 @@
           if (shouldShow) { hasItem = true; const opt = document.createElement('option'); opt.value = s.service_id || s.id; opt.textContent = `${sName} | ⏱️ ${time} นาที | 💰 ${price}.-`; optgroup.appendChild(opt); }
         });
         if(hasItem) sel.appendChild(optgroup);
+      }
+      // 🆕 (Bug A5): restore selection ถ้ายังมีใน options ใหม่
+      if (prevValue) {
+        const exists = Array.from(sel.options).some(o => o.value === prevValue);
+        if (exists) sel.value = prevValue;
       }
     }
 
@@ -779,6 +796,145 @@
     }
 
     // ==============================================
+    // 🆕 (Bug A1) Admin: เลื่อนเวลาคิว + ลบคิว
+    // ==============================================
+
+    // 🔄 เปิด modal เลื่อนเวลา — reuse slot picker logic จาก walk-in
+    function openRescheduleModal(bookingId, currentDate, lineType, serviceIds, branchId, plate) {
+      const initialDate = (currentDate || '').split('T')[0] || new Date().toISOString().split('T')[0];
+      // ใช้ Swal multi-step: เลือกวัน → เลือกเวลา
+      Swal.fire({
+        title: `📅 เลื่อนเวลาคิว ${plate}`,
+        html: `
+          <p class="text-xs text-gray-500 mb-3">รหัส: ${esc(bookingId)}</p>
+          <label class="text-[10px] font-bold text-gray-500 uppercase block text-left mb-1">เลือกวันใหม่</label>
+          <input type="date" id="rescheduleDate" value="${initialDate}" class="w-full p-3 border border-gray-300 rounded-lg text-sm" />
+          <p class="text-[10px] text-gray-400 mt-2">กด "ต่อไป" เพื่อเลือกเวลา</p>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'ต่อไป →',
+        cancelButtonText: 'ยกเลิก'
+      }).then(res => {
+        if (!res.isConfirmed) return;
+        const newDate = document.getElementById('rescheduleDate').value;
+        if (!newDate) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกวัน', 'warning');
+        _showRescheduleSlots(bookingId, newDate, lineType, serviceIds, branchId, plate);
+      });
+    }
+
+    function _showRescheduleSlots(bookingId, newDate, lineType, serviceIds, branchId, plate) {
+      // Build slot picker เหมือน walk-in
+      const branch = (configData.branches || []).find(b => (b.branch_id||b.id) == branchId);
+      const openMin  = _parseTimeMin(branch ? branch.open_time : '08:00', 8*60);
+      const closeMin = _parseTimeMin(branch ? branch.close_time : '18:00', 18*60);
+      const buffer = parseInt((branch && branch.buffer_time) || 10);
+      const capL1 = 1;
+      const capL2 = parseInt((branch && branch.bay_capacity) || 1);
+
+      // คำนวน duration จาก serviceIds
+      let totalT = 0;
+      String(serviceIds || '').split(',').forEach(id => {
+        const s = adminServices.find(svc => String(svc.service_id) === String(id).trim());
+        if (s) totalT += parseInt(s.std_time_mins || s.stdtime || 0) || 0;
+      });
+      if (totalT === 0) totalT = 30;
+
+      // Build tl1/tl2 (ข้าม booking ปัจจุบัน — กันชนกับตัวเอง)
+      const tl1 = new Array(1440).fill(0);
+      const tl2 = new Array(1440).fill(0);
+      (window.adminBookingsCache || []).forEach(b => {
+        if (b.bookingId === bookingId) return; // ข้ามตัวเอง
+        const bDate = (b.bookingDate || '').split('T')[0];
+        if (bDate !== newDate) return;
+        if (branchId && b.branchId && String(b.branchId) !== String(branchId)) return;
+        const BLOCK = ['pending','confirmed','checked_in','in_progress','valet_pickup_pending','valet_going_pickup'];
+        if (!BLOCK.includes(b.status)) return;
+        const timePart = (b.bookingDate || '').split('T')[1] || '00:00';
+        const start = _parseTimeMin(timePart, 0);
+        let bDur = 0;
+        String(b.serviceIds || '').split(',').forEach(id => {
+          const s = adminServices.find(svc => String(svc.service_id) === String(id).trim());
+          if (s) bDur += parseInt(s.std_time_mins || s.stdtime || 0) || 0;
+        });
+        if (bDur === 0) bDur = 30;
+        if (b.lineTypeRaw === 'LINE1') {
+          for (let i = start; i < start + 10 && i < 1440; i++) tl1[i]++;
+          if (bDur > 10) for (let i = start+10; i < start+10+(bDur-10+buffer) && i < 1440; i++) tl2[i]++;
+        } else {
+          for (let i = start; i < start + bDur + buffer && i < 1440; i++) tl2[i]++;
+        }
+      });
+
+      const stepMin = lineType === 'LINE1' ? 10 : 30;
+      const nowMin = (newDate === new Date().toISOString().split('T')[0])
+                     ? (new Date().getHours()*60 + new Date().getMinutes() + 20) // admin เลื่อนได้แต่ยังให้ lead 20 min
+                     : -1;
+      let html = '<div class="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto p-2">';
+      let curr = openMin;
+      while (curr + totalT <= closeMin) {
+        const timeStr = `${String(Math.floor(curr/60)).padStart(2,'0')}:${String(curr%60).padStart(2,'0')}`;
+        let avail = (nowMin < 0 || curr >= nowMin), reason = avail ? '' : 'อดีต';
+        if (avail) {
+          if (lineType === 'LINE1') {
+            for (let i = curr; i < curr + 10; i++) if (tl1[i] >= capL1) { avail = false; reason = 'เต็ม'; break; }
+            if (avail && totalT > 10) {
+              for (let i = curr+10; i < curr+10+(totalT-10+buffer); i++) if (tl2[i] >= capL2) { avail = false; reason = 'เต็ม'; break; }
+            }
+          } else {
+            for (let i = curr; i < curr + totalT + buffer; i++) if (tl2[i] >= capL2) { avail = false; reason = 'เต็ม'; break; }
+          }
+        }
+        if (avail) {
+          html += `<button onclick="_doReschedule('${bookingId}','${newDate}T${timeStr}')" class="p-2 bg-white text-gray-700 border-2 border-blue-200 rounded-xl text-sm hover:bg-blue-50 transition active:scale-95">${timeStr}</button>`;
+        } else {
+          html += `<div class="p-2 bg-red-50 text-red-300 rounded-xl border-2 border-red-100 text-xs flex flex-col items-center"><span class="line-through">${timeStr}</span><span class="text-[8px] mt-0.5">${reason}</span></div>`;
+        }
+        curr += stepMin;
+      }
+      html += '</div>';
+      Swal.fire({ title: `เลื่อน ${plate} → ${newDate}`, html: html, showConfirmButton: false, width: 600 });
+    }
+
+    async function _doReschedule(bookingId, newDateTime) {
+      Swal.fire({ title: 'กำลังเลื่อน...', didOpen: () => Swal.showLoading() });
+      try {
+        const payload = new URLSearchParams({ action: 'rescheduleBooking', bookingId: bookingId, newDate: newDateTime });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status === 'success') {
+          Swal.fire('สำเร็จ!', 'เลื่อนเวลาเรียบร้อย ลูกค้าจะได้รับแจ้งใน LINE', 'success').then(() => loadAdminData());
+        } else {
+          Swal.fire('ไม่สำเร็จ', result.message || 'เกิดข้อผิดพลาด', 'warning');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    }
+
+    // 🗑️ ลบคิว (set status = cancelled) — ใช้ updateBookingStatus ที่มีอยู่
+    async function confirmCancelBooking(bookingId, plate) {
+      const res = await Swal.fire({
+        title: `ยกเลิกคิว ${plate}?`,
+        text: `รหัส: ${bookingId} — ลูกค้าจะได้รับแจ้งใน LINE ทันที`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'ยกเลิกคิว',
+        cancelButtonText: 'ไม่ยกเลิก',
+        confirmButtonColor: '#ef4444'
+      });
+      if (!res.isConfirmed) return;
+      Swal.fire({ title: 'กำลังยกเลิก...', didOpen: () => Swal.showLoading() });
+      try {
+        const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: 'cancelled' });
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await r.json();
+        if (result.status === 'success') {
+          Swal.fire('สำเร็จ', 'ยกเลิกคิวเรียบร้อย', 'success').then(() => loadAdminData());
+        } else {
+          Swal.fire('ไม่สำเร็จ', result.message || 'เกิดข้อผิดพลาด', 'warning');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    }
+
+    // ==============================================
     // 🆕 รอบ 8: Walk-in slot picker (เหมือนฝั่งลูกค้า แต่ skipMinStart)
     // ==============================================
 
@@ -809,28 +965,27 @@
       const capL1 = 1;
       const capL2 = parseInt((branch && branch.bay_capacity) || 1);
 
-      // Build tl1/tl2 จาก adminBookings ของวันเดียวกัน
+      // 🆕 (Bug A4): Build tl1/tl2 จาก adminBookings ของวันและสาขาเดียวกัน — ใช้ raw IDs
       const tl1 = new Array(1440).fill(0);
       const tl2 = new Array(1440).fill(0);
       (window.adminBookingsCache || []).forEach(b => {
         const bDate = (b.bookingDate || '').split('T')[0];
         if (bDate !== date) return;
+        // filter branch (ถ้าระบุ branch — ถ้าไม่ระบุก็เอาทุก booking)
+        if (branchId && b.branchId && String(b.branchId) !== String(branchId)) return;
         const BLOCK = ['pending','confirmed','checked_in','in_progress','valet_pickup_pending','valet_going_pickup'];
         if (!BLOCK.includes(b.status)) return;
         const timePart = (b.bookingDate || '').split('T')[1] || '00:00';
         const start = _parseTimeMin(timePart, 0);
-        // หา duration จาก service
-        let bDur = 30;
-        if (b.serviceType || b.serviceIds) {
-          const ids = String(b.serviceType || b.serviceIds || '').split(',');
-          bDur = 0;
-          ids.forEach(id => {
-            const s = adminServices.find(svc => String(svc.service_id) === String(id).trim());
-            if (s) bDur += parseInt(s.std_time_mins || s.stdtime || 0) || 0;
-          });
-          if (bDur === 0) bDur = 30;
-        }
-        if ((b.lineType || '').includes('ด่วน') || b.lineTypeRaw === 'LINE1') {
+        // หา duration จาก raw service IDs
+        let bDur = 0;
+        const ids = String(b.serviceIds || '').split(',');
+        ids.forEach(id => {
+          const s = adminServices.find(svc => String(svc.service_id) === String(id).trim());
+          if (s) bDur += parseInt(s.std_time_mins || s.stdtime || 0) || 0;
+        });
+        if (bDur === 0) bDur = 30;
+        if (b.lineTypeRaw === 'LINE1') {
           for (let i = start; i < start + 10 && i < 1440; i++) tl1[i]++;
           if (bDur > 10) for (let i = start+10; i < start+10+(bDur-10+buffer) && i < 1440; i++) tl2[i]++;
         } else {
@@ -933,15 +1088,15 @@
       badge.dataset.status = status;
     }
 
-    // เก็บ admin bookings ไว้ใช้ใน slot picker (เรียกจาก loadAdminData)
-    // โดยใส่ใน window.adminBookingsCache + ใส่ raw lineType ด้วย (admin response แปลงเป็นไทยแล้ว)
+    // 🆕 (Bug A4): เก็บ admin bookings ไว้ใช้ใน slot picker — ใช้ raw IDs เพื่อคำนวน duration ถูกต้อง
     function _cacheAdminBookings(bookings) {
       window.adminBookingsCache = bookings.map(b => ({
         bookingDate: b.bookingDate,
-        status: b.status,
-        serviceType: b.serviceText, // จาก server แปลงเป็นชื่อแล้ว — ไม่ใช่ ID ใช้ duration default
-        lineTypeRaw: (b.lineType || '').includes('ด่วน') ? 'LINE1' : 'LINE2',
-        lineType: b.lineType
+        status:      b.status,
+        serviceIds:  b.serviceIds || '',          // raw IDs จาก server (สำหรับ duration)
+        serviceText: b.serviceText,                // human-readable
+        lineTypeRaw: b.lineTypeRaw || 'LINE2',    // 'LINE1' หรือ 'LINE2' ตรงๆ
+        branchId:    b.branchId || ''
       }));
     }
 
@@ -1828,6 +1983,8 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       showSection('board-section');
+      // 🆕 (Bug A3): preload settings (branches/services/closures) — walk-in slot picker จะใช้
+      loadStoreConfig();
       setInterval(loadAdminData, 30000);
     });
   </script>
