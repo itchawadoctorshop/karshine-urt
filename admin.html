@@ -136,8 +136,28 @@
         </div>
         <div>
           <label class="text-[10px] font-bold text-gray-500 uppercase">แพ็กเกจบริการ</label>
-          <select id="wiService" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 bg-gray-50" required><option value="">กำลังโหลดข้อมูล...</option></select>
+          <select id="wiService" onchange="updateWiSlotInfo()" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 bg-gray-50" required><option value="">กำลังโหลดข้อมูล...</option></select>
         </div>
+
+        <!-- 🆕 รอบ 8: Date + Time picker สำหรับ walk-in -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-[10px] font-bold text-gray-500 uppercase">วันที่</label>
+            <input type="date" id="wiDate" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1" required>
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-gray-500 uppercase">เวลา</label>
+            <div onclick="openWiSlotModal()" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 bg-gray-50 cursor-pointer text-center active:bg-gray-100 transition">
+              <span id="wiTimeDisplay" class="font-bold text-gray-700">- - : - -</span>
+              <span class="text-[9px] text-gray-400 block mt-0.5">กดเพื่อเลือก</span>
+            </div>
+            <input type="hidden" id="wiTime">
+          </div>
+        </div>
+
+        <!-- 🆕 Smart status badge — แสดงตามเวลาที่เลือก -->
+        <div id="wiStatusBadge" class="hidden p-3 rounded-xl text-xs border"></div>
+
         <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition mt-4 text-lg"><i class="fa-solid fa-plus-circle mr-1"></i> ยืนยันสร้างคิว Walk-in</button>
       </form>
     </div>
@@ -166,6 +186,7 @@
          <button onclick="switchConfigTab('packages')" id="tab-packages" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">แพ็กเกจ</button>
          <button onclick="switchConfigTab('branches')" id="tab-branches" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">สาขา</button>
          <button onclick="switchConfigTab('payments')" id="tab-payments" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">ชำระเงิน</button>
+         <button onclick="switchConfigTab('closures')" id="tab-closures" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">🚫 วันปิดร้าน</button>
       </div>
 
       <div id="content-services" class="config-content block">
@@ -187,8 +208,53 @@
          <button onclick="addPayment()" class="mb-4 bg-purple-500 hover:bg-purple-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95"><i class="fa-solid fa-plus mr-1"></i> เพิ่มวิธีชำระเงิน</button>
          <div id="configPaymentsList" class="space-y-3"><div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div></div>
       </div>
+
+      <!-- 🚫 F0.6: Branch Closures tab -->
+      <div id="content-closures" class="config-content hidden">
+         <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-2xl text-xs text-yellow-800">
+           💡 ตั้งวันปิดร้าน → ลูกค้าจะเห็นวันนั้นเป็นสีแดงในปฏิทิน กดจองไม่ได้
+         </div>
+         <button onclick="openClosureModal('add')" class="mb-4 bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95">
+           <i class="fa-solid fa-plus mr-1"></i> เพิ่มวันปิดใหม่
+         </button>
+         <div id="configClosuresList" class="space-y-3">
+           <div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div>
+         </div>
+      </div>
     </div>
   </section>
+
+  <!-- 🚫 F0.6: Closure Add/Edit Modal -->
+  <div id="closureModal" class="fixed inset-0 bg-black bg-opacity-60 z-[70] hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
+      <div class="bg-red-500 text-white p-4 flex justify-between items-center">
+        <h3 class="font-bold text-lg" id="closureModalTitle">เพิ่มวันปิดร้าน</h3>
+        <button onclick="closeClosureModal()" class="text-red-200 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      <form id="closureForm" class="p-5 space-y-4 bg-gray-50">
+        <input type="hidden" id="closureId">
+        <div>
+          <label class="text-[10px] font-bold text-gray-500 uppercase">วันที่ปิด</label>
+          <input type="date" id="closureDate" class="w-full p-3 border border-gray-300 rounded-lg text-sm mt-1" required>
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-gray-500 uppercase">สาขา (เลือกได้)</label>
+          <select id="closureBranch" class="w-full p-3 border border-gray-300 rounded-lg text-sm mt-1">
+            <option value="">ทุกสาขา (ปิดหมด)</option>
+          </select>
+          <p class="text-[10px] text-gray-400 mt-1">ถ้ามีสาขาเดียว → เลือก "ทุกสาขา" ได้เลย</p>
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-gray-500 uppercase">เหตุผล (ลูกค้าจะเห็น)</label>
+          <input type="text" id="closureReason" class="w-full p-3 border border-gray-300 rounded-lg text-sm mt-1" required
+                 placeholder="เช่น ปิดทดสอบระบบ / วันสงกรานต์">
+        </div>
+        <button type="submit" class="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold shadow transition mt-2">
+          <i class="fa-solid fa-save mr-1"></i> บันทึก
+        </button>
+      </form>
+    </div>
+  </div>
 
   <div id="crmModal" class="fixed inset-0 bg-black bg-opacity-60 z-[60] hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-[2rem] w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
@@ -392,7 +458,7 @@
       window.scrollTo(0,0);
       
       if(id === 'board-section') loadAdminData();
-      if(id === 'walkin-section') renderWiServices(); 
+      if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); }
       if(id === 'config-section') loadStoreConfig(); 
     }
 
@@ -405,7 +471,7 @@
       try {
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
-        if (result.status === 'success') { renderBoard(result.data); if(result.services) { adminServices = result.services; renderWiServices(); } }
+        if (result.status === 'success') { renderBoard(result.data); _cacheAdminBookings(result.data); if(result.services) { adminServices = result.services; renderWiServices(); } }
       } catch (e) { console.error(e); }
       finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
 
@@ -630,9 +696,16 @@
 
     function setWiLine(type) {
       document.getElementById('wiLine').value = type;
-      if(type === 'LINE1') { document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition"; document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition"; } 
+      if(type === 'LINE1') { document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition"; document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition"; }
       else { document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition"; document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition"; }
-      renderWiServices(); 
+      // 🆕 reset เวลาตอนเปลี่ยน line type (step size ต่างกัน)
+      const tInp = document.getElementById('wiTime');
+      const tDisp = document.getElementById('wiTimeDisplay');
+      if (tInp) tInp.value = '';
+      if (tDisp) tDisp.innerText = '- - : - -';
+      const badge = document.getElementById('wiStatusBadge');
+      if (badge) badge.classList.add('hidden');
+      renderWiServices();
     }
 
     document.getElementById('wiPlate').addEventListener('blur', async (e) => {
@@ -657,22 +730,226 @@
     });
 
     function selectWalkInVehicle(v) {
-      document.getElementById('wiSize').value = v.size; renderWiServices(); 
+      document.getElementById('wiSize').value = v.size; renderWiServices();
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `พบข้อมูล: ${v.ownerName}`, showConfirmButton: false, timer: 2000 });
       document.getElementById('walkInForm').dataset.vid = v.vehicleId; document.getElementById('walkInForm').dataset.uid = v.lineUid;
+    }
+
+    // ==============================================
+    // 🆕 รอบ 8: Walk-in slot picker (เหมือนฝั่งลูกค้า แต่ skipMinStart)
+    // ==============================================
+
+    // helper: คำนวน totalT (duration นาที) จาก serviceId ปัจจุบัน
+    function _wiGetTotalTime() {
+      const sId = document.getElementById('wiService').value;
+      if (!sId || !adminServices) return 30;
+      const svc = adminServices.find(s => String(s.service_id) === String(sId));
+      if (!svc) return 30;
+      return parseInt(svc.std_time_mins || svc.stdtime || svc.std_time || 30) || 30;
+    }
+
+    // เปิด slot picker เหมือนฝั่งลูกค้า แต่:
+    //   - skipMinStart = true (เห็น slot ตอนนี้+ใกล้นี้)
+    //   - allowPast    = true (เห็น slot ในอดีต — สำหรับ back-fill)
+    function openWiSlotModal() {
+      const date = document.getElementById('wiDate').value;
+      const totalT = _wiGetTotalTime();
+      const type = document.getElementById('wiLine').value;
+      if (!date) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ก่อน', 'warning');
+
+      // ใช้ adminBookings (จาก getAdminData) เป็น source ของ active slots
+      const branchId = 'BR-01'; // default — ปรับได้ถ้ามีหลายสาขา
+      const branch = (configData && configData.branches || []).find(b => (b.branch_id||b.id) == branchId);
+      const openMin  = _parseTimeMin(branch ? branch.open_time : '08:00', 8*60);
+      const closeMin = _parseTimeMin(branch ? branch.close_time : '18:00', 18*60);
+      const buffer = parseInt((branch && branch.buffer_time) || 10);
+      const capL1 = 1;
+      const capL2 = parseInt((branch && branch.bay_capacity) || 1);
+
+      // Build tl1/tl2 จาก adminBookings ของวันเดียวกัน
+      const tl1 = new Array(1440).fill(0);
+      const tl2 = new Array(1440).fill(0);
+      (window.adminBookingsCache || []).forEach(b => {
+        const bDate = (b.bookingDate || '').split('T')[0];
+        if (bDate !== date) return;
+        const BLOCK = ['pending','confirmed','checked_in','in_progress','valet_pickup_pending','valet_going_pickup'];
+        if (!BLOCK.includes(b.status)) return;
+        const timePart = (b.bookingDate || '').split('T')[1] || '00:00';
+        const start = _parseTimeMin(timePart, 0);
+        // หา duration จาก service
+        let bDur = 30;
+        if (b.serviceType || b.serviceIds) {
+          const ids = String(b.serviceType || b.serviceIds || '').split(',');
+          bDur = 0;
+          ids.forEach(id => {
+            const s = adminServices.find(svc => String(svc.service_id) === String(id).trim());
+            if (s) bDur += parseInt(s.std_time_mins || s.stdtime || 0) || 0;
+          });
+          if (bDur === 0) bDur = 30;
+        }
+        if ((b.lineType || '').includes('ด่วน') || b.lineTypeRaw === 'LINE1') {
+          for (let i = start; i < start + 10 && i < 1440; i++) tl1[i]++;
+          if (bDur > 10) for (let i = start+10; i < start+10+(bDur-10+buffer) && i < 1440; i++) tl2[i]++;
+        } else {
+          for (let i = start; i < start + bDur + buffer && i < 1440; i++) tl2[i]++;
+        }
+      });
+
+      // สร้างปุ่ม slot ทุกอันทั้งวัน
+      const stepMin = type === 'LINE1' ? 10 : 30;
+      const nowMin = (date === new Date().toISOString().split('T')[0])
+                     ? (new Date().getHours()*60 + new Date().getMinutes())
+                     : -1; // -1 = ไม่ใช่วันนี้
+
+      let html = '<div class="text-[10px] text-gray-500 mb-2 text-center">เลือกเวลา — รวมถึง slot ที่เลยมาแล้ว (back-fill ได้)</div>';
+      html += '<div class="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto p-2">';
+      let curr = openMin;
+      while (curr + totalT <= closeMin) {
+        const timeStr = `${String(Math.floor(curr/60)).padStart(2,'0')}:${String(curr%60).padStart(2,'0')}`;
+        let avail = true, reason = '';
+        // เช็คทับ
+        if (type === 'LINE1') {
+          for (let i = curr; i < curr + 10; i++) if (tl1[i] >= capL1) { avail = false; reason = 'เครื่องเต็ม'; break; }
+          if (avail && totalT > 10) {
+            for (let i = curr+10; i < curr+10+(totalT-10+buffer); i++) if (tl2[i] >= capL2) { avail = false; reason = 'bay เต็ม'; break; }
+          }
+        } else {
+          for (let i = curr; i < curr + totalT + buffer; i++) if (tl2[i] >= capL2) { avail = false; reason = 'bay เต็ม'; break; }
+        }
+
+        // tag past slot
+        const isPast = (nowMin >= 0 && curr < nowMin - 5); // > 5 นาทีในอดีต
+        const isNow  = (nowMin >= 0 && Math.abs(curr - nowMin) <= 5);
+
+        if (avail) {
+          const cls = isPast ? 'bg-gray-100 text-gray-600 border-gray-300'
+                    : isNow  ? 'bg-yellow-100 text-yellow-800 border-yellow-400 font-bold'
+                             : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50';
+          const label = isPast ? '<span class="text-[8px] block">ย้อนหลัง</span>' :
+                        isNow  ? '<span class="text-[8px] block">ตอนนี้</span>' : '';
+          html += `<button onclick="confirmWiTime('${timeStr}')" class="p-2 rounded-xl border-2 text-sm transition active:scale-95 ${cls}">${timeStr}${label}</button>`;
+        } else {
+          html += `<div class="p-2 bg-red-50 text-red-300 rounded-xl border-2 border-red-100 text-xs flex flex-col items-center"><span class="line-through">${timeStr}</span><span class="text-[8px] mt-0.5">${reason}</span></div>`;
+        }
+        curr += stepMin;
+      }
+      html += '</div>';
+
+      Swal.fire({ title: 'เลือกเวลา Walk-in', html: html, showConfirmButton: false, width: 600 });
+    }
+
+    function _parseTimeMin(val, defaultMin) {
+      if (!val) return defaultMin;
+      let str = String(val);
+      if (str.includes('T')) {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) return d.getHours()*60 + d.getMinutes();
+      }
+      str = str.replace(/[^0-9:]/g, '');
+      const parts = str.split(':');
+      if (parts.length >= 2) return parseInt(parts[0])*60 + parseInt(parts[1]);
+      return defaultMin;
+    }
+
+    function confirmWiTime(t) {
+      document.getElementById('wiTime').value = t;
+      document.getElementById('wiTimeDisplay').innerText = t + ' น.';
+      Swal.close();
+      updateWiSlotInfo();
+    }
+
+    // อัปเดต status badge ตามเวลาที่เลือก
+    function updateWiSlotInfo() {
+      const date = document.getElementById('wiDate').value;
+      const time = document.getElementById('wiTime').value;
+      const badge = document.getElementById('wiStatusBadge');
+      if (!badge) return;
+      if (!date || !time) { badge.classList.add('hidden'); return; }
+
+      const selected = new Date(date + 'T' + time);
+      const diffMs = selected.getTime() - Date.now();
+      const diffMin = Math.round(diffMs / 60000);
+
+      let cls = '', icon = '', text = '', status = '';
+      if (diffMs < -5*60000) {
+        status = 'completed';
+        cls = 'bg-purple-50 border-purple-200 text-purple-800';
+        icon = '🕘'; text = `back-fill ย้อนหลัง ${Math.abs(diffMin)} นาที → จะบันทึกเป็น completed + เพิ่มแต้มลูกค้าทันที`;
+      } else if (diffMs <= 30*60000) {
+        status = 'checked_in';
+        cls = 'bg-blue-50 border-blue-200 text-blue-800';
+        icon = '✅'; text = `ลูกค้าอยู่ที่ร้าน → จะบันทึกเป็น checked_in (อยู่ในคิว Kanban)`;
+      } else {
+        status = 'pending';
+        cls = 'bg-orange-50 border-orange-200 text-orange-800';
+        icon = '⏳'; text = `จองล่วงหน้า ${diffMin} นาที → จะบันทึกเป็น pending (รอลูกค้ามา/admin กดเช็คอิน)`;
+      }
+
+      badge.className = 'p-3 rounded-xl text-xs border ' + cls;
+      badge.innerHTML = `<b>${icon} สถานะที่จะบันทึก: ${status}</b><br><span class="text-[10px]">${text}</span>`;
+      badge.dataset.status = status;
+    }
+
+    // เก็บ admin bookings ไว้ใช้ใน slot picker (เรียกจาก loadAdminData)
+    // โดยใส่ใน window.adminBookingsCache + ใส่ raw lineType ด้วย (admin response แปลงเป็นไทยแล้ว)
+    function _cacheAdminBookings(bookings) {
+      window.adminBookingsCache = bookings.map(b => ({
+        bookingDate: b.bookingDate,
+        status: b.status,
+        serviceType: b.serviceText, // จาก server แปลงเป็นชื่อแล้ว — ไม่ใช่ ID ใช้ duration default
+        lineTypeRaw: (b.lineType || '').includes('ด่วน') ? 'LINE1' : 'LINE2',
+        lineType: b.lineType
+      }));
     }
 
     document.getElementById('walkInForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const serviceId = document.getElementById('wiService').value;
-      if(!serviceId) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแพ็กเกจบริการ', 'warning');
-      const payload = new URLSearchParams({ action: 'submitWalkIn', plate: document.getElementById('wiPlate').value, size: document.getElementById('wiSize').value, lineType: document.getElementById('wiLine').value, serviceId: serviceId, vehicleId: document.getElementById('walkInForm').dataset.vid || '', lineUid: document.getElementById('walkInForm').dataset.uid || 'WALKIN_NEW' });
+      const date = document.getElementById('wiDate').value;
+      const time = document.getElementById('wiTime').value;
+      if (!serviceId) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแพ็กเกจบริการ', 'warning');
+      if (!date || !time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันและเวลา', 'warning');
+
+      const bookingDateTime = date + 'T' + time;
+      const status = (document.getElementById('wiStatusBadge').dataset.status) || '';
+
+      const payload = new URLSearchParams({
+        action: 'submitWalkIn',
+        plate: document.getElementById('wiPlate').value,
+        size: document.getElementById('wiSize').value,
+        lineType: document.getElementById('wiLine').value,
+        serviceId: serviceId,
+        vehicleId: document.getElementById('walkInForm').dataset.vid || '',
+        lineUid: document.getElementById('walkInForm').dataset.uid || 'WALKIN_NEW',
+        bookingDate: bookingDateTime,
+        status: status,
+        branchId: 'BR-01'
+      });
       Swal.fire({ title: 'กำลังสร้างคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
-        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
-        if(result.status === 'success') { Swal.fire('สำเร็จ!', 'สร้างคิว Walk-in เรียบร้อย', 'success').then(() => { document.getElementById('walkInForm').reset(); document.getElementById('walkInForm').dataset.vid = ''; document.getElementById('walkInForm').dataset.uid = ''; showSection('board-section'); }); } else throw new Error(result.message);
-      } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status === 'success') {
+          Swal.fire('สำเร็จ!', `สร้างคิว Walk-in เรียบร้อย — สถานะ: ${result.finalStatus}`, 'success').then(() => {
+            document.getElementById('walkInForm').reset();
+            document.getElementById('walkInForm').dataset.vid = '';
+            document.getElementById('walkInForm').dataset.uid = '';
+            document.getElementById('wiTime').value = '';
+            document.getElementById('wiTimeDisplay').innerText = '- - : - -';
+            document.getElementById('wiStatusBadge').classList.add('hidden');
+            showSection('board-section');
+          });
+        } else {
+          Swal.fire('ไม่สามารถสร้างคิวได้', result.message || 'เกิดข้อผิดพลาด', 'warning');
+        }
+      } catch(err) { Swal.fire('Error', err.message, 'error'); }
     });
+
+    // default วันที่ + cache bookings ทุกครั้งที่เปิดหน้า walk-in
+    function initWalkInForm() {
+      const dEl = document.getElementById('wiDate');
+      if (dEl && !dEl.value) dEl.value = new Date().toISOString().split('T')[0];
+    }
 
     // ==============================================
     // 👥 3. ระบบ CRM (ค้นหา & Modal)
@@ -783,11 +1060,11 @@
       document.getElementById(`content-${tab}`).classList.remove('hidden');
       const activeClass = "px-4 py-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap transition";
       const inactiveClass = "px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition";
-      
-      document.getElementById('tab-services').className = tab==='services' ? activeClass : inactiveClass;
-      document.getElementById('tab-packages').className = tab==='packages' ? activeClass : inactiveClass;
-      document.getElementById('tab-branches').className = tab==='branches' ? activeClass : inactiveClass;
-      document.getElementById('tab-payments').className = tab==='payments' ? activeClass : inactiveClass;
+
+      ['services', 'packages', 'branches', 'payments', 'closures'].forEach(t => {
+        const el = document.getElementById('tab-' + t);
+        if (el) el.className = tab === t ? activeClass : inactiveClass;
+      });
     }
 
     async function loadStoreConfig() {
@@ -898,9 +1175,127 @@
             `}).join('');
           } else { payContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีวิธีชำระเงิน</div>'; }
 
+          // 🚫 F0.6: Render Closures
+          renderClosures(configData.closures || []);
         }
       } catch(e) { console.error(e); }
     }
+
+    // 🚫 F0.6: Render closures list
+    function renderClosures(closures) {
+      const container = document.getElementById('configClosuresList');
+      if (!container) return;
+
+      // เรียงตามวันที่ ใกล้สุด → ไกลสุด
+      const today = new Date().toISOString().split('T')[0];
+      const sorted = closures.slice().sort((a, b) => a.date.localeCompare(b.date));
+      // กรองวันในอนาคต + วันที่ผ่านมาแต่ในเดือนเดียวกัน
+      const upcoming = sorted.filter(c => c.date >= today);
+      const past = sorted.filter(c => c.date < today).slice(-5).reverse(); // 5 ตัวล่าสุด
+
+      if (sorted.length === 0) {
+        container.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ยังไม่มีวันปิดร้านในระบบ</div>';
+        return;
+      }
+
+      const branchMap = {};
+      (configData.branches || []).forEach(b => branchMap[b.branch_id || b.id] = b.branch_name || b.name);
+
+      const renderItem = (c, isPast) => {
+        const d = c.date.split('-');
+        const dateStr = `${d[2]}/${d[1]}/${d[0]}`;
+        const branchLabel = c.branchId ? (branchMap[c.branchId] || c.branchId) : 'ทุกสาขา';
+        const cardClass = isPast
+          ? 'bg-gray-50 border border-gray-200 opacity-60'
+          : 'bg-red-50 border border-red-200';
+        return `
+          <div class="${cardClass} rounded-2xl p-4 flex justify-between items-center">
+            <div class="w-4/5">
+              <h4 class="font-bold ${isPast?'text-gray-600':'text-red-800'} text-sm mb-1">📅 ${dateStr}</h4>
+              <p class="text-[11px] text-gray-700"><b>${esc(c.reason)}</b></p>
+              <p class="text-[10px] text-gray-500 mt-1">🏠 ${esc(branchLabel)}</p>
+            </div>
+            <div class="flex gap-2 flex-col">
+              ${isPast ? '' : `<button onclick='openClosureModal("edit", ${JSON.stringify(c).replace(/'/g, "&apos;")})' class="bg-white text-blue-500 hover:bg-blue-100 border border-blue-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>`}
+              <button onclick="deleteConfigData('Branch_Closures', '${c.closureId}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>`;
+      };
+
+      let html = '';
+      if (upcoming.length > 0) {
+        html += '<div class="text-[10px] font-bold text-gray-500 uppercase mb-2">🔴 วันที่จะปิด (กำลังมา)</div>';
+        html += upcoming.map(c => renderItem(c, false)).join('');
+      }
+      if (past.length > 0) {
+        html += '<div class="text-[10px] font-bold text-gray-400 uppercase mt-4 mb-2">📜 ประวัติ (5 ล่าสุดที่ผ่านมา)</div>';
+        html += past.map(c => renderItem(c, true)).join('');
+      }
+      container.innerHTML = html;
+    }
+
+    // 🚫 F0.6: Modal — เพิ่ม/แก้ไขวันปิดร้าน
+    function openClosureModal(mode, data) {
+      const modal = document.getElementById('closureModal');
+      const title = document.getElementById('closureModalTitle');
+      const branchSel = document.getElementById('closureBranch');
+
+      // เติม branch options
+      branchSel.innerHTML = '<option value="">ทุกสาขา (ปิดหมด)</option>' +
+        (configData.branches || []).map(b => `<option value="${esc(b.branch_id || b.id)}">${esc(b.branch_name || b.name)}</option>`).join('');
+
+      if (mode === 'edit' && data) {
+        title.textContent = 'แก้ไขวันปิดร้าน';
+        document.getElementById('closureId').value = data.closureId || '';
+        document.getElementById('closureDate').value = data.date || '';
+        document.getElementById('closureBranch').value = data.branchId || '';
+        document.getElementById('closureReason').value = data.reason || '';
+      } else {
+        title.textContent = 'เพิ่มวันปิดร้าน';
+        document.getElementById('closureForm').reset();
+        document.getElementById('closureId').value = '';
+        // default = วันนี้
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('closureDate').value = today;
+      }
+      modal.classList.remove('hidden');
+    }
+
+    function closeClosureModal() {
+      document.getElementById('closureModal').classList.add('hidden');
+    }
+
+    // 🚫 F0.6: Submit handler
+    document.getElementById('closureForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('closureId').value;
+      const action = id ? 'edit' : 'add';
+      const closureId = id || ('CL-' + Date.now());
+
+      const payload = new URLSearchParams({
+        action: 'manageData',
+        target: 'Branch_Closures',
+        actionType: action,
+        id: closureId,
+        branchId: document.getElementById('closureBranch').value,
+        closureDate: document.getElementById('closureDate').value,
+        reason: document.getElementById('closureReason').value
+      });
+
+      Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      try {
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status === 'success') {
+          Swal.fire('สำเร็จ!', 'บันทึกวันปิดเรียบร้อย', 'success').then(() => {
+            closeClosureModal();
+            loadStoreConfig();
+          });
+        } else {
+          Swal.fire('Error', result.message || 'เกิดข้อผิดพลาด', 'error');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    });
 
     // 🌟 ระบบจัดการ Form แพ็กเกจ (เพิ่มแถวบริการอัตโนมัติ)
     function togglePkgUI() {
