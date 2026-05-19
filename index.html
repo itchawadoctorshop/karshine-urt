@@ -193,6 +193,30 @@
              <div><label class="text-[10px] font-bold text-gray-400 uppercase">เพศ</label><select id="uGender" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 text-gray-600"><option value="">ไม่ระบุ</option><option value="M">ชาย</option><option value="F">หญิง</option></select></div>
              <div><label class="text-[10px] font-bold text-gray-400 uppercase">ช่วงอายุ</label><select id="uAge" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 text-gray-600"><option value="">ไม่ระบุ</option><option value="<20">ต่ำกว่า 20 ปี</option><option value="20-30">20 - 30 ปี</option><option value="31-40">31 - 40 ปี</option><option value="41-50">41 - 50 ปี</option><option value=">50">50 ปีขึ้นไป</option></select></div>
           </div>
+          <!-- 🎂 F1.4: วัน-เดือนเกิด (ไม่บังคับ — ใช้ส่ง Flex อวยพร) -->
+          <div>
+            <label class="text-[10px] font-bold text-gray-400 uppercase">🎂 วัน-เดือนเกิด <span class="text-gray-300 normal-case">(เพื่อรับอวยพร — ไม่บังคับ)</span></label>
+            <div class="grid grid-cols-2 gap-3 mt-1">
+              <select id="uBirthDay" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm text-gray-600">
+                <option value="">วัน</option>
+              </select>
+              <select id="uBirthMonth" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm text-gray-600">
+                <option value="">เดือน</option>
+                <option value="1">มกราคม</option>
+                <option value="2">กุมภาพันธ์</option>
+                <option value="3">มีนาคม</option>
+                <option value="4">เมษายน</option>
+                <option value="5">พฤษภาคม</option>
+                <option value="6">มิถุนายน</option>
+                <option value="7">กรกฎาคม</option>
+                <option value="8">สิงหาคม</option>
+                <option value="9">กันยายน</option>
+                <option value="10">ตุลาคม</option>
+                <option value="11">พฤศจิกายน</option>
+                <option value="12">ธันวาคม</option>
+              </select>
+            </div>
+          </div>
         </div>
         <div class="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
           <h3 class="text-xs font-bold text-blue-600 uppercase border-b border-gray-200 pb-2"><i class="fa-solid fa-car"></i> ข้อมูลรถยนต์ (จำเป็น)</h3>
@@ -302,6 +326,17 @@
       }
 
       document.getElementById('provinceList').innerHTML = thaiProvinces.map(p => `<option value="${esc(p)}">`).join('');
+
+      // 🎂 F1.4: เติม dropdown วัน 1-31 ในแบบฟอร์ม addVehicle
+      const dayEl = document.getElementById('uBirthDay');
+      if (dayEl && dayEl.options.length <= 1) {
+        for (let d = 1; d <= 31; d++) {
+          const opt = document.createElement('option');
+          opt.value = d; opt.textContent = d;
+          dayEl.appendChild(opt);
+        }
+      }
+
       await refreshData();
 
       // 🚫 F0.6: รวมวันปิดร้านจาก server → ใส่ใน flatpickr disable
@@ -536,7 +571,35 @@
     function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active')); document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active'); window.scrollTo(0,0); }
     function navToBooking() { if(!masterData.vehicles || masterData.vehicles.length === 0) { Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section')); } else { showSection('booking-section'); } }
 
-    document.getElementById('addVehicleForm').addEventListener('submit', async (e) => { e.preventDefault(); const payload = new URLSearchParams({ action: 'addVehicle', lineUid: userUid, uName: document.getElementById('uName').value, uPhone: document.getElementById('uPhone').value, uGender: document.getElementById('uGender').value, uAge: document.getElementById('uAge').value, licensePlate: document.getElementById('vPlate').value, province: document.getElementById('vProvince').value, brand: document.getElementById('vBrand').value, model: document.getElementById('vModel').value, color: document.getElementById('vColor').value, size: document.getElementById('vSize').value }); Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() }); try { const res = await fetch(API_URL, { method: 'POST', body: payload }); const result = await res.json(); if(result.status === 'success') { Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success'); e.target.reset(); await refreshData(); showSection('home-section'); } } catch(e) { Swal.fire('Error', e.message, 'error'); } });
+    document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = new URLSearchParams({
+        action: 'addVehicle', lineUid: userUid,
+        uName: document.getElementById('uName').value,
+        uPhone: document.getElementById('uPhone').value,
+        uGender: document.getElementById('uGender').value,
+        uAge: document.getElementById('uAge').value,
+        uBirthDay: document.getElementById('uBirthDay').value,        // 🎂 F1.4
+        uBirthMonth: document.getElementById('uBirthMonth').value,    // 🎂 F1.4
+        licensePlate: document.getElementById('vPlate').value,
+        province: document.getElementById('vProvince').value,
+        brand: document.getElementById('vBrand').value,
+        model: document.getElementById('vModel').value,
+        color: document.getElementById('vColor').value,
+        size: document.getElementById('vSize').value
+      });
+      Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      try {
+        const res = await fetch(API_URL, { method: 'POST', body: payload });
+        const result = await res.json();
+        if (result.status === 'success') {
+          Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success');
+          e.target.reset();
+          await refreshData();
+          showSection('home-section');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    });
     function selectLine(type) {
       document.getElementById('selectedLineType').value = type;
       document.getElementById('lineBg').style.transform = type==='LINE1' ? 'translateX(0)' : 'translateX(100%)';
