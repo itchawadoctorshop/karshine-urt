@@ -840,17 +840,23 @@
       if (totalT === 0) totalT = 30;
 
       // Build tl1/tl2 (ข้าม booking ปัจจุบัน — กันชนกับตัวเอง)
+      const _splitDT2 = (s) => {
+        const str = String(s || '').replace('T', ' ').trim();
+        const parts = str.split(/\s+/);
+        return { date: parts[0] || '', time: (parts[1] || '00:00').substring(0, 5) };
+      };
+      const branchesR = (configData && configData.branches) || [];
+      const isMultiBranchR = branchesR.length > 1;
       const tl1 = new Array(1440).fill(0);
       const tl2 = new Array(1440).fill(0);
       (window.adminBookingsCache || []).forEach(b => {
         if (b.bookingId === bookingId) return; // ข้ามตัวเอง
-        const bDate = (b.bookingDate || '').split('T')[0];
-        if (bDate !== newDate) return;
-        if (branchId && b.branchId && String(b.branchId) !== String(branchId)) return;
+        const dt = _splitDT2(b.bookingDate);
+        if (dt.date !== newDate) return;
+        if (isMultiBranchR && branchId && b.branchId && String(b.branchId) !== String(branchId)) return;
         const BLOCK = ['pending','confirmed','checked_in','in_progress','valet_pickup_pending','valet_going_pickup'];
         if (!BLOCK.includes(b.status)) return;
-        const timePart = (b.bookingDate || '').split('T')[1] || '00:00';
-        const start = _parseTimeMin(timePart, 0);
+        const start = _parseTimeMin(dt.time, 0);
         let bDur = 0;
         String(b.serviceIds || '').split(',').forEach(id => {
           const s = adminServices.find(svc => String(svc.service_id) === String(id).trim());
@@ -999,23 +1005,34 @@
         console.warn('[WiSlotPicker] ⚠️ ไม่พบ branch config — ใช้ default 8:00-18:00 (เช็คชีต Branches?)');
       }
 
+      // 🆕 (Bug A4 hotfix4): รองรับ separator ทั้ง 'T' และ space — เพราะ getDisplayValues() ของ Sheet ใช้ space
+      const _splitDT = (s) => {
+        const str = String(s || '').replace('T', ' ').trim();
+        const parts = str.split(/\s+/);
+        return { date: parts[0] || '', time: (parts[1] || '00:00').substring(0, 5) };
+      };
+
       // 🆕 (Bug A4 hotfix3): Build tl1/tl2 — ร้านสาขาเดียวไม่ filter by branch
-      //   เพราะ branch_id ในชีตอาจไม่ตรงกับที่ walk-in ใช้
       const tl1 = new Array(1440).fill(0);
       const tl2 = new Array(1440).fill(0);
       let skippedByBranch = 0;
       (window.adminBookingsCache || []).forEach(b => {
-        const bDate = (b.bookingDate || '').split('T')[0];
-        if (bDate !== date) return;
-        // 🔧 Filter branch เฉพาะกรณีมีหลายสาขาเท่านั้น (ป้องกัน mismatch ของสาขาเดียว)
+        const dt = _splitDT(b.bookingDate);
+        if (dt.date !== date) {
+          console.log(`[WiSlotPicker]   ⏭ skip booking date=${dt.date} (ไม่ตรงกับ ${date})`);
+          return;
+        }
+        // 🔧 Filter branch เฉพาะกรณีมีหลายสาขาเท่านั้น
         if (isMultiBranch && branchId && b.branchId && String(b.branchId) !== String(branchId)) {
           skippedByBranch++;
           return;
         }
         const BLOCK = ['pending','confirmed','checked_in','in_progress','valet_pickup_pending','valet_going_pickup'];
-        if (!BLOCK.includes(b.status)) return;
-        const timePart = (b.bookingDate || '').split('T')[1] || '00:00';
-        const start = _parseTimeMin(timePart, 0);
+        if (!BLOCK.includes(b.status)) {
+          console.log(`[WiSlotPicker]   ⏭ skip booking status=${b.status} (ไม่อยู่ใน BLOCK list)`);
+          return;
+        }
+        const start = _parseTimeMin(dt.time, 0);
         // หา duration จาก raw service IDs
         let bDur = 0;
         const ids = String(b.serviceIds || '').split(',');
@@ -1027,10 +1044,10 @@
         if (b.lineTypeRaw === 'LINE1') {
           for (let i = start; i < start + 10 && i < 1440; i++) tl1[i]++;
           if (bDur > 10) for (let i = start+10; i < start+10+(bDur-10+buffer) && i < 1440; i++) tl2[i]++;
-          console.log(`[WiSlotPicker]   → LINE1 booking @ ${timePart} dur=${bDur}min → tl1[${start}-${start+10}] + tl2[${start+10}-${start+10+(bDur-10+buffer)}]`);
+          console.log(`[WiSlotPicker]   ✓ LINE1 @ ${dt.time} dur=${bDur}min → tl1[${start}..${start+10}]${bDur>10?` + tl2[${start+10}..${start+10+(bDur-10+buffer)}]`:''}`);
         } else {
           for (let i = start; i < start + bDur + buffer && i < 1440; i++) tl2[i]++;
-          console.log(`[WiSlotPicker]   → LINE2 booking @ ${timePart} dur=${bDur}min → tl2[${start}-${start+bDur+buffer}]`);
+          console.log(`[WiSlotPicker]   ✓ LINE2 @ ${dt.time} dur=${bDur}min → tl2[${start}..${start+bDur+buffer}]`);
         }
       });
 
