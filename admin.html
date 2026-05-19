@@ -6,6 +6,8 @@
   <title>Karshine URT - Admin Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- 💰 F2.4b: QR code generator สำหรับ PromptPay -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
@@ -756,6 +758,127 @@
       }
     }
 
+    // ==============================================
+    // 💰 F2.4b: PromptPay QR generator
+    // ==============================================
+    //   ใช้ EMV QR standard ของ PromptPay
+    //   รับ target (เบอร์ 10 หลัก หรือ เลขปชช 13 หลัก) + amount (optional)
+    //   คืน EMV payload string ที่พร้อม render เป็น QR
+
+    function _ppTlv(tag, value) {
+      const v = String(value);
+      const len = v.length.toString().padStart(2, '0');
+      return tag + len + v;
+    }
+
+    function _ppCrc16(data) {
+      // CRC-16-CCITT (poly 0x1021, init 0xFFFF) — ตามมาตรฐาน EMV
+      let crc = 0xFFFF;
+      for (let i = 0; i < data.length; i++) {
+        crc ^= data.charCodeAt(i) << 8;
+        for (let j = 0; j < 8; j++) {
+          if (crc & 0x8000) crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+          else crc = (crc << 1) & 0xFFFF;
+        }
+      }
+      return crc.toString(16).toUpperCase().padStart(4, '0');
+    }
+
+    function generatePromptPayPayload(target, amount) {
+      const clean = String(target || '').replace(/\D/g, '');
+      if (!clean) return null;
+      const isPhone = clean.length === 9 || clean.length === 10;
+      // Phone: 0812345678 → drop leading 0, prepend 0066 → 00668123456789 (13 digits with leading zeros)
+      // Citizen ID: 13 digits stay as-is
+      let formatted;
+      if (isPhone) {
+        const noLead = clean.replace(/^0/, '');
+        formatted = '0000000000000'.slice(0, 13 - noLead.length - 4) + '0066' + noLead;
+        // Simpler: pad to 13 chars
+        formatted = ('0000000000000' + '0066' + noLead).slice(-13);
+      } else {
+        formatted = clean.padStart(13, '0');
+      }
+
+      // Build merchant account info (Tag 29)
+      const merchantInfo =
+        _ppTlv('00', 'A000000677010111') +              // AID
+        _ppTlv(isPhone ? '01' : '02', formatted);       // 01=phone, 02=citizenID
+
+      // Build full payload
+      let payload =
+        _ppTlv('00', '01') +                            // Format
+        _ppTlv('01', amount > 0 ? '12' : '11') +        // 12=dynamic, 11=static
+        _ppTlv('29', merchantInfo) +
+        _ppTlv('53', '764') +                           // THB
+        (amount > 0 ? _ppTlv('54', Number(amount).toFixed(2)) : '') +
+        _ppTlv('58', 'TH');                             // Country
+
+      payload += '6304';                                // CRC tag + length placeholder
+      const crc = _ppCrc16(payload);
+      return payload + crc;
+    }
+
+    // render QR เป็น img (base64) ขนาด ~256px
+    function renderPromptPayQR(target, amount) {
+      const payload = generatePromptPayPayload(target, amount);
+      if (!payload) return '<p class="text-red-500 text-xs">⚠️ PromptPay ID ไม่ถูกต้อง</p>';
+      if (typeof qrcode === 'undefined') {
+        return '<p class="text-red-500 text-xs">⚠️ ไม่สามารถโหลด QR library — เช็คอินเทอร์เน็ต</p>';
+      }
+      try {
+        const qr = qrcode(0, 'M');  // error correction level M
+        qr.addData(payload);
+        qr.make();
+        return qr.createImgTag(5, 0);  // cellSize=5px, margin=0
+      } catch (e) {
+        return `<p class="text-red-500 text-xs">QR error: ${e.message}</p>`;
+      }
+    }
+
+    // หา PromptPay ID จาก configData.branches[0] (col `promptpay_id` ในชีต Branches)
+    function _getPromptPayId() {
+      const b = (configData.branches || [])[0];
+      if (!b) return '';
+      return b.promptpay_id || b.promptpayid || b.promptpay || '';
+    }
+
+    // 💰 F2.4b: ตรวจ method ปัจจุบัน + ยอด → แสดง/ซ่อน QR section
+    function _updatePaymentQR() {
+      const sec = document.getElementById('payQRSection');
+      if (!sec) return;
+      const methodSel = document.getElementById('payMethod');
+      const amtInput = document.getElementById('payAmount');
+      if (!methodSel || !amtInput) return;
+
+      const methodVal = methodSel.value;
+      const methodText = methodSel.options[methodSel.selectedIndex]?.textContent || '';
+      const isPromptPay = /promptpay|พร้อมเพย์/i.test(methodVal + ' ' + methodText);
+
+      if (!isPromptPay) { sec.classList.add('hidden'); return; }
+
+      const amount = parseFloat(amtInput.value) || 0;
+      const ppId = _getPromptPayId();
+      if (!ppId) {
+        sec.classList.remove('hidden');
+        document.getElementById('payQRContainer').innerHTML =
+          '<p class="text-red-500 text-xs p-4">⚠️ ยังไม่ได้ตั้ง <b>promptpay_id</b> ในชีต Branches<br>เพิ่มคอลัมน์ <code>promptpay_id</code> + ใส่เบอร์โทร 10 หลัก หรือ เลขประจำตัว 13 หลัก</p>';
+        document.getElementById('payQRAmount').textContent = amount.toLocaleString();
+        document.getElementById('payQRTarget').textContent = '-';
+        return;
+      }
+
+      sec.classList.remove('hidden');
+      document.getElementById('payQRContainer').innerHTML = renderPromptPayQR(ppId, amount);
+      document.getElementById('payQRAmount').textContent = amount.toLocaleString();
+      // mask เบอร์โทร: 081-xxx-1234
+      let maskedId = ppId;
+      const clean = String(ppId).replace(/\D/g, '');
+      if (clean.length === 10) maskedId = clean.slice(0,3) + '-xxx-' + clean.slice(7);
+      else if (clean.length === 13) maskedId = clean.slice(0,1) + '-xxxx-xxxxx-' + clean.slice(11);
+      document.getElementById('payQRTarget').textContent = 'PromptPay: ' + maskedId;
+    }
+
     // 💰 F2.4: Payment modal — เปิดเมื่อ admin กด "ล้างเสร็จ"
     async function openPaymentModal_(bookingId) {
       // ค้น booking จาก cache เพื่อคำนวนราคาประเมิน
@@ -786,14 +909,14 @@
 
           <div>
             <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">วิธีจ่าย</label>
-            <select id="payMethod" class="w-full p-3 border border-gray-300 rounded-lg text-sm">
+            <select id="payMethod" class="w-full p-3 border border-gray-300 rounded-lg text-sm" onchange="_updatePaymentQR()">
               ${methodOptions}
             </select>
           </div>
 
           <div>
             <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">ยอดจ่ายจริง (บาท)</label>
-            <input type="number" id="payAmount" value="${estimatedPrice}" min="0" step="1"
+            <input type="number" id="payAmount" value="${estimatedPrice}" min="0" step="1" oninput="_updatePaymentQR()"
                    class="w-full p-3 border border-gray-300 rounded-lg text-sm font-bold text-blue-700" />
             <p class="text-[10px] text-gray-400 mt-1">ประเมินจากบริการ — admin แก้ไขได้</p>
           </div>
@@ -805,6 +928,14 @@
               <option value="unpaid">⏳ ยังไม่จ่าย (เครดิต)</option>
               <option value="partial">💰 จ่ายบางส่วน</option>
             </select>
+          </div>
+
+          <!-- 💰 F2.4b: PromptPay QR section — แสดงเมื่อเลือก method ที่มีคำว่า promptpay -->
+          <div id="payQRSection" class="hidden bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 text-center">
+            <p class="text-[10px] font-bold text-blue-600 uppercase mb-2">📱 PromptPay QR — ให้ลูกค้าสแกน</p>
+            <div id="payQRContainer" class="flex justify-center my-2"></div>
+            <p class="text-xs text-gray-600 mt-2">ยอด <b class="text-blue-700 text-lg" id="payQRAmount">0</b> บาท</p>
+            <p class="text-[10px] text-gray-500 mt-1" id="payQRTarget">-</p>
           </div>
         </div>`;
 
@@ -818,7 +949,8 @@
         cancelButtonText: 'ยกเลิก',
         confirmButtonColor: '#16a34a',
         denyButtonColor: '#9ca3af',
-        width: 460
+        width: 460,
+        didOpen: () => { _updatePaymentQR(); }   // 💰 F2.4b: render QR ครั้งแรกถ้า method เริ่มต้นเป็น promptpay
       });
 
       if (res.isConfirmed) {
