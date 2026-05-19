@@ -53,6 +53,7 @@
         <p class="text-[10px] text-gray-400 font-bold uppercase">💰 ยอดวันนี้</p>
         <p class="text-2xl font-bold text-green-600 mt-1"><span id="dsRevenueToday">-</span><span class="text-sm text-gray-400">.-</span></p>
         <p class="text-[10px] text-gray-400 mt-1">เฉลี่ย/บิล <span id="dsAvgPerBill">-</span>.-</p>
+        <p class="text-[10px] text-amber-600 mt-0.5">🎁 ส่วนลด <span id="dsDiscountToday">-</span>.-</p>
       </div>
       <!-- 💰 F2.4: Card ใหม่ — Unpaid -->
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -543,6 +544,7 @@
           setText('dsCompletedToday',    (d.completedToday || 0) + ' คิว');
           setText('dsRevenueToday',      (d.revenueToday || 0).toLocaleString());
           setText('dsAvgPerBill',        (d.avgPerBill || 0).toLocaleString());
+          setText('dsDiscountToday',     (d.totalDiscountToday || 0).toLocaleString());   // 🆕 F1.5b
           setText('dsUnpaidToday',       d.unpaidToday || 0);
           setText('dsNewUsers',          d.newUsersToday || 0);
           setText('dsUniqueCustomers',   (d.uniqueCustomersToday || 0) + ' คน');
@@ -845,6 +847,37 @@
       return b.promptpay_id || b.promptpayid || b.promptpay || '';
     }
 
+    // 🆕 F1.5b: toggle discount fields + คำนวน net ใหม่
+    function _toggleDiscount() {
+      const cb = document.getElementById('discountToggle');
+      const fields = document.getElementById('discountFields');
+      if (!cb || !fields) return;
+      if (cb.checked) {
+        fields.classList.remove('hidden');
+      } else {
+        fields.classList.add('hidden');
+        document.getElementById('discountAmount').value = 0;
+      }
+      _recalcNetAmount();
+    }
+
+    // 🆕 F1.5b: คำนวนยอดสุทธิจาก ยอดประเมิน - ส่วนลด → ใส่ใน payAmount
+    function _recalcNetAmount() {
+      const estEl = document.getElementById('payEstimated');
+      const discountEl = document.getElementById('discountAmount');
+      const amtEl = document.getElementById('payAmount');
+      if (!estEl || !amtEl) return;
+
+      // parse estimate (รูปแบบ "450.-")
+      const estMatch = String(estEl.textContent || '').match(/[\d,]+/);
+      const estimated = estMatch ? parseInt(estMatch[0].replace(/,/g, '')) : 0;
+      const discount = discountEl ? (parseFloat(discountEl.value) || 0) : 0;
+      const net = Math.max(0, estimated - discount);
+
+      amtEl.value = net;
+      _updatePaymentQR();
+    }
+
     // 💰 F2.4b: ตรวจ method ปัจจุบัน + ยอด → แสดง/ซ่อน QR section
     function _updatePaymentQR() {
       const sec = document.getElementById('payQRSection');
@@ -909,6 +942,40 @@
           <p class="text-gray-500 text-xs">รหัส: ${esc(bookingId)} — ${esc(b.plate || '-')}</p>
           <p class="text-gray-500 text-xs">${esc(b.serviceText || '-')}</p>
 
+          <!-- 💰 ยอดประเมิน -->
+          <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm">
+            <div class="flex justify-between items-center">
+              <span class="text-gray-500">ยอดประเมิน:</span>
+              <span class="font-bold text-gray-800" id="payEstimated">${estimatedPrice.toLocaleString()}.-</span>
+            </div>
+          </div>
+
+          <!-- 🆕 F1.5b: ส่วนลด -->
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" id="discountToggle" onchange="_toggleDiscount()" class="w-4 h-4 accent-amber-500">
+              <span class="font-bold text-amber-700">🎁 ใช้ส่วนลด</span>
+            </label>
+            <div id="discountFields" class="hidden grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[9px] font-bold text-gray-500 uppercase block mb-1">จำนวน (บาท)</label>
+                <input type="number" id="discountAmount" min="0" max="${estimatedPrice}" step="1" value="0" oninput="_recalcNetAmount()"
+                       class="w-full p-2 border border-amber-300 rounded-lg text-sm font-bold text-amber-700" />
+              </div>
+              <div>
+                <label class="text-[9px] font-bold text-gray-500 uppercase block mb-1">เหตุผล</label>
+                <select id="discountReason" class="w-full p-2 border border-amber-300 rounded-lg text-sm">
+                  <option value="regular">ขาประจำ</option>
+                  <option value="new_customer">ลูกค้าใหม่</option>
+                  <option value="compensation">ชดเชย (ลูกค้าบ่น)</option>
+                  <option value="promotion">โปรโมชั่น</option>
+                  <option value="vip">VIP/พิเศษ</option>
+                  <option value="other">อื่นๆ</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">วิธีจ่าย</label>
             <select id="payMethod" class="w-full p-3 border border-gray-300 rounded-lg text-sm" onchange="_updatePaymentQR()">
@@ -917,10 +984,10 @@
           </div>
 
           <div>
-            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">ยอดจ่ายจริง (บาท)</label>
+            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">ยอดสุทธิที่ลูกค้าจ่ายจริง (บาท)</label>
             <input type="number" id="payAmount" value="${estimatedPrice}" min="0" step="1" oninput="_updatePaymentQR()"
-                   class="w-full p-3 border border-gray-300 rounded-lg text-sm font-bold text-blue-700" />
-            <p class="text-[10px] text-gray-400 mt-1">ประเมินจากบริการ — admin แก้ไขได้</p>
+                   class="w-full p-3 border border-green-300 rounded-lg text-lg font-bold text-green-700 bg-green-50" />
+            <p class="text-[10px] text-gray-400 mt-1">📝 ปรับอัตโนมัติเมื่อใส่ส่วนลด — แก้เองได้</p>
           </div>
 
           <div>
@@ -960,12 +1027,18 @@
         const method = document.getElementById('payMethod').value;
         const amount = parseFloat(document.getElementById('payAmount').value) || 0;
         const payStatus = document.getElementById('payStatus').value;
+        // 🆕 F1.5b: discount
+        const discountCB = document.getElementById('discountToggle');
+        const discountAmt = (discountCB && discountCB.checked) ? (parseFloat(document.getElementById('discountAmount').value) || 0) : 0;
+        const discountReason = (discountCB && discountCB.checked) ? document.getElementById('discountReason').value : '';
+
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
         try {
-          // 1. บันทึก payment
+          // 1. บันทึก payment (+ discount)
           const payPayload = new URLSearchParams({
             action: 'recordPayment', bookingId: bookingId,
-            method: method, amount: amount, status: payStatus
+            method: method, amount: amount, status: payStatus,
+            discountAmount: discountAmt, discountReason: discountReason
           });
           const payRes = await fetch(API_URL, { method: 'POST', body: withAuth(payPayload) });
           const payResult = await payRes.json();
@@ -977,7 +1050,10 @@
           const statusResult = await statusRes.json();
           if (statusResult.status !== 'success') throw new Error(statusResult.message);
 
-          Swal.fire('สำเร็จ!', `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method}) + ล้างเสร็จ`, 'success').then(() => loadAdminData());
+          const successMsg = discountAmt > 0
+            ? `บันทึกการจ่าย ${amount.toLocaleString()}.- (ลด ${discountAmt}.-) + ล้างเสร็จ`
+            : `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method}) + ล้างเสร็จ`;
+          Swal.fire('สำเร็จ!', successMsg, 'success').then(() => loadAdminData());
         } catch (e) { Swal.fire('Error', e.message, 'error'); }
       } else if (res.isDenied) {
         // ข้าม payment — complete อย่างเดียว
