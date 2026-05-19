@@ -41,7 +41,7 @@
 
   <section id="board-section" class="section active p-4 lg:p-6">
     <!-- 📊 F0.4 Mini Dashboard — สรุปยอดวันนี้ (รีเฟรชพร้อม Kanban) -->
-    <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">📋 คิววันนี้</p>
         <p class="text-2xl font-bold text-gray-800 mt-1"><span id="dsQueueToday">-</span></p>
@@ -51,6 +51,12 @@
         <p class="text-[10px] text-gray-400 font-bold uppercase">💰 ยอดวันนี้</p>
         <p class="text-2xl font-bold text-green-600 mt-1"><span id="dsRevenueToday">-</span><span class="text-sm text-gray-400">.-</span></p>
         <p class="text-[10px] text-gray-400 mt-1">เฉลี่ย/บิล <span id="dsAvgPerBill">-</span>.-</p>
+      </div>
+      <!-- 💰 F2.4: Card ใหม่ — Unpaid -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <p class="text-[10px] text-gray-400 font-bold uppercase">⏳ ยังไม่จ่าย</p>
+        <p class="text-2xl font-bold text-red-500 mt-1"><span id="dsUnpaidToday">-</span> <span class="text-sm text-gray-400">คิว</span></p>
+        <p class="text-[10px] text-gray-400 mt-1" id="dsRevByMethod">วิธีจ่าย: -</p>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">🆕 ลูกค้าใหม่</p>
@@ -522,7 +528,7 @@
       loadDashboardSummary();
     }
 
-    // 📊 F0.4 Mini Dashboard
+    // 📊 F0.4 Mini Dashboard (+ 💰 F2.4 Payment breakdown)
     async function loadDashboardSummary() {
       try {
         const payload = new URLSearchParams({ action: 'getDashboardSummary', t: Date.now() });
@@ -535,11 +541,31 @@
           setText('dsCompletedToday',    (d.completedToday || 0) + ' คิว');
           setText('dsRevenueToday',      (d.revenueToday || 0).toLocaleString());
           setText('dsAvgPerBill',        (d.avgPerBill || 0).toLocaleString());
+          setText('dsUnpaidToday',       d.unpaidToday || 0);
           setText('dsNewUsers',          d.newUsersToday || 0);
           setText('dsUniqueCustomers',   (d.uniqueCustomersToday || 0) + ' คน');
           setText('dsDate',              d.date ? d.date.split('-').reverse().join('/') : '-');
           const now = new Date();
           setText('dsUpdatedAt', now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0'));
+
+          // 💰 F2.4: render breakdown รายได้ตามวิธีจ่าย
+          const breakdownEl = document.getElementById('dsRevByMethod');
+          if (breakdownEl && Array.isArray(d.revenueByMethod) && d.revenueByMethod.length > 0) {
+            // ทำชื่อ method ให้อ่านง่าย
+            const pretty = (m) => {
+              if (m === '_unpaid') return 'ยังไม่จ่าย';
+              if (!m) return 'ไม่ระบุ';
+              // ค้นจาก configData.payments
+              const pay = (configData.payments || []).find(p => (p.pay_id||p.id) === m);
+              return pay ? (pay.pay_name || pay.name) : m;
+            };
+            const top = d.revenueByMethod.slice(0, 2)
+              .map(x => `${pretty(x.method)} ${x.amount.toLocaleString()}.-`).join(' · ');
+            breakdownEl.textContent = top || 'ยังไม่มีรายรับ';
+            breakdownEl.title = d.revenueByMethod.map(x => `${pretty(x.method)}: ${x.amount.toLocaleString()}.-`).join('\n');
+          } else if (breakdownEl) {
+            breakdownEl.textContent = 'ยังไม่มีรายรับ';
+          }
         }
       } catch (e) { console.error('Dashboard load error:', e); }
     }
@@ -704,6 +730,11 @@
     }
 
     async function updateStatus(bookingId, newStatus) {
+      // 💰 F2.4: ถ้ากำลังจะ complete → เปิด Payment modal ก่อน
+      if (newStatus === 'completed') {
+        return openPaymentModal_(bookingId);
+      }
+
       // 🚗 F0.2 เพิ่ม confirm text สำหรับ valet statuses
       const confirmTexts = {
         'in_progress':            'กำลังนำรถคันนี้เข้าช่องล้างใช่ไหม?',
@@ -722,6 +753,109 @@
           const response = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await response.json();
           if(result.status === 'success') { Swal.close(); loadAdminData(); } else throw new Error(result.message);
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
+      }
+    }
+
+    // 💰 F2.4: Payment modal — เปิดเมื่อ admin กด "ล้างเสร็จ"
+    async function openPaymentModal_(bookingId) {
+      // ค้น booking จาก cache เพื่อคำนวนราคาประเมิน
+      const b = (window.adminBookingsCache || []).find(x => x.bookingId === bookingId);
+      if (!b) return Swal.fire('Error', 'ไม่พบ booking ใน cache — ลองกด อัปเดต ก่อน', 'error');
+
+      // คำนวนยอดประเมินจาก serviceIds + carSize (ดึงจาก booking) + extraFee
+      // หา size: ดึงจาก vehicleId ใน original bookings (ไม่ใช่ใน cache) → ใช้ default 'M' ถ้าหาไม่เจอ
+      let estimatedPrice = 0;
+      String(b.serviceIds || '').split(',').forEach(id => {
+        const s = adminServices.find(svc => String(svc.service_id) === String(id).trim());
+        if (s) {
+          // ใช้ราคา M เป็น default (admin ปรับเองได้ในช่อง input)
+          estimatedPrice += parseFloat(s.price_m || s.pricem || 0) || 0;
+        }
+      });
+
+      // ดึงรายการ payment methods จาก configData
+      const methods = (configData && configData.payments) || [];
+      const methodOptions = methods.length > 0
+        ? methods.map(m => `<option value="${esc(m.pay_id || m.id)}">${esc(m.pay_name || m.name)}</option>`).join('')
+        : `<option value="cash">เงินสด</option><option value="transfer">โอน</option><option value="package">หักจากแพ็กเกจ</option>`;
+
+      const html = `
+        <div class="text-left text-sm space-y-3">
+          <p class="text-gray-500 text-xs">รหัส: ${esc(bookingId)} — ${esc(b.plate || '-')}</p>
+          <p class="text-gray-500 text-xs">${esc(b.serviceText || '-')}</p>
+
+          <div>
+            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">วิธีจ่าย</label>
+            <select id="payMethod" class="w-full p-3 border border-gray-300 rounded-lg text-sm">
+              ${methodOptions}
+            </select>
+          </div>
+
+          <div>
+            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">ยอดจ่ายจริง (บาท)</label>
+            <input type="number" id="payAmount" value="${estimatedPrice}" min="0" step="1"
+                   class="w-full p-3 border border-gray-300 rounded-lg text-sm font-bold text-blue-700" />
+            <p class="text-[10px] text-gray-400 mt-1">ประเมินจากบริการ — admin แก้ไขได้</p>
+          </div>
+
+          <div>
+            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">สถานะการจ่าย</label>
+            <select id="payStatus" class="w-full p-3 border border-gray-300 rounded-lg text-sm">
+              <option value="paid">✅ จ่ายแล้ว</option>
+              <option value="unpaid">⏳ ยังไม่จ่าย (เครดิต)</option>
+              <option value="partial">💰 จ่ายบางส่วน</option>
+            </select>
+          </div>
+        </div>`;
+
+      const res = await Swal.fire({
+        title: '💰 บันทึกการจ่ายเงิน',
+        html: html,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: '<i class="fa-solid fa-check"></i> บันทึก + ล้างเสร็จ',
+        denyButtonText: 'ข้าม (ล้างเสร็จไม่บันทึก)',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#16a34a',
+        denyButtonColor: '#9ca3af',
+        width: 460
+      });
+
+      if (res.isConfirmed) {
+        // บันทึก payment + complete
+        const method = document.getElementById('payMethod').value;
+        const amount = parseFloat(document.getElementById('payAmount').value) || 0;
+        const payStatus = document.getElementById('payStatus').value;
+        Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+        try {
+          // 1. บันทึก payment
+          const payPayload = new URLSearchParams({
+            action: 'recordPayment', bookingId: bookingId,
+            method: method, amount: amount, status: payStatus
+          });
+          const payRes = await fetch(API_URL, { method: 'POST', body: withAuth(payPayload) });
+          const payResult = await payRes.json();
+          if (payResult.status !== 'success') throw new Error('บันทึกการจ่ายไม่สำเร็จ: ' + (payResult.message || ''));
+
+          // 2. update status → completed
+          const statusPayload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: 'completed' });
+          const statusRes = await fetch(API_URL, { method: 'POST', body: withAuth(statusPayload) });
+          const statusResult = await statusRes.json();
+          if (statusResult.status !== 'success') throw new Error(statusResult.message);
+
+          Swal.fire('สำเร็จ!', `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method}) + ล้างเสร็จ`, 'success').then(() => loadAdminData());
+        } catch (e) { Swal.fire('Error', e.message, 'error'); }
+      } else if (res.isDenied) {
+        // ข้าม payment — complete อย่างเดียว
+        Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
+        try {
+          const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: 'completed' });
+          const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+          const result = await r.json();
+          if (result.status === 'success') {
+            Swal.fire('สำเร็จ', 'ล้างเสร็จ (ไม่ได้บันทึกการจ่าย — จะแสดงเป็น "ยังไม่จ่าย" ใน dashboard)', 'success').then(() => loadAdminData());
+          } else throw new Error(result.message);
+        } catch (e) { Swal.fire('Error', e.message, 'error'); }
       }
     }
 
