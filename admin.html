@@ -609,9 +609,11 @@
 
         // 🆕 (Bug A1): ปุ่ม "เลื่อน" + "ลบ" (เฉพาะ status ที่ยังจัดการได้)
         const canReschedule = ['pending', 'confirmed', 'valet_pickup_pending'].includes(b.status);
+        const canEdit = ['pending', 'confirmed', 'valet_pickup_pending'].includes(b.status); // 🛠️ F0.7a
         const canCancel = !['completed', 'cancelled', 'cancelled_noshow'].includes(b.status);
-        const adminActionBtns = (canReschedule || canCancel) ? `
+        const adminActionBtns = (canReschedule || canCancel || canEdit) ? `
           <div class="flex gap-1 mt-2 pt-2 border-t border-gray-100">
+            ${canEdit ? `<button onclick="openEditBookingModal('${esc(b.bookingId)}','${esc(b.plate)}','${esc(b.serviceIds)}')" class="flex-1 text-[10px] py-1.5 bg-cyan-50 text-cyan-600 rounded-md hover:bg-cyan-100 transition font-bold"><i class="fa-solid fa-pen"></i> แก้คิว</button>` : ''}
             ${canReschedule ? `<button onclick="openRescheduleModal('${esc(b.bookingId)}','${esc(b.bookingDate)}','${esc(b.lineTypeRaw)}','${esc(b.serviceIds)}','${esc(b.branchId)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition font-bold"><i class="fa-solid fa-clock-rotate-left"></i> เลื่อนเวลา</button>` : ''}
             ${canCancel ? `<button onclick="confirmCancelBooking('${esc(b.bookingId)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition font-bold"><i class="fa-solid fa-trash"></i> ลบคิว</button>` : ''}
           </div>` : '';
@@ -1059,6 +1061,95 @@
       document.getElementById('wiSize').value = v.size; renderWiServices();
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `พบข้อมูล: ${v.ownerName}`, showConfirmButton: false, timer: 2000 });
       document.getElementById('walkInForm').dataset.vid = v.vehicleId; document.getElementById('walkInForm').dataset.uid = v.lineUid;
+    }
+
+    // ==============================================
+    // 🛠️ (F0.7a) Admin: แก้ไขคิว (services + size)
+    // ==============================================
+
+    // เปิด Modal แก้ไขคิว — checkbox services + dropdown size
+    function openEditBookingModal(bookingId, plate, currentServiceIds) {
+      const currentIds = String(currentServiceIds || '').split(',').map(s => s.trim()).filter(Boolean);
+
+      // หา vehicleSize ปัจจุบัน จาก cache booking + lookup ใน masterData (ถ้ามี)
+      const cached = (window.adminBookingsCache || []).find(b => b.bookingId === bookingId);
+      // หา size — ใน admin ไม่มี vehicle data ตรงๆ จาก booking → ใช้ M เป็น default
+      const currentSize = 'M';
+
+      // Group services by category
+      const grouped = {};
+      (adminServices || []).forEach(s => {
+        const cat = s.category || 'ทั่วไป';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(s);
+      });
+
+      let svcHtml = '';
+      Object.keys(grouped).forEach(cat => {
+        svcHtml += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-3 mb-1">${esc(cat)}</div>`;
+        grouped[cat].forEach(s => {
+          const id = s.service_id || s.id;
+          const name = s.service_name || s.name || '-';
+          const time = s.std_time_mins || s.stdtime || 0;
+          const isChecked = currentIds.includes(String(id));
+          svcHtml += `
+            <label class="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg mb-1 cursor-pointer hover:bg-blue-50 text-xs">
+              <input type="checkbox" class="edit-svc-cb" value="${esc(id)}" ${isChecked ? 'checked' : ''}>
+              <span class="flex-1">${esc(name)} <span class="text-gray-400 text-[10px]">(${time}น.)</span></span>
+            </label>`;
+        });
+      });
+
+      const html = `
+        <div class="text-left text-xs">
+          <p class="text-gray-500 mb-3">รหัส: ${esc(bookingId)} — <b>${esc(plate)}</b></p>
+          <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถ</label>
+          <select id="editSize" class="w-full p-3 border border-gray-300 rounded-lg text-sm mb-3 mt-1">
+            <option value="M">M (Eco / เก๋งเล็ก)</option>
+            <option value="L">L (SUV / เก๋งใหญ่)</option>
+            <option value="XL">XL (กระบะ / ตู้ / PPV)</option>
+          </select>
+          <label class="text-[10px] font-bold text-gray-500 uppercase">เลือกบริการ</label>
+          <div class="max-h-72 overflow-y-auto mt-1 p-2 bg-gray-50 rounded-lg">
+            ${svcHtml || '<p class="text-gray-400 text-sm text-center py-4">ไม่มีบริการในระบบ</p>'}
+          </div>
+          <p class="text-[10px] text-amber-600 mt-2">⚠️ แก้ได้เฉพาะ services + size — ถ้าต้องการเปลี่ยน line type หรือเวลา ใช้ "เลื่อนเวลา" หรือ "ลบคิว+จองใหม่"</p>
+        </div>`;
+
+      Swal.fire({
+        title: '✏️ แก้ไขคิว ' + plate,
+        html: html,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึก',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#06B6D4',
+        width: 500,
+        didOpen: () => { document.getElementById('editSize').value = currentSize; }
+      }).then(res => {
+        if (!res.isConfirmed) return;
+        // collect checked service IDs
+        const ids = Array.from(document.querySelectorAll('.edit-svc-cb:checked')).map(el => el.value);
+        if (ids.length === 0) return Swal.fire('แจ้งเตือน', 'ต้องเลือกบริการอย่างน้อย 1 รายการ', 'warning');
+        const newSize = document.getElementById('editSize').value;
+        _doEditBooking(bookingId, ids.join(','), newSize);
+      });
+    }
+
+    async function _doEditBooking(bookingId, services, size) {
+      Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+      try {
+        const payload = new URLSearchParams({
+          action: 'editBookingByAdmin', bookingId: bookingId,
+          services: services, vehicleSize: size
+        });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status === 'success') {
+          Swal.fire('สำเร็จ', 'แก้ไขคิวเรียบร้อย ลูกค้าจะได้รับแจ้งใน LINE', 'success').then(() => loadAdminData());
+        } else {
+          Swal.fire('ไม่สำเร็จ', result.message || 'เกิดข้อผิดพลาด', 'warning');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
     }
 
     // ==============================================
@@ -1578,18 +1669,29 @@
             <p class="text-2xl font-bold text-green-600 mt-1">${(s.totalSpent || 0).toLocaleString()}<span class="text-xs text-gray-400">.-</span></p>
           </div>`;
 
+        // 🚗 F0.7b: Add vehicle button (top) + edit/delete icons per card
+        const addBtn = `
+          <button onclick="openVehicleModal('add')" class="w-full mb-2 bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl text-xs font-bold shadow transition active:scale-95">
+            <i class="fa-solid fa-plus mr-1"></i> เพิ่มรถใหม่ให้ลูกค้า
+          </button>`;
         if (d.vehicles && d.vehicles.length > 0) {
-          vList.innerHTML = d.vehicles.map(v => `
+          vList.innerHTML = addBtn + d.vehicles.map(v => {
+            const vJson = JSON.stringify(v).replace(/'/g, '&apos;').replace(/"/g, '&quot;');
+            return `
             <div class="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-200">
-              <div>
-                <b class="text-sm text-gray-800">${esc(v.plate)}</b>
+              <div class="flex-1 min-w-0">
+                <b class="text-sm text-gray-800">${esc(v.plate)} ${v.province ? `<span class="text-[9px] text-gray-400 font-normal">จ.${esc(v.province)}</span>` : ''}</b>
                 <br><span class="text-[10px] text-gray-500">${esc(v.brand)} ${esc(v.model)} ${v.color ? '· ' + esc(v.color) : ''}</span>
                 <br><span class="text-[10px] text-blue-600 font-bold">ขนาด: ${esc(v.size)}</span>
               </div>
-              <button onclick="deleteUserVehicle('${esc(v.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
-            </div>`).join('');
+              <div class="flex gap-1 ml-2">
+                <button onclick='openVehicleModal("edit", ${vJson})' class="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition" title="แก้ไข"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="deleteUserVehicle('${esc(v.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition" title="ลบ"><i class="fa-solid fa-trash"></i></button>
+              </div>
+            </div>`;
+          }).join('');
         } else {
-          vList.innerHTML = '<p class="text-xs text-gray-400 italic text-center py-4">ไม่มีข้อมูลรถ</p>';
+          vList.innerHTML = addBtn + '<p class="text-xs text-gray-400 italic text-center py-4">ไม่มีข้อมูลรถ</p>';
         }
 
         // --- Tab 2: ประวัติบริการ ---
@@ -1702,6 +1804,104 @@
     }
 
     function closeCrmModal() { document.getElementById('crmModal').classList.add('hidden'); currentCrmUid = ""; }
+
+    // 🚗 F0.7b: Modal เพิ่ม/แก้ไขรถ (ใช้ร่วมกัน)
+    function openVehicleModal(mode, vehicle) {
+      if (!currentCrmUid) return Swal.fire('Error', 'ไม่มีข้อมูลลูกค้า', 'error');
+      const v = vehicle || {};
+      const isEdit = (mode === 'edit');
+
+      const html = `
+        <div class="text-left text-xs space-y-3">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">ทะเบียน *</label>
+              <input type="text" id="vmPlate" value="${esc(v.plate || '')}" class="w-full p-2 border border-gray-300 rounded-lg text-sm" required />
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">จังหวัด</label>
+              <input type="text" id="vmProvince" value="${esc(v.province || '')}" class="w-full p-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">ยี่ห้อ</label>
+              <input type="text" id="vmBrand" value="${esc(v.brand || '')}" class="w-full p-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">รุ่น *</label>
+              <input type="text" id="vmModel" value="${esc(v.model || '')}" class="w-full p-2 border border-gray-300 rounded-lg text-sm" required />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">สี</label>
+              <input type="text" id="vmColor" value="${esc(v.color || '')}" class="w-full p-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">ขนาด *</label>
+              <select id="vmSize" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                <option value="M">M (Eco / เก๋งเล็ก)</option>
+                <option value="L">L (SUV / เก๋งใหญ่)</option>
+                <option value="XL">XL (กระบะ / ตู้)</option>
+              </select>
+            </div>
+          </div>
+          ${isEdit ? `<p class="text-[10px] text-amber-600">⚠️ แก้ไขข้อมูลรถ — ประวัติคิวเก่ายังคงโยงไว้</p>` : `<p class="text-[10px] text-blue-600">💡 ถ้าทะเบียนนี้เคยใช้ Walk-in ระบบจะ auto-claim ให้</p>`}
+        </div>`;
+
+      Swal.fire({
+        title: isEdit ? '✏️ แก้ไขข้อมูลรถ' : '➕ เพิ่มรถใหม่',
+        html: html,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึก',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: isEdit ? '#2563EB' : '#10B981',
+        width: 480,
+        didOpen: () => { if (v.size) document.getElementById('vmSize').value = v.size; }
+      }).then(async res => {
+        if (!res.isConfirmed) return;
+
+        const plate = document.getElementById('vmPlate').value.trim();
+        const province = document.getElementById('vmProvince').value.trim();
+        const brand = document.getElementById('vmBrand').value.trim();
+        const model = document.getElementById('vmModel').value.trim();
+        const color = document.getElementById('vmColor').value.trim();
+        const size = document.getElementById('vmSize').value;
+
+        if (!plate || !model) return Swal.fire('แจ้งเตือน', 'กรุณากรอกทะเบียน + รุ่นรถ', 'warning');
+
+        Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+        try {
+          let payload;
+          if (isEdit) {
+            payload = new URLSearchParams({
+              action: 'editVehicle',
+              vehicleId: v.id || v.vehicleId,
+              lineUid: currentCrmUid,
+              plate: plate, province: province, brand: brand,
+              model: model, color: color, size: size
+            });
+          } else {
+            // Reuse addVehicle (เหมือนฝั่ง LIFF — auto-claim walk-in ถ้ามี)
+            payload = new URLSearchParams({
+              action: 'addVehicle',
+              lineUid: currentCrmUid,
+              licensePlate: plate, province: province, brand: brand,
+              model: model, color: color, size: size
+            });
+          }
+          const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+          const result = await r.json();
+          if (result.status === 'success') {
+            Swal.fire('สำเร็จ', isEdit ? 'แก้ไขข้อมูลรถเรียบร้อย' : 'เพิ่มรถเรียบร้อย', 'success')
+              .then(() => openCrmModal(currentCrmUid, document.getElementById('crmModalTitle').innerText));
+          } else {
+            throw new Error(result.message || 'เกิดข้อผิดพลาด');
+          }
+        } catch (e) { Swal.fire('Error', e.message, 'error'); }
+      });
+    }
 
     async function deleteUserVehicle(vid) {
       const res = await Swal.fire({ title: 'ลบรถยนต์?', text: 'รถคันนี้จะถูกซ่อนจากระบบ ยืนยันไหมครับ?', icon: 'warning', showCancelButton: true, confirmButtonText: 'ลบทิ้ง', cancelButtonText: 'ยกเลิก', confirmButtonColor: '#ef4444' });
