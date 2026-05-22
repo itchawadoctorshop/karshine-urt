@@ -1952,8 +1952,31 @@
         banner.innerHTML = `🔗 <b>ยืมแพ็กเกจของ ${esc(ownerName)}</b><br><span class="text-[10px]">${esc(pkgName)} — ระบบจะแจ้ง LINE เจ้าของอัตโนมัติหลังบันทึก</span>`;
       }
 
-      // 7) Toast
-      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เลือกแพ็กเกจของ ' + ownerName, showConfirmButton: false, timer: 1800 });
+      // 7) Toast + flash บันทึก button เพื่อย้ำให้ admin กดต่อ
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success',
+        title: '✅ เลือกแล้ว — กด "บันทึก + ล้างเสร็จ" เพื่อยืนยัน',
+        showConfirmButton: false, timer: 3000 });
+
+      // 8) Flash confirm button (ใน Swal) — ดึงความสนใจ admin
+      setTimeout(() => {
+        const confirmBtn = document.querySelector('.swal2-confirm');
+        if (confirmBtn) {
+          confirmBtn.style.transition = 'all 0.3s';
+          let flashes = 0;
+          const flashTimer = setInterval(() => {
+            confirmBtn.style.transform = (flashes % 2 === 0) ? 'scale(1.1)' : 'scale(1)';
+            confirmBtn.style.boxShadow = (flashes % 2 === 0) ? '0 0 20px rgba(22,163,74,0.6)' : '';
+            flashes++;
+            if (flashes >= 6) {
+              clearInterval(flashTimer);
+              confirmBtn.style.transform = 'scale(1)';
+              confirmBtn.style.boxShadow = '';
+            }
+          }, 250);
+          // scroll into view
+          try { confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+        }
+      }, 100);
     }
 
     // 🆕 F2.5f: render Hybrid Box breakdown — เรียกซ้ำได้เมื่อ discount เปลี่ยน
@@ -2288,6 +2311,16 @@
         //   เพราะถ้าปิดโดยไม่ตั้งใจ state วิธีจ่าย (เช่น PromptPay) จะหาย → ตอนเปิดใหม่ default = cash → กระทบยอดเพี้ยน
         allowOutsideClick: false,
         allowEscapeKey: false,
+        // 🛡️ F2.5g: preConfirm — ตรวจว่ายังเลือก "__borrow__" อยู่หรือเปล่า
+        //   ถ้าใช่ = admin ยังไม่ได้กด "ใช้" บน package → ต้องเตือน + ป้องกัน submit
+        preConfirm: () => {
+          const m = document.getElementById('payMethod').value;
+          if (m === '__borrow__') {
+            Swal.showValidationMessage('⚠️ กรุณากดปุ่ม "ใช้" บน package ที่ค้นเจอก่อน — ถ้ายังไม่ค้น ให้พิมพ์ชื่อ/เบอร์/ทะเบียน แล้วกด 🔍 ค้น');
+            return false;
+          }
+          return true;
+        },
         didOpen: () => {
           _recalcNetAmount();
           _updatePaymentQR();
