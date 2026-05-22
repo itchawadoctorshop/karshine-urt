@@ -1508,14 +1508,11 @@
       const isPackage = typeof methodVal === 'string' && methodVal.startsWith('package:');
       if (isPackage) {
         sec.classList.add('hidden');
-        // ตั้งยอด = 0 (ไม่รับเงินสดเพิ่ม)
         const dispEl = document.getElementById('payAmountDisplay');
         if (dispEl) dispEl.textContent = '0';
         amtInput.value = 0;
-        // ตั้งสถานะเป็น paid
         const statusSel = document.getElementById('payStatus');
         if (statusSel) statusSel.value = 'paid';
-        // แสดง info banner
         const banner = document.getElementById('payPkgInfo');
         if (banner) {
           banner.classList.remove('hidden');
@@ -1523,11 +1520,27 @@
         }
         return;
       } else {
-        // ถ้าเปลี่ยนกลับจาก package → ซ่อน banner
+        // ถ้าเปลี่ยนกลับจาก package → ซ่อน banner + restore amount inline
+        // ⚠️ ห้ามเรียก _recalcNetAmount() เพราะมัน call _updatePaymentQR กลับ → infinite loop
         const banner = document.getElementById('payPkgInfo');
         if (banner) banner.classList.add('hidden');
-        // restore ยอดเป็นค่าจากการคำนวน net
-        if (typeof _recalcNetAmount === 'function') _recalcNetAmount();
+        const estEl = document.getElementById('payEstimated');
+        const discountEl = document.getElementById('discountAmount');
+        const dispEl = document.getElementById('payAmountDisplay');
+        const manualWrap = document.getElementById('payAmountManual');
+        const isManual = manualWrap && !manualWrap.classList.contains('hidden');
+        if (estEl && !isManual) {
+          const estMatch = String(estEl.textContent || '').match(/[\d,]+/);
+          const estimated = estMatch ? parseInt(estMatch[0].replace(/,/g, '')) : 0;
+          const discount = discountEl ? (parseFloat(discountEl.value) || 0) : 0;
+          const autoNet = Math.max(0, estimated - discount);
+          // ถ้ายอดปัจจุบันเป็น 0 (เพิ่งย้ายจาก package) → restore
+          // ถ้ายอดมีค่าอยู่แล้ว → คง (ไม่ override admin)
+          if ((parseFloat(amtInput.value) || 0) === 0 && autoNet > 0) {
+            amtInput.value = autoNet;
+            if (dispEl) dispEl.textContent = autoNet.toLocaleString();
+          }
+        }
       }
 
       const isPromptPay = /promptpay|พร้อมเพย์/i.test(methodVal + ' ' + methodText);
@@ -2261,6 +2274,8 @@
     function _cacheAdminBookings(bookings) {
       window.adminBookingsCache = bookings.map(b => ({
         bookingId:   b.bookingId,                  // 🆕 ใช้ใน reschedule (ข้ามตัวเอง)
+        lineUid:     b.lineUid || '',              // 🆕 F2.5c: ใช้ check แพ็กเกจ
+        plate:       b.plate || '',                // 🆕 ใช้ใน Payment Modal title
         bookingDate: b.bookingDate,
         status:      b.status,
         serviceIds:  b.serviceIds || '',          // raw IDs จาก server (สำหรับ duration)
