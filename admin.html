@@ -1962,29 +1962,46 @@
         banner.innerHTML = `🔗 <b>ยืมแพ็กเกจของ ${esc(ownerName)}</b><br><span class="text-[10px]">${esc(pkgName)} — ระบบจะแจ้ง LINE เจ้าของอัตโนมัติหลังบันทึก</span>`;
       }
 
-      // 7) Toast + flash บันทึก button เพื่อย้ำให้ admin กดต่อ
-      Swal.fire({ toast: true, position: 'top-end', icon: 'success',
-        title: '✅ เลือกแล้ว — กด "บันทึก + ล้างเสร็จ" เพื่อยืนยัน',
-        showConfirmButton: false, timer: 3000 });
-
-      // 8) Flash confirm button (ใน Swal) — ดึงความสนใจ admin
+      // 7) เปลี่ยน confirm button — ให้เด่นมากๆ + scroll เข้าจอ
       setTimeout(() => {
         const confirmBtn = document.querySelector('.swal2-confirm');
         if (confirmBtn) {
+          // เปลี่ยน label ปุ่ม
+          confirmBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i> ยืนยัน + ตัดแพ็กเกจ ' + esc(ownerName);
+          confirmBtn.style.background = '#7C3AED';  // ม่วงเด่น
+          confirmBtn.style.fontSize = '14px';
+          confirmBtn.style.padding = '12px 20px';
           confirmBtn.style.transition = 'all 0.3s';
+
+          // Pulse 3 ครั้ง
           let flashes = 0;
           const flashTimer = setInterval(() => {
-            confirmBtn.style.transform = (flashes % 2 === 0) ? 'scale(1.1)' : 'scale(1)';
-            confirmBtn.style.boxShadow = (flashes % 2 === 0) ? '0 0 20px rgba(22,163,74,0.6)' : '';
+            confirmBtn.style.transform = (flashes % 2 === 0) ? 'scale(1.08)' : 'scale(1)';
+            confirmBtn.style.boxShadow = (flashes % 2 === 0) ? '0 0 25px rgba(124,58,237,0.7)' : '';
             flashes++;
-            if (flashes >= 6) {
+            if (flashes >= 8) {
               clearInterval(flashTimer);
               confirmBtn.style.transform = 'scale(1)';
-              confirmBtn.style.boxShadow = '';
+              confirmBtn.style.boxShadow = '0 0 15px rgba(124,58,237,0.4)';  // คงไว้
             }
-          }, 250);
-          // scroll into view
+          }, 200);
           try { confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+        }
+
+        // 🚨 Persistent banner ใหญ่ — บอกชัดให้กดบันทึก (ไม่ใช่ toast ที่หายไป)
+        const banner = document.getElementById('payPkgInfo');
+        if (banner) {
+          banner.classList.remove('hidden');
+          banner.classList.remove('bg-orange-50', 'border-orange-200', 'text-orange-800');
+          banner.classList.add('bg-purple-100', 'border-purple-400', 'text-purple-900');
+          banner.style.borderWidth = '2px';
+          banner.style.padding = '12px';
+          banner.innerHTML = `
+            <div class="font-bold text-sm">🔗 ยืมแพ็กเกจของ ${esc(ownerName)}</div>
+            <div class="text-[11px] mt-1">${esc(pkgName)} — เหลือ ${remaining}/${total} ครั้ง</div>
+            <div class="mt-2 p-2 bg-yellow-100 border-2 border-yellow-400 rounded text-center font-bold text-yellow-900 animate-pulse">
+              👇 กดปุ่ม "ยืนยัน + ตัดแพ็กเกจ" ด้านล่างเพื่อบันทึก 👇
+            </div>`;
         }
       }, 100);
     }
