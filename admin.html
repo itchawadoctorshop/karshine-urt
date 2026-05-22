@@ -50,7 +50,7 @@
         <p class="text-[10px] text-gray-400 mt-1">เสร็จแล้ว <span id="dsCompletedToday">-</span></p>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-        <p class="text-[10px] text-gray-400 font-bold uppercase">💰 ยอดวันนี้ (สุทธิ)</p>
+        <p class="text-[10px] text-gray-400 font-bold uppercase">💰 รับเงินวันนี้ <span class="text-[8px] text-gray-300 normal-case">(paid only)</span></p>
         <p class="text-2xl font-bold text-green-600 mt-1"><span id="dsRevenueToday">-</span><span class="text-sm text-gray-400">.-</span></p>
         <!-- 🆕 breakdown แสดงเฉพาะตอนมีส่วนลด -->
         <div id="dsBreakdown" class="hidden text-[10px] mt-1 space-y-0.5 border-t border-gray-100 pt-1">
@@ -59,10 +59,19 @@
         </div>
         <p class="text-[10px] text-gray-400 mt-1">เฉลี่ย/บิล <span id="dsAvgPerBill">-</span>.-</p>
       </div>
-      <!-- 💰 F2.4: Card ใหม่ — Unpaid -->
+      <!-- 💰 F2.4 / F2.5c: Card รวม Unpaid + Package consumption -->
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-        <p class="text-[10px] text-gray-400 font-bold uppercase">⏳ ยังไม่จ่าย</p>
-        <p class="text-2xl font-bold text-red-500 mt-1"><span id="dsUnpaidToday">-</span> <span class="text-sm text-gray-400">คิว</span></p>
+        <p class="text-[10px] text-gray-400 font-bold uppercase">⏳ ค้างจ่าย + 📦 หักแพ็กเกจ</p>
+        <p class="text-2xl font-bold mt-1">
+          <span class="text-red-500"><span id="dsUnpaidToday">-</span></span>
+          <span class="text-sm text-gray-400 font-normal">/</span>
+          <span class="text-orange-500"><span id="dsPkgConsumedCount">-</span></span>
+          <span class="text-xs text-gray-400 font-normal">คิว</span>
+        </p>
+        <p class="text-[10px] text-gray-500 mt-1">
+          <span class="text-red-500">ยังไม่จ่าย <span id="dsUnpaidAmt">-</span>.-</span> ·
+          <span class="text-orange-500">📦 มูลค่า <span id="dsPkgConsumedValue">-</span>.-</span>
+        </p>
         <p class="text-[10px] text-gray-400 mt-1" id="dsRevByMethod">วิธีจ่าย: -</p>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -416,12 +425,20 @@
             </div>
             <div class="mb-2">
               <label class="text-[10px] font-bold text-gray-500 uppercase">วิธีชำระเงิน</label>
-              <select id="crmPkgPayMethod" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 bg-gray-50">
+              <select id="crmPkgPayMethod" onchange="_updateCrmPkgQR()" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 bg-gray-50">
                 <option value="cash">💵 เงินสด</option>
               </select>
             </div>
             <div class="mb-3 p-2 bg-emerald-50 rounded-lg text-center text-xs">
               ยอดสุทธิที่รับ: <span id="crmPkgNet" class="font-bold text-emerald-700 text-base">0</span>.-
+            </div>
+
+            <!-- 💰 F2.4b — PromptPay QR สำหรับขายแพ็กเกจ -->
+            <div id="crmPkgQRSection" class="hidden mb-3 p-3 bg-gradient-to-br from-blue-50 to-emerald-50 border-2 border-blue-300 rounded-xl text-center">
+              <p class="text-[9px] font-bold text-blue-700 uppercase mb-1">📱 สแกนจ่าย — ลูกค้าสแกน QR ด้านล่าง</p>
+              <div id="crmPkgQRContainer" class="flex justify-center my-2"></div>
+              <p class="text-[10px] text-gray-600">ยอดที่ต้องโอน: <span class="font-bold text-blue-700"><span id="crmPkgQRAmount">0</span>.-</span></p>
+              <p class="text-[9px] text-gray-500" id="crmPkgQRTarget">-</p>
             </div>
 
             <button onclick="addPackageToCustomer()" class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow transition"><i class="fa-solid fa-plus mr-1"></i> ยืนยันขายแพ็กเกจ</button>
@@ -691,17 +708,36 @@
         if (dashRes && dashRes.status === 'success' && Array.isArray(dashRes.data.revenueByMethod)) {
           methodStats = dashRes.data.revenueByMethod;
         } else if (salesRes && salesRes.status === 'success') {
+          // 📋 สำหรับวันที่ผ่านมา — สร้าง methodStats เอง โดยแยก paid/package/unpaid 3 buckets
           const map = {};
           (salesRes.data.rows || []).forEach(r => {
             if (r.status !== 'completed') return;
-            const key = (r.payment_status === 'paid' && r.payment_method) ? r.payment_method : '_unpaid';
-            if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0 };
-            map[key].count    += 1;
-            map[key].gross    += r.gross;
-            map[key].discount += r.discount;
-            map[key].net      += r.net;
+            let key;
+            if (r.payment_method === 'package' && r.payment_status === 'paid') {
+              key = 'package';
+              if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0, serviceValue: 0 };
+              map[key].count += 1;
+              map[key].serviceValue += (r.gross || 0);  // service value (จาก getDailySalesList ที่คำนวนแล้ว)
+            } else if (r.payment_status === 'paid') {
+              key = r.payment_method || 'unknown';
+              if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0 };
+              map[key].count    += 1;
+              map[key].gross    += r.gross;
+              map[key].discount += r.discount;
+              map[key].net      += r.net;
+            } else {
+              key = '_unpaid';
+              if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0 };
+              map[key].count    += 1;
+              map[key].gross    += r.gross;
+              map[key].discount += r.discount;
+              map[key].net      += r.net;
+            }
           });
-          methodStats = Object.keys(map).map(k => map[k]).sort((a,b)=>b.net-a.net);
+          methodStats = Object.keys(map).map(k => map[k]).sort((a,b) => {
+            const order = (m) => m === '_unpaid' ? 2 : (m === 'package' ? 1 : 0);
+            return order(a.method) - order(b.method) || b.net - a.net;
+          });
         }
 
         _reconCache.dashboardMethods = methodStats;
@@ -724,50 +760,79 @@
         saved.items.forEach(it => { savedMap[it.method_id] = it; });
       }
 
-      const allMethodIds = new Set();
-      methods.forEach(m => allMethodIds.add(m.method));
-      if (saved) Object.keys(savedMap).forEach(k => allMethodIds.add(k));
-      (configData.payments || []).forEach(p => allMethodIds.add(p.pay_id || p.id));
+      // 📋 แยก methods เป็น 3 กลุ่ม
+      const SPECIAL = { PACKAGE: 'package', UNPAID: '_unpaid' };
+      const paidMethods = methods.filter(m => m.method !== SPECIAL.PACKAGE && m.method !== SPECIAL.UNPAID);
+      const packageMethod = methods.find(m => m.method === SPECIAL.PACKAGE);
+      const unpaidMethod = methods.find(m => m.method === SPECIAL.UNPAID);
 
-      let totalCount = 0, totalGross = 0, totalDiscount = 0, totalNet = 0, totalActual = 0, totalDiff = 0;
-      const rows = [];
-      const ordered = Array.from(allMethodIds).sort((a,b) => {
-        if (a === '_unpaid') return 1;
-        if (b === '_unpaid') return -1;
-        return _methodLabel(a).localeCompare(_methodLabel(b));
+      // รวม payment_methods ที่ active ลงใน paid list (เพื่อให้ admin ใส่ยอดได้แม้ยังไม่มีรายการ)
+      const allPaidIds = new Set();
+      paidMethods.forEach(m => allPaidIds.add(m.method));
+      if (saved) Object.keys(savedMap).forEach(k => {
+        if (k !== SPECIAL.PACKAGE && k !== SPECIAL.UNPAID) allPaidIds.add(k);
       });
+      (configData.payments || []).forEach(p => allPaidIds.add(p.pay_id || p.id));
 
-      ordered.forEach(mid => {
+      // === Section A: Paid methods (รวมในยอดรวม) ===
+      let totalCount = 0, totalGross = 0, totalDiscount = 0, totalNet = 0, totalActual = 0, totalDiff = 0;
+      const orderedPaid = Array.from(allPaidIds).sort((a,b) => _methodLabel(a).localeCompare(_methodLabel(b)));
+
+      const rows = orderedPaid.map(mid => {
         const stat = methods.find(m => m.method === mid) || { count: 0, gross: 0, discount: 0, net: 0 };
         const savedItem = savedMap[mid] || null;
         const actual = savedItem ? savedItem.actual_amount : '';
         const diff = (actual === '' || actual === null) ? 0 : (actual - stat.net);
-        totalCount    += stat.count;
-        totalGross    += stat.gross;
-        totalDiscount += stat.discount;
-        totalNet      += stat.net;
+        totalCount += stat.count; totalGross += stat.gross; totalDiscount += stat.discount; totalNet += stat.net;
         if (actual !== '' && actual !== null) totalActual += actual;
         totalDiff += diff;
-        const isUnpaid = mid === '_unpaid';
         const diffColor = diff === 0 ? 'text-gray-400' : (diff > 0 ? 'text-blue-600' : 'text-red-600');
-        rows.push(`
-          <tr class="${isUnpaid ? 'bg-red-50' : ''}">
+        return `
+          <tr>
             <td class="px-2 py-2 text-left">${_methodLabel(mid)}</td>
             <td class="px-2 py-2 text-center">${stat.count}</td>
             <td class="px-2 py-2 text-right">${stat.gross.toLocaleString()}</td>
             <td class="px-2 py-2 text-right text-amber-600">${stat.discount.toLocaleString()}</td>
             <td class="px-2 py-2 text-right font-bold text-green-700">${stat.net.toLocaleString()}</td>
             <td class="px-2 py-2 text-right">
-              ${isUnpaid ? '<span class="text-gray-400">-</span>' : `<input type="number" data-method="${mid}" class="recon-actual w-24 text-right border border-gray-300 rounded-md px-2 py-1 text-xs" placeholder="0" value="${actual !== '' && actual !== null ? actual : ''}" oninput="recalcReconRow(this)">`}
+              <input type="number" data-method="${mid}" class="recon-actual w-24 text-right border border-gray-300 rounded-md px-2 py-1 text-xs" placeholder="0" value="${actual !== '' && actual !== null ? actual : ''}" oninput="recalcReconRow(this)">
             </td>
             <td class="px-2 py-2 text-right font-bold ${diffColor}" data-diff="${mid}">
-              ${isUnpaid ? '-' : (diff === 0 ? '0' : (diff > 0 ? '+' : '') + diff.toLocaleString())}
+              ${diff === 0 ? '0' : (diff > 0 ? '+' : '') + diff.toLocaleString()}
             </td>
-          </tr>
-        `);
+          </tr>`;
       });
+
+      // === Section B: Package consumption (info only — ไม่รวมในยอดรวม) ===
+      if (packageMethod && packageMethod.count > 0) {
+        const svcVal = packageMethod.serviceValue || 0;
+        rows.push(`
+          <tr class="bg-orange-50 border-t-2 border-orange-200">
+            <td class="px-2 py-2 text-left text-orange-800">📦 หักจากแพ็กเกจ <span class="text-[9px] text-gray-500 font-normal">(ไม่รวมในยอดรวม)</span></td>
+            <td class="px-2 py-2 text-center text-orange-700">${packageMethod.count}</td>
+            <td class="px-2 py-2 text-right text-gray-400" colspan="3">มูลค่าบริการ <span class="font-bold text-orange-700">${svcVal.toLocaleString()}.-</span></td>
+            <td class="px-2 py-2 text-center text-gray-400">-</td>
+            <td class="px-2 py-2 text-center text-gray-400">-</td>
+          </tr>`);
+      }
+
+      // === Section C: Unpaid (info only — ไม่รวมในยอดรวม) ===
+      if (unpaidMethod && unpaidMethod.count > 0) {
+        rows.push(`
+          <tr class="bg-red-50 ${packageMethod ? '' : 'border-t-2 border-red-200'}">
+            <td class="px-2 py-2 text-left text-red-700">⏳ ยังไม่จ่าย <span class="text-[9px] text-gray-500 font-normal">(ไม่รวมในยอดรวม)</span></td>
+            <td class="px-2 py-2 text-center text-red-700">${unpaidMethod.count}</td>
+            <td class="px-2 py-2 text-right text-red-600">${unpaidMethod.gross.toLocaleString()}</td>
+            <td class="px-2 py-2 text-right text-amber-600">${unpaidMethod.discount.toLocaleString()}</td>
+            <td class="px-2 py-2 text-right font-bold text-red-700">${unpaidMethod.net.toLocaleString()}</td>
+            <td class="px-2 py-2 text-center text-gray-400">-</td>
+            <td class="px-2 py-2 text-center text-gray-400">-</td>
+          </tr>`);
+      }
+
       tbody.innerHTML = rows.length > 0 ? rows.join('') : `<tr><td colspan="7" class="text-center py-6 text-gray-400">ยังไม่มีรายการสำหรับวันนี้</td></tr>`;
 
+      // Footer ใช้ตัวเลขจาก paid only
       document.getElementById('reconSumCount').textContent = totalCount;
       document.getElementById('reconSumGross').textContent = totalGross.toLocaleString();
       document.getElementById('reconSumDiscount').textContent = totalDiscount.toLocaleString();
@@ -1128,27 +1193,35 @@
             else bdEl.classList.add('hidden');
           }
           setText('dsUnpaidToday',       d.unpaidToday || 0);
+          setText('dsUnpaidAmt',         (d.unpaidAmountToday || 0).toLocaleString());     // 🆕
+          setText('dsPkgConsumedCount',  d.packageConsumedCount || 0);                     // 🆕 F2.5c
+          setText('dsPkgConsumedValue',  (d.packageConsumedValue || 0).toLocaleString());  // 🆕 F2.5c
           setText('dsNewUsers',          d.newUsersToday || 0);
           setText('dsUniqueCustomers',   (d.uniqueCustomersToday || 0) + ' คน');
           setText('dsDate',              d.date ? d.date.split('-').reverse().join('/') : '-');
           const now = new Date();
           setText('dsUpdatedAt', now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0'));
 
-          // 💰 F2.4: render breakdown รายได้ตามวิธีจ่าย
+          // 💰 F2.4 / F2.5c: render breakdown — เฉพาะ paid (ไม่รวม _unpaid + package)
           const breakdownEl = document.getElementById('dsRevByMethod');
           if (breakdownEl && Array.isArray(d.revenueByMethod) && d.revenueByMethod.length > 0) {
-            // ทำชื่อ method ให้อ่านง่าย
             const pretty = (m) => {
               if (m === '_unpaid') return 'ยังไม่จ่าย';
-              if (!m) return 'ไม่ระบุ';
-              // ค้นจาก configData.payments
+              if (m === 'package') return '📦 หักแพ็กเกจ';
+              if (!m || m === 'unknown') return 'ไม่ระบุ';
               const pay = (configData.payments || []).find(p => (p.pay_id||p.id) === m);
               return pay ? (pay.pay_name || pay.name) : m;
             };
-            const top = d.revenueByMethod.slice(0, 2)
-              .map(x => `${pretty(x.method)} ${x.amount.toLocaleString()}.-`).join(' · ');
-            breakdownEl.textContent = top || 'ยังไม่มีรายรับ';
-            breakdownEl.title = d.revenueByMethod.map(x => `${pretty(x.method)}: ${x.amount.toLocaleString()}.-`).join('\n');
+            // กรองเอาเฉพาะ paid methods (ไม่รวม _unpaid + package — มี card แสดงแยกแล้ว)
+            const paidOnly = d.revenueByMethod.filter(x => x.method !== '_unpaid' && x.method !== 'package');
+            if (paidOnly.length > 0) {
+              const top = paidOnly.slice(0, 2)
+                .map(x => `${pretty(x.method)} ${(x.net || 0).toLocaleString()}.-`).join(' · ');
+              breakdownEl.textContent = 'รับเงิน: ' + top;
+              breakdownEl.title = paidOnly.map(x => `${pretty(x.method)}: ${(x.net || 0).toLocaleString()}.-`).join('\n');
+            } else {
+              breakdownEl.textContent = 'ยังไม่มีรายรับ';
+            }
           } else if (breakdownEl) {
             breakdownEl.textContent = 'ยังไม่มีรายรับ';
           }
@@ -2705,13 +2778,53 @@
       _updateCrmPkgNet();
     }
 
-    // 🆕 คำนวน net = price - discount, refresh display
+    // 🆕 คำนวน net = price - discount, refresh display + update QR
     function _updateCrmPkgNet() {
       const price = parseFloat(document.getElementById('crmPkgPrice').value) || 0;
       const disc  = parseFloat(document.getElementById('crmPkgDiscount').value) || 0;
       const net   = Math.max(0, price - disc);
       const el = document.getElementById('crmPkgNet');
       if (el) el.textContent = net.toLocaleString();
+      _updateCrmPkgQR();
+    }
+
+    // 🆕 F2.4b: render QR ใน CRM ขายแพ็กเกจ — เฉพาะ method ที่เป็น PromptPay
+    function _updateCrmPkgQR() {
+      const sec = document.getElementById('crmPkgQRSection');
+      const pmSel = document.getElementById('crmPkgPayMethod');
+      if (!sec || !pmSel) return;
+      const methodVal  = pmSel.value || '';
+      const methodText = pmSel.options[pmSel.selectedIndex]?.textContent || '';
+      const isPromptPay = /promptpay|พร้อมเพย์/i.test(methodVal + ' ' + methodText);
+      if (!isPromptPay) { sec.classList.add('hidden'); return; }
+
+      const net = parseFloat((document.getElementById('crmPkgNet').textContent || '0').replace(/,/g, '')) || 0;
+      const ppId = (typeof _getPromptPayId === 'function') ? _getPromptPayId() : null;
+      if (!ppId) {
+        sec.classList.remove('hidden');
+        document.getElementById('crmPkgQRContainer').innerHTML =
+          '<p class="text-red-500 text-[10px] p-2">⚠️ ยังไม่ได้ตั้ง <b>promptpay_id</b> ใน Branches</p>';
+        document.getElementById('crmPkgQRAmount').textContent = net.toLocaleString();
+        document.getElementById('crmPkgQRTarget').textContent = '-';
+        return;
+      }
+      if (net <= 0) {
+        sec.classList.remove('hidden');
+        document.getElementById('crmPkgQRContainer').innerHTML =
+          '<p class="text-gray-400 text-[10px] p-2">ยอด 0 — ไม่ต้อง QR</p>';
+        document.getElementById('crmPkgQRAmount').textContent = '0';
+        return;
+      }
+
+      sec.classList.remove('hidden');
+      document.getElementById('crmPkgQRContainer').innerHTML = renderPromptPayQR(ppId, net);
+      document.getElementById('crmPkgQRAmount').textContent = net.toLocaleString();
+      // mask
+      let maskedId = ppId;
+      const clean = String(ppId).replace(/\D/g, '');
+      if (clean.length === 10) maskedId = clean.slice(0,3) + '-xxx-' + clean.slice(7);
+      else if (clean.length === 13) maskedId = clean.slice(0,1) + '-xxxx-xxxxx-' + clean.slice(11);
+      document.getElementById('crmPkgQRTarget').textContent = 'PromptPay: ' + maskedId;
     }
 
     async function addPackageToCustomer() {
