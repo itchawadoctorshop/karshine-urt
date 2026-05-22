@@ -1685,32 +1685,54 @@
       _recalcNetAmount();
     }
 
-    // 🆕 F1.5b: คำนวนยอดสุทธิจาก ยอดเต็ม - ส่วนลด → ใส่ใน payAmount (hidden) + display
+    // 🆕 F1.5b / F2.5f: คำนวนยอดสุทธิ — รู้จัก hybrid mode (cash = gross - pkgCredit - discount)
     //   ถ้า admin unlock manual → ใช้ค่าจาก manual input แทน
     function _recalcNetAmount() {
       const estEl = document.getElementById('payEstimated');
       const discountEl = document.getElementById('discountAmount');
+      const discountCB = document.getElementById('discountToggle');
       const amtEl = document.getElementById('payAmount');           // hidden — ตัวที่ส่ง submit
       const dispEl = document.getElementById('payAmountDisplay');    // display เด่นสุด
       const manualWrap = document.getElementById('payAmountManual');
       const manualInp = document.getElementById('payAmountManualInput');
+      const methodSel = document.getElementById('payMethod');
+      const hybridBox = document.getElementById('payHybridBox');
       if (!estEl || !amtEl) return;
 
-      // parse estimate (รูปแบบ "450.-" หรือ "1,500.-")
       const estMatch = String(estEl.textContent || '').match(/[\d,]+/);
       const estimated = estMatch ? parseInt(estMatch[0].replace(/,/g, '')) : 0;
-      const discount = discountEl ? (parseFloat(discountEl.value) || 0) : 0;
-      const autoNet = Math.max(0, estimated - discount);
+      const discount = (discountCB && discountCB.checked && discountEl) ? (parseFloat(discountEl.value) || 0) : 0;
 
-      // ถ้า manual unlock อยู่ → ไม่แตะ amtEl (admin คุมเอง)
-      // ถ้ายังไม่ unlock → set อัตโนมัติ
+      // 🆕 F2.5f: ตรวจ mode
+      const methodVal = methodSel ? (methodSel.value || '') : '';
+      const isPackage = methodVal.startsWith('package:');
+      const isHybrid  = isPackage && hybridBox && !hybridBox.classList.contains('hidden');
+      const packageCredit = parseFloat(amtEl.dataset.packageCredit) || 0;
+
+      let autoAmount;
+      if (isPackage && !isHybrid) {
+        // Full coverage → cash = 0
+        autoAmount = 0;
+      } else if (isHybrid) {
+        // Hybrid → cash = max(0, gross - packageCredit - discount)
+        autoAmount = Math.max(0, estimated - packageCredit - discount);
+      } else {
+        // Normal cash → net = gross - discount
+        autoAmount = Math.max(0, estimated - discount);
+      }
+
       const isManual = manualWrap && !manualWrap.classList.contains('hidden');
       if (!isManual) {
-        amtEl.value = autoNet;
-        if (manualInp) manualInp.value = autoNet;
+        amtEl.value = autoAmount;
+        if (manualInp) manualInp.value = autoAmount;
       }
-      // อัปเดต display เสมอ (สะท้อนยอดสุทธิปัจจุบัน)
       if (dispEl) dispEl.textContent = (parseFloat(amtEl.value) || 0).toLocaleString();
+
+      // 🆕 F2.5f: refresh Hybrid Box breakdown (เพื่อแสดง discount line)
+      if (isHybrid && typeof _refreshHybridBreakdown === 'function') {
+        _refreshHybridBreakdown();
+      }
+
       _updatePaymentQR();
     }
 
@@ -1736,20 +1758,21 @@
     }
 
     // 🆕 F2.5f Hybrid: เมื่อ admin เปลี่ยน method — เช็คว่า package coverage ครอบคลุมเต็มมั้ย
-    //   ถ้า partial → แสดง breakdown + secondary cash method
-    //   ถ้า full → ใช้ flow เดิม (amount=0)
-    //   ถ้า cash → ปกติ
     function _onPayMethodChange() {
       const sel = document.getElementById('payMethod');
       if (!sel) return;
       const val = sel.value || '';
       const hybridBox = document.getElementById('payHybridBox');
-      const breakdownEl = document.getElementById('payHybridBreakdown');
+      const amtEl = document.getElementById('payAmount');
 
-      // ถ้าไม่ใช่ package → ซ่อน hybrid box + ใช้ flow QR เดิม
+      // ถ้าไม่ใช่ package → ซ่อน hybrid box + clear dataset
       if (!val.startsWith('package:')) {
         if (hybridBox) hybridBox.classList.add('hidden');
-        _updatePaymentQR();
+        if (amtEl) {
+          amtEl.dataset.packageCredit = 0;
+          amtEl.dataset.pkgRowId = '';
+        }
+        _recalcNetAmount();  // ✅ recompute net (= gross - discount)
         return;
       }
 
@@ -1757,7 +1780,7 @@
       const pkgRowId = val.substring(8);
       const eligibles = window._currentEligiblePkgs || [];
       const pkg = eligibles.find(p => String(p.pkg_row_id) === String(pkgRowId));
-      if (!pkg) { _updatePaymentQR(); return; }
+      if (!pkg) { _recalcNetAmount(); return; }
 
       const bInfo = window._currentBookingInfo || {};
       const bookingSvcIds = String(bInfo.serviceIds || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -1781,54 +1804,64 @@
         }
       });
 
-      // render breakdown
-      let html = '';
-      if (covered.length > 0) {
-        html += `<div class="text-emerald-700"><b>✅ ครอบคลุม (แพ็กเกจ):</b></div>`;
-        covered.forEach(c => { html += `<div class="ml-3 text-emerald-600">• ${esc(c.name)} — ${c.price.toLocaleString()}.-</div>`; });
+      // เก็บ coverage info ใน data attribute + global (ใช้ใน _refreshHybridBreakdown)
+      if (amtEl) {
+        amtEl.dataset.packageCredit = packageCoveredAmt;
+        amtEl.dataset.pkgRowId = pkgRowId;
       }
-      if (notCovered.length > 0) {
+      window._currentCoverage = { covered, notCovered, packageCoveredAmt, cashRequiredAmt };
+
+      if (cashRequiredAmt > 0) {
+        // Hybrid → show box
+        if (hybridBox) hybridBox.classList.remove('hidden');
+      } else {
+        // Full coverage → hide
+        if (hybridBox) hybridBox.classList.add('hidden');
+      }
+      // ✅ ใช้ _recalcNetAmount() คำนวน cash (รวม discount) + render breakdown
+      _recalcNetAmount();
+    }
+
+    // 🆕 F2.5f: render Hybrid Box breakdown — เรียกซ้ำได้เมื่อ discount เปลี่ยน
+    function _refreshHybridBreakdown() {
+      const breakdownEl = document.getElementById('payHybridBreakdown');
+      if (!breakdownEl) return;
+      const cov = window._currentCoverage;
+      if (!cov) return;
+      const discountCB = document.getElementById('discountToggle');
+      const discountEl = document.getElementById('discountAmount');
+      const discount = (discountCB && discountCB.checked && discountEl) ? (parseFloat(discountEl.value) || 0) : 0;
+      const cashToCollect = Math.max(0, cov.cashRequiredAmt - discount);
+      // ส่วน discount ที่เกินจาก cashRequired (ใช้กับ package portion) — แสดง info
+      const overflowDiscount = Math.max(0, discount - cov.cashRequiredAmt);
+
+      let html = '';
+      if (cov.covered.length > 0) {
+        html += `<div class="text-emerald-700"><b>✅ ครอบคลุม (แพ็กเกจ):</b></div>`;
+        cov.covered.forEach(c => { html += `<div class="ml-3 text-emerald-600">• ${esc(c.name)} — ${c.price.toLocaleString()}.-</div>`; });
+      }
+      if (cov.notCovered.length > 0) {
         html += `<div class="text-red-600 mt-1"><b>💰 ต้องเก็บเพิ่ม:</b></div>`;
-        notCovered.forEach(c => { html += `<div class="ml-3 text-red-500">• ${esc(c.name)} — ${c.price.toLocaleString()}.-</div>`; });
+        cov.notCovered.forEach(c => { html += `<div class="ml-3 text-red-500">• ${esc(c.name)} — ${c.price.toLocaleString()}.-</div>`; });
       }
       html += `<div class="mt-2 pt-2 border-t border-orange-200 flex justify-between">
                 <span class="font-bold text-orange-700">📦 หักแพ็กเกจ:</span>
-                <span class="font-bold text-orange-700">${packageCoveredAmt.toLocaleString()}.-</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="font-bold text-emerald-700">💵 รับเงินสด:</span>
-                <span class="font-bold text-emerald-700">${cashRequiredAmt.toLocaleString()}.-</span>
+                <span class="font-bold text-orange-700">${cov.packageCoveredAmt.toLocaleString()}.-</span>
               </div>`;
-      if (breakdownEl) breakdownEl.innerHTML = html;
-
-      // ตั้ง state ตาม coverage
-      if (cashRequiredAmt > 0) {
-        // Partial → แสดง hybrid box + secondary method
-        if (hybridBox) hybridBox.classList.remove('hidden');
-        const amtEl = document.getElementById('payAmount');
-        const dispEl = document.getElementById('payAmountDisplay');
-        if (amtEl) amtEl.value = cashRequiredAmt;
-        if (dispEl) dispEl.textContent = cashRequiredAmt.toLocaleString();
-        // เก็บ package credit + pkgRowId ใน data attribute เพื่อใช้ตอน submit
-        if (amtEl) {
-          amtEl.dataset.packageCredit = packageCoveredAmt;
-          amtEl.dataset.pkgRowId = pkgRowId;
-        }
-        // ล้าง QR ตามจริงด้วย hybrid method
-        _updatePaymentQR();
-      } else {
-        // Full coverage → flow เดิม (amount=0)
-        if (hybridBox) hybridBox.classList.add('hidden');
-        const amtEl = document.getElementById('payAmount');
-        const dispEl = document.getElementById('payAmountDisplay');
-        if (amtEl) {
-          amtEl.value = 0;
-          amtEl.dataset.packageCredit = packageCoveredAmt;
-          amtEl.dataset.pkgRowId = pkgRowId;
-        }
-        if (dispEl) dispEl.textContent = '0';
-        _updatePaymentQR();
+      if (discount > 0) {
+        html += `<div class="flex justify-between">
+                  <span class="font-bold text-amber-700">🎁 ส่วนลด:</span>
+                  <span class="font-bold text-amber-700">-${discount.toLocaleString()}.-</span>
+                </div>`;
       }
+      html += `<div class="flex justify-between">
+                <span class="font-bold text-emerald-700">💵 รับเงินสด:</span>
+                <span class="font-bold text-emerald-700">${cashToCollect.toLocaleString()}.-</span>
+              </div>`;
+      if (overflowDiscount > 0) {
+        html += `<div class="text-[10px] text-amber-600 italic">ℹ️ ส่วนลดเกินส่วนต่าง ${overflowDiscount.toLocaleString()}.- — ครอบคลุมหมดแล้ว</div>`;
+      }
+      breakdownEl.innerHTML = html;
     }
 
     // 💰 F2.4b: ตรวจ method ปัจจุบัน + ยอด → แสดง/ซ่อน QR section
