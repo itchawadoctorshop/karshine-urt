@@ -942,29 +942,72 @@
         return '<span class="text-red-500">⏳ ยังไม่จ่าย</span>';
       };
 
-      // 📦 Group ตามชื่อบริการ
+      // 📦 Group ตามชื่อบริการ — แยก 4 buckets: paid / package / unpaid / cancelled
       const groups = {};
       rows.forEach(r => {
         const key = r.services_name || '(ไม่ระบุบริการ)';
         if (!groups[key]) {
-          groups[key] = { name: key, items: [], count: 0, gross: 0, discount: 0, net: 0, completed: 0, unpaid: 0, cancelled: 0 };
+          groups[key] = {
+            name: key, items: [], totalCount: 0,
+            paidCount: 0,     paidNet: 0,      paidGross: 0,    paidDiscount: 0,    // 💵 รับเงินจริง
+            packageCount: 0,  packageValue: 0,                                        // 📦 หักแพ็กเกจ (service value, info only)
+            unpaidCount: 0,   unpaidNet: 0,                                           // ⏳ ค้างจ่าย
+            cancelledCount: 0                                                         // ❌ ยกเลิก
+          };
         }
         groups[key].items.push(r);
-        groups[key].count++;
-        groups[key].gross    += r.gross || 0;
-        groups[key].discount += r.discount || 0;
-        groups[key].net      += r.net || 0;
-        if (r.status === 'completed') {
-          groups[key].completed++;
-          if (r.payment_status !== 'paid') groups[key].unpaid++;
+        groups[key].totalCount++;
+
+        const isCancelled = (r.status === 'cancelled' || r.status === 'cancelled_noshow');
+        const isCompleted = (r.status === 'completed');
+        const isPackage   = (r.payment_method === 'package' && r.payment_status === 'paid');
+        const isPaid      = (isCompleted && r.payment_status === 'paid' && !isPackage);
+        const isUnpaid    = (isCompleted && r.payment_status !== 'paid');
+
+        if (isCancelled) {
+          groups[key].cancelledCount++;
+        } else if (isPackage) {
+          groups[key].packageCount++;
+          groups[key].packageValue += (r.gross || 0);  // service value
+        } else if (isPaid) {
+          groups[key].paidCount++;
+          groups[key].paidNet      += (r.net || 0);
+          groups[key].paidGross    += (r.gross || 0);
+          groups[key].paidDiscount += (r.discount || 0);
+        } else if (isUnpaid) {
+          groups[key].unpaidCount++;
+          groups[key].unpaidNet += (r.net || 0);
         }
-        if (r.status === 'cancelled' || r.status === 'cancelled_noshow') groups[key].cancelled++;
       });
 
-      // เรียง: บริการที่ขายเยอะสุดก่อน
-      const groupArr = Object.values(groups).sort((a, b) => b.count - a.count);
+      // เรียง: บริการที่มี paidNet เยอะสุดก่อน
+      const groupArr = Object.values(groups).sort((a, b) => b.paidNet - a.paidNet);
 
-      container.innerHTML = groupArr.map((g, gIdx) => {
+      // 📊 Global summary (sum across all groups)
+      const totalPaid    = groupArr.reduce((s, g) => s + g.paidNet, 0);
+      const totalPkg     = groupArr.reduce((s, g) => s + g.packageValue, 0);
+      const totalUnpaid  = groupArr.reduce((s, g) => s + g.unpaidNet, 0);
+      const summaryHtml = `
+        <div class="mb-3 p-3 bg-gradient-to-r from-emerald-50 via-orange-50 to-red-50 rounded-xl border border-gray-200">
+          <p class="text-[10px] font-bold text-gray-500 uppercase mb-2">📊 สรุปรวม (match กับ Dashboard)</p>
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <div class="bg-white rounded-lg p-2 border border-emerald-200">
+              <p class="text-[9px] text-gray-500">💵 จ่ายจริง</p>
+              <p class="font-bold text-emerald-700 text-base">${totalPaid.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
+            </div>
+            <div class="bg-white rounded-lg p-2 border border-orange-200">
+              <p class="text-[9px] text-gray-500">📦 หักแพ็กเกจ <span class="text-gray-400">(มูลค่า)</span></p>
+              <p class="font-bold text-orange-700 text-base">${totalPkg.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
+            </div>
+            <div class="bg-white rounded-lg p-2 border border-red-200">
+              <p class="text-[9px] text-gray-500">⏳ ค้างจ่าย</p>
+              <p class="font-bold text-red-600 text-base">${totalUnpaid.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
+            </div>
+          </div>
+        </div>
+      `;
+
+      container.innerHTML = summaryHtml + groupArr.map((g, gIdx) => {
         const itemsHtml = g.items.map(r => `
           <tr class="hover:bg-gray-50 text-[11px]">
             <td class="px-2 py-1.5 whitespace-nowrap font-mono text-gray-600">${r.time || '-'}</td>
@@ -985,10 +1028,19 @@
           </tr>
         `).join('');
 
+        // 🎯 Badges แสดงจำนวนแต่ละ bucket
         const badges = [];
-        if (g.completed > 0)  badges.push(`<span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px]">เสร็จ ${g.completed}</span>`);
-        if (g.unpaid > 0)     badges.push(`<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px]">ค้าง ${g.unpaid}</span>`);
-        if (g.cancelled > 0)  badges.push(`<span class="px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-[10px]">ยกเลิก ${g.cancelled}</span>`);
+        if (g.paidCount > 0)      badges.push(`<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px]">💵 จ่ายแล้ว ${g.paidCount}</span>`);
+        if (g.packageCount > 0)   badges.push(`<span class="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px]">📦 แพ็กเกจ ${g.packageCount}</span>`);
+        if (g.unpaidCount > 0)    badges.push(`<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px]">⏳ ค้าง ${g.unpaidCount}</span>`);
+        if (g.cancelledCount > 0) badges.push(`<span class="px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-[10px]">❌ ยกเลิก ${g.cancelledCount}</span>`);
+
+        // 💰 Right-side summary
+        const moneyLines = [];
+        moneyLines.push(`<div class="font-bold text-emerald-700 text-sm">💵 ${g.paidNet.toLocaleString()}.-</div>`);
+        if (g.packageValue > 0) moneyLines.push(`<div class="text-orange-600 text-[10px]">📦 ${g.packageValue.toLocaleString()}.-</div>`);
+        if (g.unpaidNet > 0)    moneyLines.push(`<div class="text-red-600 text-[10px]">⏳ ${g.unpaidNet.toLocaleString()}.-</div>`);
+        if (g.paidDiscount > 0) moneyLines.push(`<div class="text-amber-600 text-[10px]">🎁 ลด ${g.paidDiscount.toLocaleString()}.-</div>`);
 
         return `
           <details class="border border-gray-200 rounded-xl bg-white overflow-hidden">
@@ -1001,9 +1053,8 @@
                 </div>
               </div>
               <div class="flex flex-col items-end text-[10px] flex-shrink-0">
-                <div class="text-gray-500">รวม ${g.count} คิว</div>
-                <div class="font-bold text-green-700 text-sm">${g.net.toLocaleString()}.-</div>
-                ${g.discount > 0 ? `<div class="text-amber-600">ส่วนลด ${g.discount.toLocaleString()}</div>` : ''}
+                <div class="text-gray-500">รวม ${g.totalCount} คิว</div>
+                ${moneyLines.join('')}
               </div>
             </summary>
             <div class="overflow-x-auto border-t border-gray-100">
