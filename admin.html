@@ -1888,6 +1888,10 @@
         confirmButtonColor: '#16a34a',
         denyButtonColor: '#9ca3af',
         width: 460,
+        // 🛡️ F2.5e: lock — กัน admin คลิกนอกหรือกด ESC โดยไม่ตั้งใจ
+        //   เพราะถ้าปิดโดยไม่ตั้งใจ state วิธีจ่าย (เช่น PromptPay) จะหาย → ตอนเปิดใหม่ default = cash → กระทบยอดเพี้ยน
+        allowOutsideClick: false,
+        allowEscapeKey: false,
         didOpen: () => { _recalcNetAmount(); _updatePaymentQR(); }   // 💰 F2.4b + F1.5b: set display ครั้งแรก + render QR
       });
 
@@ -3600,11 +3604,31 @@
     }
     // ── End Photo Modal ───────────────────────────────────────────
 
+    // 🛡️ F2.5e: เช็คก่อน auto-refresh — ถ้า modal เปิดอยู่ห้าม reload (กัน state หาย ตอน admin กำลังกรอกข้อมูลจ่ายเงิน)
+    function _shouldSkipAutoRefresh() {
+      // ① Swal modal
+      if (window.Swal && typeof Swal.isVisible === 'function' && Swal.isVisible()) return true;
+      // ② Custom modals — เช็คจาก class .hidden
+      const customModalIds = ['crmModal', 'paymentModal', 'serviceModal', 'packageModal', 'closureModal', 'photoModal', 'editBookingModal', 'rescheduleModal'];
+      for (let i = 0; i < customModalIds.length; i++) {
+        const el = document.getElementById(customModalIds[i]);
+        if (el && !el.classList.contains('hidden')) return true;
+      }
+      return false;
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       showSection('board-section');
       // 🆕 (Bug A3): preload settings (branches/services/closures) — walk-in slot picker จะใช้
       loadStoreConfig();
-      setInterval(loadAdminData, 30000);
+      // 🛡️ F2.5e: auto-refresh ทุก 30 วิ — แต่ถ้า modal เปิดอยู่ ข้าม (กัน state หาย)
+      setInterval(() => {
+        if (_shouldSkipAutoRefresh()) {
+          console.log('[AutoRefresh] skipped — modal open');
+          return;
+        }
+        loadAdminData();
+      }, 30000);
     });
   </script>
 </body>
