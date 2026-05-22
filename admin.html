@@ -1765,13 +1765,26 @@
       const hybridBox = document.getElementById('payHybridBox');
       const amtEl = document.getElementById('payAmount');
 
-      // 🔗 F2.5g: ถ้าเลือก "ยืมแพ็กเกจคนอื่น..." → เปิด search modal
+      // 🔗 F2.5g: ถ้าเลือก "ยืมแพ็กเกจคนอื่น..." → เปิด inline search section (ไม่ใช้ Swal-in-Swal)
       if (val === '__borrow__') {
-        // reset ค่าก่อนเปิด modal (กันค้าง)
-        sel.value = '';
-        _openBorrowPackageSearch_();
+        const borrowSec = document.getElementById('payBorrowSection');
+        if (borrowSec) {
+          borrowSec.classList.remove('hidden');
+          const inp = document.getElementById('payBorrowSearchInput');
+          if (inp) { inp.focus(); inp.value = ''; }
+          const res = document.getElementById('payBorrowResults');
+          if (res) res.innerHTML = '<p class="text-[10px] text-gray-400 italic">พิมพ์เพื่อค้น...</p>';
+        }
+        // hide hybrid + payPkgInfo banner ระหว่างค้น
+        if (hybridBox) hybridBox.classList.add('hidden');
+        const banner = document.getElementById('payPkgInfo');
+        if (banner) banner.classList.add('hidden');
         return;
       }
+
+      // ซ่อน borrow section ถ้า method อื่น
+      const borrowSec = document.getElementById('payBorrowSection');
+      if (borrowSec) borrowSec.classList.add('hidden');
 
       // ถ้าไม่ใช่ package → ซ่อน hybrid box + clear dataset
       if (!val.startsWith('package:')) {
@@ -1832,132 +1845,115 @@
       _recalcNetAmount();
     }
 
-    // 🔗 F2.5g: เปิด popup ค้นเจ้าของแพ็กเกจ
-    async function _openBorrowPackageSearch_() {
-      const { value: query } = await Swal.fire({
-        title: '🔗 ยืมแพ็กเกจคนอื่น',
-        html: `<p class="text-xs text-gray-500 mb-2 text-left">ค้นจาก: ชื่อ / เบอร์โทร / ทะเบียนรถ</p>`,
-        input: 'text',
-        inputPlaceholder: 'พิมพ์ชื่อ, เบอร์, หรือทะเบียน...',
-        showCancelButton: true,
-        confirmButtonText: '🔍 ค้นหา',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#7C3AED',
-        allowOutsideClick: false,
-        inputValidator: (v) => !v || v.trim().length < 2 ? 'กรุณาพิมพ์อย่างน้อย 2 ตัวอักษร' : null
-      });
-      if (!query) return;
+    // 🔗 F2.5g — INLINE: ค้นเจ้าของแพ็กเกจ (เรียกจากปุ่ม "🔍 ค้น" ใน Payment Modal)
+    //   ใช้ DOM แทน Swal.fire เพื่อกัน Swal-in-Swal ที่ทำให้ Payment Modal หาย
+    async function _payBorrowSearch_() {
+      const inp = document.getElementById('payBorrowSearchInput');
+      const resWrap = document.getElementById('payBorrowResults');
+      if (!inp || !resWrap) return;
+      const query = (inp.value || '').trim();
+      if (query.length < 2) {
+        resWrap.innerHTML = '<p class="text-[10px] text-red-500">กรุณาพิมพ์อย่างน้อย 2 ตัวอักษร</p>';
+        return;
+      }
+      resWrap.innerHTML = '<p class="text-[10px] text-gray-500"><i class="fa-solid fa-circle-notch fa-spin"></i> กำลังค้น...</p>';
 
-      // call backend
-      Swal.fire({ title: 'กำลังค้นหา...', didOpen: () => Swal.showLoading() });
       let result;
       try {
-        const payload = new URLSearchParams({ action: 'searchPackageOwner', query: query.trim() });
+        const payload = new URLSearchParams({ action: 'searchPackageOwner', query: query });
         const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         result = await r.json();
       } catch (e) {
-        return Swal.fire('Error', e.message, 'error');
+        resWrap.innerHTML = `<p class="text-[10px] text-red-500">เกิดข้อผิดพลาด: ${esc(e.message)}</p>`;
+        return;
       }
-      Swal.close();
 
       if (result.status !== 'success' || !Array.isArray(result.data) || result.data.length === 0) {
-        return Swal.fire({ icon: 'info', title: 'ไม่พบผลลัพธ์', text: 'ไม่พบเจ้าของแพ็กเกจที่ตรงกับ "' + query + '"' });
+        resWrap.innerHTML = '<p class="text-[10px] text-gray-500 italic">ไม่พบเจ้าของแพ็กเกจที่ตรงกับ "' + esc(query) + '"</p>';
+        return;
       }
 
-      // render result list
+      const bInfo = window._currentBookingInfo || {};
+      const bookingSvcIds = String(bInfo.serviceIds || '').split(',').map(s => s.trim()).filter(Boolean);
+
       const ownersHtml = result.data.map(owner => {
         const pkgsHtml = (owner.packages || []).map(p => {
-          // disable button if service ของ pkg ไม่ตรงกับ booking
-          const bInfo = window._currentBookingInfo || {};
-          const bookingSvcIds = String(bInfo.serviceIds || '').split(',').map(s => s.trim()).filter(Boolean);
           const matchService = bookingSvcIds.includes(String(p.service_id));
-          return `<div class="flex items-center justify-between p-2 ${matchService ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-200'} border rounded-lg mt-1">
+          return `<div class="flex items-center justify-between p-1.5 ${matchService ? 'bg-purple-50' : 'bg-gray-50'} border ${matchService ? 'border-purple-200' : 'border-gray-200'} rounded-lg mt-1">
             <div class="flex-1 min-w-0 text-xs">
               <div class="font-bold ${matchService ? 'text-purple-800' : 'text-gray-500'}">📦 ${esc(p.name)}</div>
-              <div class="text-[10px] text-gray-500">เหลือ ${p.remaining}/${p.total} ครั้ง · ${matchService ? '✅ ใช้ได้' : '⚠️ บริการไม่ตรง'}</div>
+              <div class="text-[10px] text-gray-500">เหลือ ${p.remaining}/${p.total} · ${matchService ? '✅ ใช้ได้' : '⚠️ บริการไม่ตรง'}</div>
             </div>
             ${matchService
-              ? `<button type="button" onclick="_pickBorrowedPkg_('${esc(p.pkg_row_id)}','${esc(p.name)}',${p.total},${p.used},${p.remaining},'${esc(p.service_id)}','${esc(owner.owner_uid)}','${esc(owner.owner_name)}')" class="ml-2 px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-[10px] font-bold">ใช้</button>`
-              : `<button type="button" disabled class="ml-2 px-2 py-1 bg-gray-200 text-gray-400 rounded text-[10px] font-bold cursor-not-allowed">ใช้ไม่ได้</button>`
+              ? `<button type="button" onclick="_payBorrowPick_('${esc(p.pkg_row_id)}','${esc(p.name).replace(/'/g,'&apos;')}',${p.total},${p.used},${p.remaining},'${esc(p.service_id)}','${esc(owner.owner_uid)}','${esc(owner.owner_name).replace(/'/g,'&apos;')}')" class="ml-2 px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-[10px] font-bold">ใช้</button>`
+              : `<button type="button" disabled class="ml-2 px-2 py-1 bg-gray-200 text-gray-400 rounded text-[10px] font-bold cursor-not-allowed">N/A</button>`
             }
           </div>`;
         }).join('');
-        return `<div class="mb-3 p-3 bg-white border border-gray-200 rounded-xl">
-          <div class="font-bold text-sm text-gray-800">👤 ${esc(owner.owner_name)}</div>
+        return `<div class="mb-2 p-2 bg-white border border-gray-200 rounded-lg">
+          <div class="font-bold text-xs text-gray-800">👤 ${esc(owner.owner_name)}</div>
           <div class="text-[10px] text-gray-500">${owner.owner_phone ? '📞 ' + esc(owner.owner_phone) : ''}</div>
           ${pkgsHtml || '<p class="text-[10px] text-gray-400 italic mt-1">ไม่มีแพ็กเกจที่ใช้ได้</p>'}
         </div>`;
       }).join('');
 
-      Swal.fire({
-        title: `🔍 ผลลัพธ์: ${result.data.length} คน`,
-        html: `<div class="text-left max-h-[60vh] overflow-y-auto">${ownersHtml}</div>`,
-        showCancelButton: true,
-        showConfirmButton: false,
-        cancelButtonText: 'ปิด',
-        width: 480,
-        allowOutsideClick: false
-      });
+      resWrap.innerHTML = `<p class="text-[10px] text-gray-500 mb-1">เจอ ${result.data.length} คน</p>${ownersHtml}`;
     }
 
-    // 🔗 F2.5g: เลือกแพ็กเกจ + เจ้าของ → confirm + กลับ Payment Modal
-    async function _pickBorrowedPkg_(pkgRowId, pkgName, total, used, remaining, serviceId, ownerUid, ownerName) {
-      const confirm = await Swal.fire({
-        title: 'ยืนยันใช้แพ็กเกจ?',
-        html: `<div class="text-left text-sm">
-          <p>แพ็กเกจ: <b>${esc(pkgName)}</b></p>
-          <p>เจ้าของ: <b class="text-purple-700">${esc(ownerName)}</b></p>
-          <p>เหลือ: <b>${remaining} → ${remaining - 1}</b> ครั้ง</p>
-          <p class="mt-2 text-[11px] text-amber-700 bg-amber-50 p-2 rounded">⚠️ ระบบจะส่ง LINE แจ้งเจ้าของแพ็กเกจอัตโนมัติ</p>
-        </div>`,
-        icon: 'question', showCancelButton: true,
-        confirmButtonText: '✅ ยืนยันยืม', cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#7C3AED'
-      });
-      if (!confirm.isConfirmed) return;
-
-      // 1) เพิ่ม pkg เข้า eligiblePkgs (เพื่อให้ logic เดิมใช้ต่อได้)
+    // 🔗 F2.5g — INLINE pick: เลือกแพ็กเกจที่จะยืม
+    function _payBorrowPick_(pkgRowId, pkgName, total, used, remaining, serviceId, ownerUid, ownerName) {
+      // 1) เพิ่ม pkg เข้า eligiblePkgs (กันซ้ำ)
       window._currentEligiblePkgs = window._currentEligiblePkgs || [];
-      window._currentEligiblePkgs.push({
-        pkg_row_id: pkgRowId, name: pkgName, total: total, used: used, remaining: remaining, service_id: serviceId,
-        owner_uid: ownerUid, owner_name: ownerName
-      });
-
-      // 2) เพิ่ม option เข้า dropdown + select เอง
-      const sel = document.getElementById('payMethod');
-      if (sel) {
-        // ใส่ใน optgroup ยืมแพ็กเกจ
-        const borrowGrp = document.getElementById('payBorrowOptgroup');
-        const opt = document.createElement('option');
-        opt.value = 'package:' + pkgRowId;
-        opt.textContent = `🔗 ${pkgName} (ของ ${ownerName}, เหลือ ${remaining})`;
-        opt.dataset.borrowed = '1';
-        opt.dataset.ownerUid = ownerUid;
-        opt.dataset.ownerName = ownerName;
-        if (borrowGrp) borrowGrp.appendChild(opt); else sel.appendChild(opt);
-        sel.value = opt.value;
+      if (!window._currentEligiblePkgs.find(p => String(p.pkg_row_id) === String(pkgRowId))) {
+        window._currentEligiblePkgs.push({
+          pkg_row_id: pkgRowId, name: pkgName, total: total, used: used, remaining: remaining, service_id: serviceId,
+          owner_uid: ownerUid, owner_name: ownerName
+        });
       }
 
-      // 3) บันทึก borrowed info ใน amtEl dataset (ใช้ตอน submit)
+      // 2) เพิ่ม option เข้า dropdown + select (กันซ้ำด้วย id)
+      const sel = document.getElementById('payMethod');
+      if (sel) {
+        const targetVal = 'package:' + pkgRowId;
+        let opt = Array.from(sel.querySelectorAll('option')).find(o => o.value === targetVal);
+        if (!opt) {
+          opt = document.createElement('option');
+          opt.value = targetVal;
+          opt.textContent = `🔗 ${pkgName} (ของ ${ownerName}, เหลือ ${remaining})`;
+          opt.dataset.borrowed = '1';
+          opt.dataset.ownerUid = ownerUid;
+          opt.dataset.ownerName = ownerName;
+          const borrowGrp = document.getElementById('payBorrowOptgroup');
+          if (borrowGrp) borrowGrp.appendChild(opt); else sel.appendChild(opt);
+        }
+        sel.value = targetVal;
+      }
+
+      // 3) บันทึก borrowed info
       const amtEl = document.getElementById('payAmount');
       if (amtEl) {
         amtEl.dataset.borrowedFromUid = ownerUid;
         amtEl.dataset.ownerName = ownerName;
       }
 
-      // 4) trigger _onPayMethodChange เพื่อคำนวน coverage + hybrid box
+      // 4) ซ่อน search section
+      const borrowSec = document.getElementById('payBorrowSection');
+      if (borrowSec) borrowSec.classList.add('hidden');
+
+      // 5) trigger _onPayMethodChange (จะคำนวน coverage + hybrid box)
       _onPayMethodChange();
 
-      // 5) แสดง banner ม่วงๆ
-      setTimeout(() => {
-        const banner = document.getElementById('payPkgInfo');
-        if (banner) {
-          banner.classList.remove('hidden');
-          banner.classList.remove('bg-orange-50', 'border-orange-200', 'text-orange-800');
-          banner.classList.add('bg-purple-50', 'border-purple-200', 'text-purple-800');
-          banner.innerHTML = `🔗 <b>ยืมแพ็กเกจของ ${esc(ownerName)}</b><br><span class="text-[10px]">${esc(pkgName)} — ระบบจะแจ้ง LINE เจ้าของอัตโนมัติหลังบันทึก</span>`;
-        }
-      }, 50);
+      // 6) แสดง banner สีม่วง
+      const banner = document.getElementById('payPkgInfo');
+      if (banner) {
+        banner.classList.remove('hidden');
+        banner.classList.remove('bg-orange-50', 'border-orange-200', 'text-orange-800');
+        banner.classList.add('bg-purple-50', 'border-purple-200', 'text-purple-800');
+        banner.innerHTML = `🔗 <b>ยืมแพ็กเกจของ ${esc(ownerName)}</b><br><span class="text-[10px]">${esc(pkgName)} — ระบบจะแจ้ง LINE เจ้าของอัตโนมัติหลังบันทึก</span>`;
+      }
+
+      // 7) Toast
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เลือกแพ็กเกจของ ' + ownerName, showConfirmButton: false, timer: 1800 });
     }
 
     // 🆕 F2.5f: render Hybrid Box breakdown — เรียกซ้ำได้เมื่อ discount เปลี่ยน
@@ -2170,9 +2166,10 @@
         ? methods.map(m => `<option value="${esc(m.pay_id || m.id)}">${esc(m.pay_name || m.name)}</option>`).join('')
         : `<option value="cash">💵 เงินสด</option><option value="promptpay">📱 PromptPay</option><option value="transfer">🏦 โอน</option>`;
 
-      // 🆕 F2.5f Issue 2: เริ่มต้นด้วย placeholder optgroup (loading) — แล้ว inject options เมื่อโหลดเสร็จ
-      // 🔗 F2.5g: เพิ่ม option "ยืมแพ็กเกจคนอื่น" ที่ optgroup ถัดมา
-      const methodOptions = `<optgroup id="payPkgOptgroup" label="📦 กำลังโหลดแพ็กเกจ...">${(b.lineUid && b.lineUid !== 'WALKIN_NEW') ? '<option value="" disabled>กำลังโหลด...</option>' : ''}</optgroup><optgroup id="payBorrowOptgroup" label="🔗 ยืมแพ็กเกจ"><option value="__borrow__">🔗 ยืมแพ็กเกจคนอื่น...</option></optgroup><optgroup label="💵 รับเงิน">${cashOptions}</optgroup>`;
+      // 🆕 F2.5f Issue 2 / 🔗 F2.5g: เรียงใหม่ — cash อยู่อันแรก (default = เงินสด)
+      //   ก่อนหน้านี้: package(loading) → borrow → cash → ทำให้ first selectable = __borrow__ → trigger search ตอน modal เปิด
+      //   ใหม่: cash → package(loading) → borrow → default = first cash method
+      const methodOptions = `<optgroup label="💵 รับเงิน">${cashOptions}</optgroup><optgroup id="payPkgOptgroup" label="📦 หักจากแพ็กเกจที่มี"></optgroup><optgroup id="payBorrowOptgroup" label="🔗 ยืมแพ็กเกจ"><option value="__borrow__">🔗 ยืมแพ็กเกจคนอื่น...</option></optgroup>`;
 
       const html = `
         <div class="text-left text-sm space-y-3">
@@ -2232,6 +2229,15 @@
             </select>
             <!-- 📦 F2.5c: banner เมื่อเลือกหักจากแพ็กเกจ -->
             <div id="payPkgInfo" class="hidden mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg text-orange-800 text-xs"></div>
+            <!-- 🔗 F2.5g: inline search section สำหรับ "ยืมแพ็กเกจคนอื่น" — กัน Swal-in-Swal -->
+            <div id="payBorrowSection" class="hidden mt-2 p-3 bg-purple-50 border-2 border-purple-300 rounded-xl space-y-2">
+              <p class="text-[10px] font-bold text-purple-700 uppercase">🔗 ค้นเจ้าของแพ็กเกจ</p>
+              <div class="flex gap-2">
+                <input type="text" id="payBorrowSearchInput" placeholder="ชื่อ / เบอร์ / ทะเบียน (≥2 ตัว)" class="flex-1 p-2 border border-gray-300 rounded-lg text-xs" onkeydown="if(event.key==='Enter'){event.preventDefault();_payBorrowSearch_();}">
+                <button type="button" onclick="_payBorrowSearch_()" class="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold whitespace-nowrap">🔍 ค้น</button>
+              </div>
+              <div id="payBorrowResults" class="max-h-56 overflow-y-auto"></div>
+            </div>
             <!-- 🆕 F2.5f Hybrid: breakdown + secondary cash method (เฉพาะเคส partial) -->
             <div id="payHybridBox" class="hidden mt-2 p-3 bg-gradient-to-br from-emerald-50 to-orange-50 border-2 border-orange-300 rounded-xl space-y-2">
               <div class="text-[10px] font-bold text-orange-700 uppercase">📦 แพ็กเกจครอบคลุมบางส่วน</div>
