@@ -1735,6 +1735,102 @@
       _updatePaymentQR();
     }
 
+    // 🆕 F2.5f Hybrid: เมื่อ admin เปลี่ยน method — เช็คว่า package coverage ครอบคลุมเต็มมั้ย
+    //   ถ้า partial → แสดง breakdown + secondary cash method
+    //   ถ้า full → ใช้ flow เดิม (amount=0)
+    //   ถ้า cash → ปกติ
+    function _onPayMethodChange() {
+      const sel = document.getElementById('payMethod');
+      if (!sel) return;
+      const val = sel.value || '';
+      const hybridBox = document.getElementById('payHybridBox');
+      const breakdownEl = document.getElementById('payHybridBreakdown');
+
+      // ถ้าไม่ใช่ package → ซ่อน hybrid box + ใช้ flow QR เดิม
+      if (!val.startsWith('package:')) {
+        if (hybridBox) hybridBox.classList.add('hidden');
+        _updatePaymentQR();
+        return;
+      }
+
+      // 📦 เลือก package — คำนวน coverage
+      const pkgRowId = val.substring(8);
+      const eligibles = window._currentEligiblePkgs || [];
+      const pkg = eligibles.find(p => String(p.pkg_row_id) === String(pkgRowId));
+      if (!pkg) { _updatePaymentQR(); return; }
+
+      const bInfo = window._currentBookingInfo || {};
+      const bookingSvcIds = String(bInfo.serviceIds || '').split(',').map(s => s.trim()).filter(Boolean);
+
+      // หา service ใน booking ที่ตรงกับ pkg.service_id
+      const covered = [];
+      const notCovered = [];
+      let packageCoveredAmt = 0;
+      let cashRequiredAmt = 0;
+      bookingSvcIds.forEach(sid => {
+        const svc = adminServices.find(s => String(s.service_id) === String(sid));
+        if (!svc) return;
+        const price = parseFloat(svc.price_m || svc.pricem || 0) || 0;
+        const sName = svc.service_name || svc.name || sid;
+        if (String(sid) === String(pkg.service_id)) {
+          covered.push({ name: sName, price: price });
+          packageCoveredAmt += price;
+        } else {
+          notCovered.push({ name: sName, price: price });
+          cashRequiredAmt += price;
+        }
+      });
+
+      // render breakdown
+      let html = '';
+      if (covered.length > 0) {
+        html += `<div class="text-emerald-700"><b>✅ ครอบคลุม (แพ็กเกจ):</b></div>`;
+        covered.forEach(c => { html += `<div class="ml-3 text-emerald-600">• ${esc(c.name)} — ${c.price.toLocaleString()}.-</div>`; });
+      }
+      if (notCovered.length > 0) {
+        html += `<div class="text-red-600 mt-1"><b>💰 ต้องเก็บเพิ่ม:</b></div>`;
+        notCovered.forEach(c => { html += `<div class="ml-3 text-red-500">• ${esc(c.name)} — ${c.price.toLocaleString()}.-</div>`; });
+      }
+      html += `<div class="mt-2 pt-2 border-t border-orange-200 flex justify-between">
+                <span class="font-bold text-orange-700">📦 หักแพ็กเกจ:</span>
+                <span class="font-bold text-orange-700">${packageCoveredAmt.toLocaleString()}.-</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-bold text-emerald-700">💵 รับเงินสด:</span>
+                <span class="font-bold text-emerald-700">${cashRequiredAmt.toLocaleString()}.-</span>
+              </div>`;
+      if (breakdownEl) breakdownEl.innerHTML = html;
+
+      // ตั้ง state ตาม coverage
+      if (cashRequiredAmt > 0) {
+        // Partial → แสดง hybrid box + secondary method
+        if (hybridBox) hybridBox.classList.remove('hidden');
+        const amtEl = document.getElementById('payAmount');
+        const dispEl = document.getElementById('payAmountDisplay');
+        if (amtEl) amtEl.value = cashRequiredAmt;
+        if (dispEl) dispEl.textContent = cashRequiredAmt.toLocaleString();
+        // เก็บ package credit + pkgRowId ใน data attribute เพื่อใช้ตอน submit
+        if (amtEl) {
+          amtEl.dataset.packageCredit = packageCoveredAmt;
+          amtEl.dataset.pkgRowId = pkgRowId;
+        }
+        // ล้าง QR ตามจริงด้วย hybrid method
+        _updatePaymentQR();
+      } else {
+        // Full coverage → flow เดิม (amount=0)
+        if (hybridBox) hybridBox.classList.add('hidden');
+        const amtEl = document.getElementById('payAmount');
+        const dispEl = document.getElementById('payAmountDisplay');
+        if (amtEl) {
+          amtEl.value = 0;
+          amtEl.dataset.packageCredit = packageCoveredAmt;
+          amtEl.dataset.pkgRowId = pkgRowId;
+        }
+        if (dispEl) dispEl.textContent = '0';
+        _updatePaymentQR();
+      }
+    }
+
     // 💰 F2.4b: ตรวจ method ปัจจุบัน + ยอด → แสดง/ซ่อน QR section
     function _updatePaymentQR() {
       const sec = document.getElementById('payQRSection');
@@ -1746,19 +1842,44 @@
       const methodVal = methodSel.value;
       const methodText = methodSel.options[methodSel.selectedIndex]?.textContent || '';
 
-      // 📦 F2.5c: ถ้าเลือก "หักจากแพ็กเกจ" → auto-set ยอด=0 + สถานะ=paid + ซ่อน QR
+      // 📦 F2.5c / F2.5f: ถ้าเลือก "หักจากแพ็กเกจ" — ดูว่า hybrid หรือ full coverage
       const isPackage = typeof methodVal === 'string' && methodVal.startsWith('package:');
       if (isPackage) {
+        const statusSel = document.getElementById('payStatus');
+        if (statusSel) statusSel.value = 'paid';
+        const banner = document.getElementById('payPkgInfo');
+        const hybridBox = document.getElementById('payHybridBox');
+        const isHybrid = hybridBox && !hybridBox.classList.contains('hidden');
+        if (isHybrid) {
+          // Hybrid → ใช้ secondary method สำหรับเก็บ cash; เช็คว่าเป็น PromptPay มั้ย → แสดง QR
+          const cashMethodSel = document.getElementById('payHybridCashMethod');
+          const cashMethodVal = cashMethodSel ? cashMethodSel.value : '';
+          const cashMethodText = cashMethodSel ? (cashMethodSel.options[cashMethodSel.selectedIndex]?.textContent || '') : '';
+          const isPromptPay = /promptpay|พร้อมเพย์/i.test(cashMethodVal + ' ' + cashMethodText);
+          if (banner) banner.classList.add('hidden');
+          if (!isPromptPay) { sec.classList.add('hidden'); return; }
+          // render QR ด้วย amount = cash portion
+          const amount = parseFloat(amtInput.value) || 0;
+          const ppId = _getPromptPayId();
+          if (!ppId || amount <= 0) { sec.classList.add('hidden'); return; }
+          sec.classList.remove('hidden');
+          document.getElementById('payQRContainer').innerHTML = renderPromptPayQR(ppId, amount);
+          document.getElementById('payQRAmount').textContent = amount.toLocaleString();
+          let maskedId = ppId;
+          const clean = String(ppId).replace(/\D/g, '');
+          if (clean.length === 10) maskedId = clean.slice(0,3) + '-xxx-' + clean.slice(7);
+          else if (clean.length === 13) maskedId = clean.slice(0,1) + '-xxxx-xxxxx-' + clean.slice(11);
+          document.getElementById('payQRTarget').textContent = 'PromptPay (เก็บส่วนต่าง): ' + maskedId;
+          return;
+        }
+        // Full coverage → flow เดิม (amount=0, ซ่อน QR)
         sec.classList.add('hidden');
         const dispEl = document.getElementById('payAmountDisplay');
         if (dispEl) dispEl.textContent = '0';
         amtInput.value = 0;
-        const statusSel = document.getElementById('payStatus');
-        if (statusSel) statusSel.value = 'paid';
-        const banner = document.getElementById('payPkgInfo');
         if (banner) {
           banner.classList.remove('hidden');
-          banner.innerHTML = `📦 <b>${methodText}</b><br><span class="text-[10px]">ระบบจะหัก 1 ครั้งจากแพ็กเกจอัตโนมัติ — ลูกค้าไม่ต้องจ่ายเงินสดเพิ่ม</span>`;
+          banner.innerHTML = `📦 <b>${methodText}</b><br><span class="text-[10px]">แพ็กเกจครอบคลุมทั้งหมด — ลูกค้าไม่ต้องจ่ายเงินสดเพิ่ม</span>`;
         }
         return;
       } else {
@@ -1860,28 +1981,26 @@
         }
       });
 
-      // 📦 F2.5c: query แพ็กเกจของลูกค้าที่ใช้ได้กับบริการนี้
-      let eligiblePkgs = [];
-      try {
-        if (b.lineUid && b.lineUid !== 'WALKIN_NEW' && b.serviceIds) {
-          const pl = new URLSearchParams({ action: 'getEligiblePackages', uid: b.lineUid, serviceIds: b.serviceIds });
-          const r = await fetch(API_URL, { method: 'POST', body: withAuth(pl) });
-          const result = await r.json();
-          if (result.status === 'success' && Array.isArray(result.data)) eligiblePkgs = result.data;
-        }
-      } catch (e) { console.warn('getEligiblePackages err', e); }
+      // 🆕 F2.5f Issue 2: เริ่ม fetch eligible packages แบบ async (ไม่ block modal opening)
+      const eligiblePkgsPromise = (b.lineUid && b.lineUid !== 'WALKIN_NEW' && b.serviceIds)
+        ? fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getEligiblePackages', uid: b.lineUid, serviceIds: b.serviceIds })) })
+            .then(r => r.json())
+            .then(result => (result.status === 'success' && Array.isArray(result.data)) ? result.data : [])
+            .catch(e => { console.warn('getEligiblePackages err', e); return []; })
+        : Promise.resolve([]);
 
-      // ดึงรายการ payment methods จาก configData
+      // 🆕 store globally — ใช้ตอน admin เลือก package method เพื่อคำนวน coverage
+      window._currentEligiblePkgs = [];
+      window._currentBookingInfo = { serviceIds: b.serviceIds, sizeMap: {}, totalGross: estimatedPrice };
+
+      // ดึงรายการ payment methods จาก configData (cash only ก่อน — package inject ทีหลัง)
       const methods = (configData && configData.payments) || [];
       const cashOptions = methods.length > 0
         ? methods.map(m => `<option value="${esc(m.pay_id || m.id)}">${esc(m.pay_name || m.name)}</option>`).join('')
         : `<option value="cash">💵 เงินสด</option><option value="promptpay">📱 PromptPay</option><option value="transfer">🏦 โอน</option>`;
 
-      // 📦 เพิ่ม option หักจากแพ็กเกจ — ก่อน cash methods (เด่นชัด)
-      const pkgOptions = eligiblePkgs.map(p =>
-        `<option value="package:${esc(p.pkg_row_id)}" class="text-orange-700">📦 หักจาก: ${esc(p.name)} (เหลือ ${p.remaining}/${p.total})</option>`
-      ).join('');
-      const methodOptions = (pkgOptions ? `<optgroup label="📦 หักจากแพ็กเกจที่มี">${pkgOptions}</optgroup><optgroup label="💵 รับเงิน">${cashOptions}</optgroup>` : cashOptions);
+      // 🆕 F2.5f Issue 2: เริ่มต้นด้วย placeholder optgroup (loading) — แล้ว inject options เมื่อโหลดเสร็จ
+      const methodOptions = `<optgroup id="payPkgOptgroup" label="📦 กำลังโหลดแพ็กเกจ...">${(b.lineUid && b.lineUid !== 'WALKIN_NEW') ? '<option value="" disabled>กำลังโหลด...</option>' : ''}</optgroup><optgroup label="💵 รับเงิน">${cashOptions}</optgroup>`;
 
       const html = `
         <div class="text-left text-sm space-y-3">
@@ -1936,11 +2055,20 @@
 
           <div>
             <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">วิธีจ่าย</label>
-            <select id="payMethod" class="w-full p-3 border border-gray-300 rounded-lg text-sm" onchange="_updatePaymentQR()">
+            <select id="payMethod" class="w-full p-3 border border-gray-300 rounded-lg text-sm" onchange="_onPayMethodChange()">
               ${methodOptions}
             </select>
             <!-- 📦 F2.5c: banner เมื่อเลือกหักจากแพ็กเกจ -->
             <div id="payPkgInfo" class="hidden mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg text-orange-800 text-xs"></div>
+            <!-- 🆕 F2.5f Hybrid: breakdown + secondary cash method (เฉพาะเคส partial) -->
+            <div id="payHybridBox" class="hidden mt-2 p-3 bg-gradient-to-br from-emerald-50 to-orange-50 border-2 border-orange-300 rounded-xl space-y-2">
+              <div class="text-[10px] font-bold text-orange-700 uppercase">📦 แพ็กเกจครอบคลุมบางส่วน</div>
+              <div id="payHybridBreakdown" class="text-xs space-y-1"></div>
+              <div>
+                <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">💰 เก็บส่วนต่างผ่าน</label>
+                <select id="payHybridCashMethod" class="w-full p-2 border border-gray-300 rounded-lg text-sm" onchange="_updatePaymentQR()">${cashOptions}</select>
+              </div>
+            </div>
           </div>
 
           <div>
@@ -1985,6 +2113,21 @@
         didOpen: () => {
           _recalcNetAmount();
           _updatePaymentQR();
+          // 🆕 F2.5f Issue 2: async inject eligible packages เข้า dropdown
+          eligiblePkgsPromise.then(eligiblePkgs => {
+            window._currentEligiblePkgs = eligiblePkgs || [];
+            const optgrp = document.getElementById('payPkgOptgroup');
+            if (!optgrp) return;
+            if (!eligiblePkgs || eligiblePkgs.length === 0) {
+              optgrp.remove();  // ไม่มี package → ลบ optgroup placeholder
+              return;
+            }
+            // เปลี่ยน label + เติม options
+            optgrp.label = '📦 หักจากแพ็กเกจที่มี';
+            optgrp.innerHTML = eligiblePkgs.map(p =>
+              `<option value="package:${esc(p.pkg_row_id)}">📦 หักจาก: ${esc(p.name)} (เหลือ ${p.remaining}/${p.total})</option>`
+            ).join('');
+          });
           // 🆕 F2.5f: ถ้า isEdit → pre-fill ค่าเดิมจาก cache
           if (isEdit) {
             const amtEl = document.getElementById('payAmount');
@@ -2006,22 +2149,47 @@
 
       if (res.isConfirmed) {
         // บันทึก payment + complete
-        const method = document.getElementById('payMethod').value;
-        const amount = parseFloat(document.getElementById('payAmount').value) || 0;
+        let method = document.getElementById('payMethod').value;
+        let amount = parseFloat(document.getElementById('payAmount').value) || 0;
         const payStatus = document.getElementById('payStatus').value;
         // 🆕 F1.5b: discount
         const discountCB = document.getElementById('discountToggle');
         const discountAmt = (discountCB && discountCB.checked) ? (parseFloat(document.getElementById('discountAmount').value) || 0) : 0;
         const discountReason = (discountCB && discountCB.checked) ? document.getElementById('discountReason').value : '';
 
+        // 🆕 F2.5f Hybrid: detect package + cash combo
+        let packageRowId = '';
+        let packageCredit = 0;
+        if (typeof method === 'string' && method.startsWith('package:')) {
+          packageRowId = method.substring(8);
+          const amtEl = document.getElementById('payAmount');
+          packageCredit = parseFloat(amtEl && amtEl.dataset.packageCredit) || 0;
+          // ถ้า hybrid (มี cashRequired) → ใช้ secondary method แทน
+          const hybridBox = document.getElementById('payHybridBox');
+          if (hybridBox && !hybridBox.classList.contains('hidden')) {
+            const cashMethodSel = document.getElementById('payHybridCashMethod');
+            if (cashMethodSel) method = cashMethodSel.value || 'cash';
+            // amount ใน payAmount = cashRequired อยู่แล้ว (ตั้งใน _onPayMethodChange)
+          } else {
+            // Full coverage → ส่ง method='package' (backend จะรับ packageRowId แทน)
+            method = 'package';
+            amount = 0;
+          }
+        }
+
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
         try {
-          // 1. บันทึก payment (+ discount)
-          const payPayload = new URLSearchParams({
+          // 1. บันทึก payment (+ discount + package)
+          const payPayloadObj = {
             action: 'recordPayment', bookingId: bookingId,
             method: method, amount: amount, status: payStatus,
             discountAmount: discountAmt, discountReason: discountReason
-          });
+          };
+          if (packageRowId) {
+            payPayloadObj.packageRowId = packageRowId;
+            payPayloadObj.packageCredit = packageCredit;
+          }
+          const payPayload = new URLSearchParams(payPayloadObj);
           const payRes = await fetch(API_URL, { method: 'POST', body: withAuth(payPayload) });
           const payResult = await payRes.json();
           if (payResult.status !== 'success') throw new Error('บันทึกการจ่ายไม่สำเร็จ: ' + (payResult.message || ''));
