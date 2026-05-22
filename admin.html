@@ -400,9 +400,31 @@
           <h4 class="font-bold text-gray-700 flex items-center gap-2 text-sm"><i class="fa-solid fa-box-open text-orange-500"></i> แพ็กเกจคงเหลือ</h4>
           <div id="crmPackagesList" class="space-y-2"></div>
           <div class="bg-white border border-gray-200 p-4 rounded-2xl shadow-sm">
-            <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">➕ เพิ่มแพ็กเกจใหม่ให้ลูกค้า</p>
-            <select id="crmAddPackageSelect" class="w-full p-3 border border-gray-300 rounded-xl text-sm mb-3 bg-gray-50"></select>
-            <button onclick="addPackageToCustomer()" class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow transition"><i class="fa-solid fa-plus mr-1"></i> ขายแพ็กเกจเข้าบัญชีนี้</button>
+            <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">➕ ขายแพ็กเกจให้ลูกค้า</p>
+            <select id="crmAddPackageSelect" onchange="onCrmPkgChange()" class="w-full p-3 border border-gray-300 rounded-xl text-sm mb-3 bg-gray-50"></select>
+
+            <!-- 🆕 ราคา + วิธีจ่าย + ส่วนลด -->
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label class="text-[10px] font-bold text-gray-500 uppercase">ราคาขาย (บาท)</label>
+                <input type="number" id="crmPkgPrice" oninput="_updateCrmPkgNet()" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 font-bold text-orange-600" placeholder="0">
+              </div>
+              <div>
+                <label class="text-[10px] font-bold text-gray-500 uppercase">ส่วนลด</label>
+                <input type="number" id="crmPkgDiscount" value="0" oninput="_updateCrmPkgNet()" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1">
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="text-[10px] font-bold text-gray-500 uppercase">วิธีชำระเงิน</label>
+              <select id="crmPkgPayMethod" class="w-full p-2 border border-gray-300 rounded-lg text-sm mt-1 bg-gray-50">
+                <option value="cash">💵 เงินสด</option>
+              </select>
+            </div>
+            <div class="mb-3 p-2 bg-emerald-50 rounded-lg text-center text-xs">
+              ยอดสุทธิที่รับ: <span id="crmPkgNet" class="font-bold text-emerald-700 text-base">0</span>.-
+            </div>
+
+            <button onclick="addPackageToCustomer()" class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow transition"><i class="fa-solid fa-plus mr-1"></i> ยืนยันขายแพ็กเกจ</button>
           </div>
         </div>
       </div>
@@ -1481,6 +1503,33 @@
 
       const methodVal = methodSel.value;
       const methodText = methodSel.options[methodSel.selectedIndex]?.textContent || '';
+
+      // 📦 F2.5c: ถ้าเลือก "หักจากแพ็กเกจ" → auto-set ยอด=0 + สถานะ=paid + ซ่อน QR
+      const isPackage = typeof methodVal === 'string' && methodVal.startsWith('package:');
+      if (isPackage) {
+        sec.classList.add('hidden');
+        // ตั้งยอด = 0 (ไม่รับเงินสดเพิ่ม)
+        const dispEl = document.getElementById('payAmountDisplay');
+        if (dispEl) dispEl.textContent = '0';
+        amtInput.value = 0;
+        // ตั้งสถานะเป็น paid
+        const statusSel = document.getElementById('payStatus');
+        if (statusSel) statusSel.value = 'paid';
+        // แสดง info banner
+        const banner = document.getElementById('payPkgInfo');
+        if (banner) {
+          banner.classList.remove('hidden');
+          banner.innerHTML = `📦 <b>${methodText}</b><br><span class="text-[10px]">ระบบจะหัก 1 ครั้งจากแพ็กเกจอัตโนมัติ — ลูกค้าไม่ต้องจ่ายเงินสดเพิ่ม</span>`;
+        }
+        return;
+      } else {
+        // ถ้าเปลี่ยนกลับจาก package → ซ่อน banner
+        const banner = document.getElementById('payPkgInfo');
+        if (banner) banner.classList.add('hidden');
+        // restore ยอดเป็นค่าจากการคำนวน net
+        if (typeof _recalcNetAmount === 'function') _recalcNetAmount();
+      }
+
       const isPromptPay = /promptpay|พร้อมเพย์/i.test(methodVal + ' ' + methodText);
 
       if (!isPromptPay) { sec.classList.add('hidden'); return; }
@@ -1524,11 +1573,28 @@
         }
       });
 
+      // 📦 F2.5c: query แพ็กเกจของลูกค้าที่ใช้ได้กับบริการนี้
+      let eligiblePkgs = [];
+      try {
+        if (b.lineUid && b.lineUid !== 'WALKIN_NEW' && b.serviceIds) {
+          const pl = new URLSearchParams({ action: 'getEligiblePackages', uid: b.lineUid, serviceIds: b.serviceIds });
+          const r = await fetch(API_URL, { method: 'POST', body: withAuth(pl) });
+          const result = await r.json();
+          if (result.status === 'success' && Array.isArray(result.data)) eligiblePkgs = result.data;
+        }
+      } catch (e) { console.warn('getEligiblePackages err', e); }
+
       // ดึงรายการ payment methods จาก configData
       const methods = (configData && configData.payments) || [];
-      const methodOptions = methods.length > 0
+      const cashOptions = methods.length > 0
         ? methods.map(m => `<option value="${esc(m.pay_id || m.id)}">${esc(m.pay_name || m.name)}</option>`).join('')
-        : `<option value="cash">เงินสด</option><option value="transfer">โอน</option><option value="package">หักจากแพ็กเกจ</option>`;
+        : `<option value="cash">💵 เงินสด</option><option value="promptpay">📱 PromptPay</option><option value="transfer">🏦 โอน</option>`;
+
+      // 📦 เพิ่ม option หักจากแพ็กเกจ — ก่อน cash methods (เด่นชัด)
+      const pkgOptions = eligiblePkgs.map(p =>
+        `<option value="package:${esc(p.pkg_row_id)}" class="text-orange-700">📦 หักจาก: ${esc(p.name)} (เหลือ ${p.remaining}/${p.total})</option>`
+      ).join('');
+      const methodOptions = (pkgOptions ? `<optgroup label="📦 หักจากแพ็กเกจที่มี">${pkgOptions}</optgroup><optgroup label="💵 รับเงิน">${cashOptions}</optgroup>` : cashOptions);
 
       const html = `
         <div class="text-left text-sm space-y-3">
@@ -1586,6 +1652,8 @@
             <select id="payMethod" class="w-full p-3 border border-gray-300 rounded-lg text-sm" onchange="_updatePaymentQR()">
               ${methodOptions}
             </select>
+            <!-- 📦 F2.5c: banner เมื่อเลือกหักจากแพ็กเกจ -->
+            <div id="payPkgInfo" class="hidden mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg text-orange-800 text-xs"></div>
           </div>
 
           <div>
@@ -1648,10 +1716,17 @@
           const statusResult = await statusRes.json();
           if (statusResult.status !== 'success') throw new Error(statusResult.message);
 
-          const successMsg = discountAmt > 0
-            ? `บันทึกการจ่าย ${amount.toLocaleString()}.- (ลด ${discountAmt}.-) + ล้างเสร็จ`
-            : `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method}) + ล้างเสร็จ`;
-          Swal.fire('สำเร็จ!', successMsg, 'success').then(() => loadAdminData());
+          // 📦 F2.5c: ถ้าหักจากแพ็กเกจ → แสดงข้อความพิเศษ
+          let successMsg;
+          if (payResult.deductedPackage) {
+            const dp = payResult.deductedPackage;
+            successMsg = `📦 หัก ${dp.name} 1 ครั้ง<br><b>เหลือ ${dp.remaining}/${dp.total} ครั้ง</b>`;
+          } else if (discountAmt > 0) {
+            successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (ลด ${discountAmt}.-) + ล้างเสร็จ`;
+          } else {
+            successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method}) + ล้างเสร็จ`;
+          }
+          Swal.fire({ icon: 'success', title: 'สำเร็จ!', html: successMsg, timer: 3000 }).then(() => loadAdminData());
         } catch (e) { Swal.fire('Error', e.message, 'error'); }
       } else if (res.isDenied) {
         // ข้าม payment — complete อย่างเดียว
@@ -2427,16 +2502,30 @@
 
         const pkgSel = document.getElementById('crmAddPackageSelect');
         if (d.masterPackages && d.masterPackages.length > 0) {
-          pkgSel.innerHTML = d.masterPackages.map(mp => {
+          // เพิ่ม placeholder ตัวแรก
+          const opts = ['<option value="">— เลือกแพ็กเกจ —</option>'];
+          d.masterPackages.forEach(mp => {
             const pName = mp.name || mp.pkg_name || mp.package_name || 'ไม่ระบุชื่อ';
             const pId   = mp.id || mp.master_id || mp.package_id;
-            // 🔧 FIX: ใช้ mp.amounts (plural) ตามที่ sheet เก็บจริง + handle combo/buffet
-            const info = _pkgAmountInfo(mp);
-            return `<option value="${pId}" data-name="${pName}" data-amount="${info.totalAmount}" data-type="${mp.type || 'single'}">${pName} (${info.label}) - ${mp.price || 0}.-</option>`;
-          }).join('');
+            const info  = _pkgAmountInfo(mp);
+            const price = parseFloat(mp.price) || 0;
+            opts.push(`<option value="${pId}" data-name="${pName}" data-amount="${info.totalAmount}" data-price="${price}" data-type="${mp.type || 'single'}">${pName} (${info.label}) - ${price.toLocaleString()}.-</option>`);
+          });
+          pkgSel.innerHTML = opts.join('');
         } else {
           pkgSel.innerHTML = '<option value="">ไม่มีแพ็กเกจเปิดขาย</option>';
         }
+        // 🆕 ตั้งค่า defaults + populate payment method dropdown
+        document.getElementById('crmPkgPrice').value = '';
+        document.getElementById('crmPkgDiscount').value = '0';
+        const pmSel = document.getElementById('crmPkgPayMethod');
+        const methods = (configData.payments || []);
+        if (methods.length > 0) {
+          pmSel.innerHTML = methods.map(m => `<option value="${m.pay_id || m.id}">${m.pay_name || m.name}</option>`).join('');
+        } else {
+          pmSel.innerHTML = '<option value="cash">💵 เงินสด</option><option value="promptpay">📱 PromptPay</option><option value="transfer">🏦 โอน</option>';
+        }
+        _updateCrmPkgNet();
 
       } catch(e) {
         const errMsg = `<p class="text-xs text-red-500">${esc(e.message)}</p>`;
@@ -2588,15 +2677,86 @@
       }
     }
 
+    // 🆕 เมื่อเปลี่ยน master package — auto-fill ราคา
+    function onCrmPkgChange() {
+      const sel = document.getElementById('crmAddPackageSelect');
+      const opt = sel.options[sel.selectedIndex];
+      const priceInput = document.getElementById('crmPkgPrice');
+      if (opt && opt.dataset.price) {
+        priceInput.value = opt.dataset.price;
+      } else {
+        priceInput.value = '';
+      }
+      _updateCrmPkgNet();
+    }
+
+    // 🆕 คำนวน net = price - discount, refresh display
+    function _updateCrmPkgNet() {
+      const price = parseFloat(document.getElementById('crmPkgPrice').value) || 0;
+      const disc  = parseFloat(document.getElementById('crmPkgDiscount').value) || 0;
+      const net   = Math.max(0, price - disc);
+      const el = document.getElementById('crmPkgNet');
+      if (el) el.textContent = net.toLocaleString();
+    }
+
     async function addPackageToCustomer() {
-      const sel = document.getElementById('crmAddPackageSelect'); const opt = sel.options[sel.selectedIndex];
+      const sel = document.getElementById('crmAddPackageSelect');
+      const opt = sel.options[sel.selectedIndex];
       if(!opt || !opt.value) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแพ็กเกจ', 'warning');
-      const pkgName = opt.dataset.name; const amount = opt.dataset.amount;
-      const res = await Swal.fire({ title: 'ยืนยันเพิ่มแพ็กเกจ?', text: `เพิ่ม ${pkgName} ให้ลูกค้ารายนี้ใช่ไหม?`, icon: 'question', showCancelButton: true, confirmButtonText: 'เพิ่มแพ็กเกจ', cancelButtonText: 'ยกเลิก' });
-      if(res.isConfirmed) {
-        Swal.fire({ title: 'กำลังเพิ่มแพ็กเกจ...', didOpen: () => Swal.showLoading() });
-        const payload = new URLSearchParams({ action: 'addPackageToUser', uid: currentCrmUid, pkgId: opt.value, pkgName: pkgName, amount: amount });
-        await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); Swal.fire('สำเร็จ', 'เพิ่มแพ็กเกจให้ลูกค้าเรียบร้อย', 'success'); openCrmModal(currentCrmUid, document.getElementById('crmModalTitle').innerText);
+
+      const pkgName  = opt.dataset.name;
+      const amount   = opt.dataset.amount;
+      const price    = parseFloat(document.getElementById('crmPkgPrice').value) || 0;
+      const discount = parseFloat(document.getElementById('crmPkgDiscount').value) || 0;
+      const payMethod= document.getElementById('crmPkgPayMethod').value || 'cash';
+      const net      = Math.max(0, price - discount);
+
+      if (price <= 0) {
+        return Swal.fire({ icon: 'warning', title: 'กรอกราคา', text: 'กรุณาใส่ราคาขาย' });
+      }
+      if (discount > price) {
+        return Swal.fire({ icon: 'warning', title: 'ส่วนลดเกินราคา', text: 'ส่วนลดต้องไม่เกินราคาขาย' });
+      }
+
+      const res = await Swal.fire({
+        title: 'ยืนยันขายแพ็กเกจ?',
+        html: `
+          <div class="text-left text-sm">
+            <p><b>${pkgName}</b></p>
+            <p class="mt-2">ราคา: <b>${price.toLocaleString()}.-</b></p>
+            ${discount > 0 ? `<p>ส่วนลด: <b class="text-amber-600">-${discount.toLocaleString()}.-</b></p>` : ''}
+            <p class="text-green-700 font-bold text-lg mt-2">รับจริง: ${net.toLocaleString()}.-</p>
+            <p class="text-xs text-gray-500 mt-1">ผ่าน: ${payMethod}</p>
+          </div>`,
+        icon: 'question', showCancelButton: true,
+        confirmButtonText: '✅ ยืนยันขาย', cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#f97316'
+      });
+      if(!res.isConfirmed) return;
+
+      Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+      try {
+        const payload = new URLSearchParams({
+          action: 'addPackageToUser',
+          uid: currentCrmUid, pkgId: opt.value, pkgName: pkgName, amount: amount,
+          price: price, paymentMethod: payMethod, paymentStatus: 'paid',
+          discountAmount: discount, discountReason: discount > 0 ? 'ส่วนลดตอนขายแพ็กเกจ' : ''
+        });
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await r.json();
+        if (result.status !== 'success') throw new Error(result.message || 'ผิดพลาด');
+
+        Swal.fire({
+          icon: 'success', title: 'ขายสำเร็จ',
+          html: `รับเงิน <b class="text-green-700">${(result.netAmount || net).toLocaleString()}.-</b> เรียบร้อย<br>เพิ่มลงสรุปยอดวันนี้แล้ว`,
+          timer: 2500, showConfirmButton: false
+        });
+        openCrmModal(currentCrmUid, document.getElementById('crmModalTitle').innerText);
+        // refresh dashboard + reconciliation ทันที
+        if (typeof loadDashboardSummary === 'function') loadDashboardSummary();
+        if (typeof loadReconciliation === 'function') loadReconciliation();
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
       }
     }
 
