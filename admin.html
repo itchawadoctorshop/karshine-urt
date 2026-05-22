@@ -138,29 +138,13 @@
         </div>
         <p id="reconSavedInfo" class="text-[10px] text-gray-500 mt-2 hidden"></p>
 
-        <!-- Section B: ตารางประวัติบริการรายวัน -->
-        <details class="mt-5 border-t pt-3" id="salesHistoryDetails">
-          <summary class="cursor-pointer text-sm font-bold text-gray-700 hover:text-blue-600">
-            📋 ประวัติบริการวันนี้ (<span id="salesHistCount">0</span> รายการ)
+        <!-- Section B: ตารางประวัติบริการรายวัน (Group by Service) -->
+        <details class="mt-5 border-t pt-3" id="salesHistoryDetails" open>
+          <summary class="cursor-pointer text-sm font-bold text-gray-700 hover:text-blue-600 flex items-center justify-between">
+            <span>📋 ประวัติบริการวันนี้ (<span id="salesHistCount">0</span> รายการ)</span>
+            <span class="text-[10px] text-gray-400 font-normal">กดที่แต่ละบริการเพื่อดูรายละเอียด</span>
           </summary>
-          <div class="overflow-x-auto mt-3">
-            <table class="w-full text-[11px]">
-              <thead class="bg-gray-50 text-gray-600 sticky top-0">
-                <tr>
-                  <th class="px-2 py-1.5 text-left">เวลา</th>
-                  <th class="px-2 py-1.5 text-left">ลูกค้า</th>
-                  <th class="px-2 py-1.5 text-left">ทะเบียน</th>
-                  <th class="px-2 py-1.5 text-left">บริการ</th>
-                  <th class="px-2 py-1.5 text-right">ยอดเต็ม</th>
-                  <th class="px-2 py-1.5 text-right">ส่วนลด</th>
-                  <th class="px-2 py-1.5 text-right">สุทธิ</th>
-                  <th class="px-2 py-1.5 text-left">ช่องทาง</th>
-                  <th class="px-2 py-1.5 text-left">สถานะ</th>
-                </tr>
-              </thead>
-              <tbody id="salesHistoryBody" class="divide-y divide-gray-100"></tbody>
-            </table>
-          </div>
+          <div id="salesHistoryBody" class="mt-3 space-y-2"></div>
         </details>
 
       </div>
@@ -807,11 +791,11 @@
     }
 
     function renderSalesHistory() {
-      const tbody = document.getElementById('salesHistoryBody');
+      const container = document.getElementById('salesHistoryBody');
       const rows = _reconCache.salesRows || [];
       document.getElementById('salesHistCount').textContent = rows.length;
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-gray-400">ไม่มีรายการ</td></tr>`;
+        container.innerHTML = `<div class="text-center py-6 text-gray-400 text-xs">ไม่มีรายการ</div>`;
         return;
       }
       const statusBadge = (st) => {
@@ -833,19 +817,101 @@
         }
         return '<span class="text-red-500">⏳ ยังไม่จ่าย</span>';
       };
-      tbody.innerHTML = rows.map(r => `
-        <tr class="hover:bg-gray-50">
-          <td class="px-2 py-1.5">${r.time || '-'}</td>
-          <td class="px-2 py-1.5">${r.customer_name || '-'}</td>
-          <td class="px-2 py-1.5 font-mono">${r.plate || '-'}</td>
-          <td class="px-2 py-1.5 text-gray-600">${r.services_name || '-'}</td>
-          <td class="px-2 py-1.5 text-right">${(r.gross||0).toLocaleString()}</td>
-          <td class="px-2 py-1.5 text-right text-amber-600">${r.discount ? '-' + r.discount.toLocaleString() : '0'}</td>
-          <td class="px-2 py-1.5 text-right font-bold text-green-700">${(r.net||0).toLocaleString()}</td>
-          <td class="px-2 py-1.5">${payBadge(r)}</td>
-          <td class="px-2 py-1.5">${statusBadge(r.status)}</td>
-        </tr>
-      `).join('');
+
+      // 📦 Group ตามชื่อบริการ
+      const groups = {};
+      rows.forEach(r => {
+        const key = r.services_name || '(ไม่ระบุบริการ)';
+        if (!groups[key]) {
+          groups[key] = { name: key, items: [], count: 0, gross: 0, discount: 0, net: 0, completed: 0, unpaid: 0, cancelled: 0 };
+        }
+        groups[key].items.push(r);
+        groups[key].count++;
+        groups[key].gross    += r.gross || 0;
+        groups[key].discount += r.discount || 0;
+        groups[key].net      += r.net || 0;
+        if (r.status === 'completed') {
+          groups[key].completed++;
+          if (r.payment_status !== 'paid') groups[key].unpaid++;
+        }
+        if (r.status === 'cancelled' || r.status === 'cancelled_noshow') groups[key].cancelled++;
+      });
+
+      // เรียง: บริการที่ขายเยอะสุดก่อน
+      const groupArr = Object.values(groups).sort((a, b) => b.count - a.count);
+
+      container.innerHTML = groupArr.map((g, gIdx) => {
+        const itemsHtml = g.items.map(r => `
+          <tr class="hover:bg-gray-50 text-[11px]">
+            <td class="px-2 py-1.5 whitespace-nowrap font-mono text-gray-600">${r.time || '-'}</td>
+            <td class="px-2 py-1.5">${r.customer_name || '-'}</td>
+            <td class="px-2 py-1.5 font-mono">
+              <div>${r.plate || '-'}</div>
+              ${r.province ? `<div class="text-[9px] text-gray-400">${r.province}</div>` : ''}
+            </td>
+            <td class="px-2 py-1.5 text-gray-600">
+              ${r.brand || r.model ? `<div>${[r.brand, r.model].filter(Boolean).join(' ')}</div>` : ''}
+              <span class="text-[9px] text-gray-400">ขนาด ${r.size || '-'}</span>
+            </td>
+            <td class="px-2 py-1.5 text-right">${(r.gross||0).toLocaleString()}</td>
+            <td class="px-2 py-1.5 text-right text-amber-600">${r.discount ? '-' + r.discount.toLocaleString() : '0'}</td>
+            <td class="px-2 py-1.5 text-right font-bold text-green-700">${(r.net||0).toLocaleString()}</td>
+            <td class="px-2 py-1.5">${payBadge(r)}</td>
+            <td class="px-2 py-1.5">${statusBadge(r.status)}</td>
+          </tr>
+        `).join('');
+
+        const badges = [];
+        if (g.completed > 0)  badges.push(`<span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px]">เสร็จ ${g.completed}</span>`);
+        if (g.unpaid > 0)     badges.push(`<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px]">ค้าง ${g.unpaid}</span>`);
+        if (g.cancelled > 0)  badges.push(`<span class="px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-[10px]">ยกเลิก ${g.cancelled}</span>`);
+
+        return `
+          <details class="border border-gray-200 rounded-xl bg-white overflow-hidden">
+            <summary class="cursor-pointer px-3 py-2.5 bg-gradient-to-r from-blue-50 to-emerald-50 hover:from-blue-100 hover:to-emerald-100 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <i class="fa-solid fa-chevron-right text-gray-400 text-xs transition-transform"></i>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-bold text-gray-800 truncate">${g.name}</div>
+                  <div class="flex flex-wrap gap-1 mt-0.5">${badges.join('')}</div>
+                </div>
+              </div>
+              <div class="flex flex-col items-end text-[10px] flex-shrink-0">
+                <div class="text-gray-500">รวม ${g.count} คิว</div>
+                <div class="font-bold text-green-700 text-sm">${g.net.toLocaleString()}.-</div>
+                ${g.discount > 0 ? `<div class="text-amber-600">ส่วนลด ${g.discount.toLocaleString()}</div>` : ''}
+              </div>
+            </summary>
+            <div class="overflow-x-auto border-t border-gray-100">
+              <table class="w-full">
+                <thead class="bg-gray-50 text-gray-600 text-[10px]">
+                  <tr>
+                    <th class="px-2 py-1.5 text-left">เวลา</th>
+                    <th class="px-2 py-1.5 text-left">ลูกค้า</th>
+                    <th class="px-2 py-1.5 text-left">ทะเบียน</th>
+                    <th class="px-2 py-1.5 text-left">รถ</th>
+                    <th class="px-2 py-1.5 text-right">ยอดเต็ม</th>
+                    <th class="px-2 py-1.5 text-right">ส่วนลด</th>
+                    <th class="px-2 py-1.5 text-right">สุทธิ</th>
+                    <th class="px-2 py-1.5 text-left">ช่องทาง</th>
+                    <th class="px-2 py-1.5 text-left">สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">${itemsHtml}</tbody>
+              </table>
+            </div>
+          </details>
+        `;
+      }).join('');
+
+      // CSS: หมุน chevron เมื่อ details เปิด
+      container.querySelectorAll('details').forEach(d => {
+        d.addEventListener('toggle', () => {
+          const icon = d.querySelector('summary .fa-chevron-right');
+          if (!icon) return;
+          icon.style.transform = d.open ? 'rotate(90deg)' : 'rotate(0deg)';
+        });
+      });
     }
 
     function exportSalesCsv() {
@@ -855,12 +921,13 @@
         Swal.fire({ icon: 'info', title: 'ไม่มีข้อมูล', text: 'ยังไม่มีรายการในวันนี้' });
         return;
       }
-      const header = ['เวลา','Booking ID','ลูกค้า','ทะเบียน','รุ่น','ขนาด','บริการ','ยอดเต็ม','ส่วนลด','เหตุผลส่วนลด','ยอดสุทธิ','ช่องทาง','สถานะจ่าย','เวลาจ่าย','สถานะคิว'];
+      const header = ['เวลา','Booking ID','ลูกค้า','ทะเบียน','จังหวัด','ยี่ห้อ','รุ่น','สี','ขนาด','บริการ','ยอดเต็ม','ส่วนลด','เหตุผลส่วนลด','ยอดสุทธิ','ช่องทาง','สถานะจ่าย','เวลาจ่าย','สถานะคิว'];
       const lines = [header.join(',')];
       rows.forEach(r => {
         const esc = (v) => `"${String(v||'').replace(/"/g,'""')}"`;
         lines.push([
-          esc(r.time), esc(r.booking_id), esc(r.customer_name), esc(r.plate), esc(r.model), esc(r.size),
+          esc(r.time), esc(r.booking_id), esc(r.customer_name),
+          esc(r.plate), esc(r.province), esc(r.brand), esc(r.model), esc(r.color), esc(r.size),
           esc(r.services_name), r.gross||0, r.discount||0, esc(r.discount_reason), r.net||0,
           esc(_methodLabel(r.payment_method)), esc(r.payment_status), esc(r.paid_at), esc(r.status)
         ].join(','));
