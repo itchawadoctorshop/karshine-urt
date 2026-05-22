@@ -580,6 +580,43 @@
     }
 
     // ==========================================
+    // 📦 Helper: คำนวน label จำนวนครั้ง + breakdown บริการ ของ Master_Package
+    //   รองรับ field naming variations + Combo/Buffet/Single
+    // ==========================================
+    function _pkgAmountInfo(p) {
+      if (!p) return { totalAmount: 0, label: '-' };
+      const type = (p.type || 'single').toLowerCase();
+      if (type === 'buffet') return { totalAmount: 999, label: 'ไม่จำกัดครั้ง' };
+      // รองรับชื่อ field หลายแบบ (amounts plural / amount singular)
+      const raw = p.amounts !== undefined && p.amounts !== '' ? p.amounts
+                : (p.amount !== undefined && p.amount !== '' ? p.amount : '');
+      if (raw === '' || raw === null || raw === undefined) return { totalAmount: 0, label: '0 ครั้ง' };
+      const parts = String(raw).split(',').map(x => parseInt(String(x).trim(), 10)).filter(n => !isNaN(n) && n > 0);
+      if (parts.length === 0) return { totalAmount: 0, label: '0 ครั้ง' };
+      const sum = parts.reduce((a,b) => a+b, 0);
+      if (type === 'combo' && parts.length > 1) {
+        return { totalAmount: sum, label: `${parts.join('+')} = ${sum} ครั้ง` };
+      }
+      return { totalAmount: sum, label: `${sum} ครั้ง` };
+    }
+
+    function _pkgServiceBreakdown(p) {
+      if (!p) return '';
+      const sIds = String(p.serviceids || p.service_ids || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (sIds.length === 0) return '';
+      const amts = String(p.amounts || p.amount || '').split(',').map(s => s.trim());
+      const svcs = configData.services || [];
+      const parts = sIds.map((sid, idx) => {
+        const svc = svcs.find(s => (s.service_id || s.id) === sid);
+        const sName = svc ? (svc.service_name || svc.name || sid) : sid;
+        const amt = (p.type === 'buffet') ? '∞' : (amts[idx] || '?');
+        return `${sName} ×${amt}`;
+      });
+      return '🛠️ ' + parts.join(' · ');
+    }
+
+
+    // ==========================================
     // 💵 F2.5 Daily Reconciliation
     // ==========================================
     let _reconCache = { date: '', dashboardMethods: [], salesRows: [], saved: null };
@@ -2393,7 +2430,9 @@
           pkgSel.innerHTML = d.masterPackages.map(mp => {
             const pName = mp.name || mp.pkg_name || mp.package_name || 'ไม่ระบุชื่อ';
             const pId   = mp.id || mp.master_id || mp.package_id;
-            return `<option value="${pId}" data-name="${pName}" data-amount="${mp.amount}">${pName} (${mp.amount} ครั้ง) - ${mp.price}.-</option>`;
+            // 🔧 FIX: ใช้ mp.amounts (plural) ตามที่ sheet เก็บจริง + handle combo/buffet
+            const info = _pkgAmountInfo(mp);
+            return `<option value="${pId}" data-name="${pName}" data-amount="${info.totalAmount}" data-type="${mp.type || 'single'}">${pName} (${info.label}) - ${mp.price || 0}.-</option>`;
           }).join('');
         } else {
           pkgSel.innerHTML = '<option value="">ไม่มีแพ็กเกจเปิดขาย</option>';
@@ -2619,22 +2658,25 @@
             `}).join('');
           } else { svcsContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-xl">ไม่มีบริการในระบบ</div>'; }
 
-          // 🌟 Render Packages (ปรับปรุงให้แสดง Combo/Buffet)
+          // 🌟 Render Packages (ปรับปรุงให้แสดง Combo/Buffet + จำนวนครั้ง)
           if(configData.masterPkgs && configData.masterPkgs.length > 0) {
             pkgsContainer.innerHTML = configData.masterPkgs.map(p => {
               const pName = p.name || p.pkg_name || p.package_name || 'ไม่ระบุชื่อแพ็กเกจ';
               const pId = p.id || p.master_id || p.package_id;
               const valid = p.validdays || p.valid_days || 365;
               const typeStr = p.type === 'combo' ? 'Combo (รวมหลายบริการ)' : (p.type === 'buffet' ? 'Buffet (ไม่อั้น)' : 'Single (บริการเดียว)');
-              
+              // 🔧 FIX: แสดงจำนวนครั้ง + breakdown บริการ
+              const info = _pkgAmountInfo(p);
+              const svcBreakdown = _pkgServiceBreakdown(p);
               return `
-              <div class="bg-orange-50 border border-orange-200 rounded-2xl p-4 flex justify-between items-center">
-                <div>
+              <div class="bg-orange-50 border border-orange-200 rounded-2xl p-4 flex justify-between items-start">
+                <div class="flex-1 min-w-0">
                   <span class="text-[9px] font-bold text-orange-500 uppercase tracking-widest">${typeStr}</span>
                   <h4 class="font-bold text-orange-800 text-sm mb-1">${pName}</h4>
-                  <p class="text-[10px] text-orange-600 font-bold">ราคา ${p.price}.- | อายุ ${valid} วัน</p>
+                  <p class="text-[10px] text-orange-700 font-bold">💰 ${(p.price||0).toLocaleString()}.- · 📅 อายุ ${valid} วัน · 🔢 ${info.label}</p>
+                  ${svcBreakdown ? `<p class="text-[10px] text-orange-600 mt-1">${svcBreakdown}</p>` : ''}
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-shrink-0 ml-2">
                   <button onclick='openConfigModal("package", "edit", ${JSON.stringify(p).replace(/'/g, "&apos;")})' class="bg-white text-orange-500 hover:bg-orange-100 border border-orange-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
                   <button onclick="deleteConfigData('Master_Packages', '${pId}')" class="bg-white text-red-500 hover:bg-red-50 border border-red-200 w-8 h-8 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
                 </div>
