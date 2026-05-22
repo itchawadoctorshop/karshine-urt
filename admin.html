@@ -1902,6 +1902,7 @@
 
     // 🔗 F2.5g — INLINE pick: เลือกแพ็กเกจที่จะยืม
     function _payBorrowPick_(pkgRowId, pkgName, total, used, remaining, serviceId, ownerUid, ownerName) {
+      console.log('[_payBorrowPick_]', { pkgRowId, pkgName, ownerUid, ownerName });
       // 1) เพิ่ม pkg เข้า eligiblePkgs (กันซ้ำ)
       window._currentEligiblePkgs = window._currentEligiblePkgs || [];
       if (!window._currentEligiblePkgs.find(p => String(p.pkg_row_id) === String(pkgRowId))) {
@@ -1942,6 +1943,15 @@
 
       // 5) trigger _onPayMethodChange (จะคำนวน coverage + hybrid box)
       _onPayMethodChange();
+
+      // 🔍 Debug — verify final state
+      console.log('[_payBorrowPick_ DONE] dropdown.value =', document.getElementById('payMethod').value,
+        '| amtEl.dataset =', JSON.stringify({
+          packageCredit: document.getElementById('payAmount').dataset.packageCredit,
+          pkgRowId: document.getElementById('payAmount').dataset.pkgRowId,
+          borrowedFromUid: document.getElementById('payAmount').dataset.borrowedFromUid,
+          ownerName: document.getElementById('payAmount').dataset.ownerName
+        }));
 
       // 6) แสดง banner สีม่วง
       const banner = document.getElementById('payPkgInfo');
@@ -2413,9 +2423,13 @@
             payPayloadObj.ownerName = ownerName;
             payPayloadObj.borrowerName = borrowerName;
           }
+          // 🔍 Debug log — เปิด F12 console ดูค่าที่ส่ง
+          console.log('[recordPayment SEND]', payPayloadObj);
           const payPayload = new URLSearchParams(payPayloadObj);
           const payRes = await fetch(API_URL, { method: 'POST', body: withAuth(payPayload) });
           const payResult = await payRes.json();
+          // 🔍 Debug log — ดู response ของ recordPayment
+          console.log('[recordPayment RESPONSE]', payResult);
           if (payResult.status !== 'success') throw new Error('บันทึกการจ่ายไม่สำเร็จ: ' + (payResult.message || ''));
 
           // 2. 🆕 F2.5f: update status → completed เฉพาะ mode complete
