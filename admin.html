@@ -224,17 +224,20 @@
           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ทะเบียนรถ <span class="text-red-500">*ค้นหาอัตโนมัติ</span></label><input type="text" id="wiPlate" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-2 focus:ring-green-500" placeholder="พิมพ์ทะเบียนแล้วคลิกออก" required></div>
           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถ</label><select id="wiSize" onchange="renderWiServices()" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 font-bold text-gray-700 bg-gray-50" required><option value="M">M</option><option value="L">L</option><option value="XL">XL</option></select></div>
         </div>
+        <!-- 🆕 F2.5f: เลือกหลายบริการได้ใน 1 คิว — ระบบ auto-detect ประเภท (LINE1/LINE2) -->
         <div>
-          <label class="text-[10px] font-bold text-gray-500 uppercase">ประเภทการล้าง</label>
-          <div class="flex gap-2 mt-1">
-            <button type="button" onclick="setWiLine('LINE1')" id="wiBtnLine1" class="flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition">ล้างด่วน (เครื่อง)</button>
-            <button type="button" onclick="setWiLine('LINE2')" id="wiBtnLine2" class="flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition">ล้างปกติ (คนล้าง)</button>
+          <label class="text-[10px] font-bold text-gray-500 uppercase">บริการ (เลือกได้หลายรายการ)</label>
+          <div id="wiServiceGrid" class="mt-1 max-h-64 overflow-y-auto border border-gray-200 rounded-xl p-2 bg-gray-50 space-y-2">
+            <p class="text-xs text-gray-400 text-center py-4">กำลังโหลดข้อมูล...</p>
           </div>
+          <input type="hidden" id="wiService">
           <input type="hidden" id="wiLine" value="LINE1">
-        </div>
-        <div>
-          <label class="text-[10px] font-bold text-gray-500 uppercase">แพ็กเกจบริการ</label>
-          <select id="wiService" onchange="updateWiSlotInfo()" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 bg-gray-50" required><option value="">กำลังโหลดข้อมูล...</option></select>
+          <!-- Summary -->
+          <div id="wiSummary" class="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs hidden">
+            <div class="flex justify-between"><span class="text-gray-500">⏱️ เวลารวม</span><span class="font-bold" id="wiTotalTime">0 นาที</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">💰 ราคารวม</span><span class="font-bold text-emerald-700" id="wiTotalPrice">0.-</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">📍 ใช้ช่อง</span><span class="font-bold" id="wiAutoLine">-</span></div>
+          </div>
         </div>
 
         <!-- 🆕 รอบ 8: Date + Time picker สำหรับ walk-in -->
@@ -1385,6 +1388,27 @@
         const canReschedule = ['pending', 'confirmed', 'valet_pickup_pending'].includes(b.status);
         const canEdit = ['pending', 'confirmed', 'valet_pickup_pending'].includes(b.status); // 🛠️ F0.7a
         const canCancel = !['completed', 'cancelled', 'cancelled_noshow'].includes(b.status);
+
+        // 🆕 F2.5f: ปุ่ม "💵 รับเงิน" + "🎁 ขายแพ็กเกจ" + payment badge
+        const isPaid = (b.paymentStatus === 'paid');
+        const isPackagePaid = (isPaid && b.paymentMethod === 'package');
+        const isActive = !['completed', 'cancelled', 'cancelled_noshow'].includes(b.status);
+        const canPayBefore = isActive && !isPaid;
+        const hasLineUid = b.lineUid && b.lineUid !== 'WALKIN_NEW';
+        const canSellPackage = isActive && hasLineUid;
+
+        const paymentBadge = isPaid ? `
+          <div class="mb-2 px-2 py-1.5 bg-green-50 border border-green-200 rounded-lg text-[10px] text-green-700 flex items-center justify-between">
+            <span>${isPackagePaid ? '📦 หักแพ็กเกจแล้ว' : '💰 จ่ายแล้ว · ' + (b.paymentMethod || '-')} ${b.paymentAmount > 0 ? '· ' + (b.paymentAmount).toLocaleString() + '.-' : ''}</span>
+            ${isActive ? `<button onclick="openPaymentBeforeService_('${esc(b.bookingId)}', true)" class="text-blue-500 hover:text-blue-700" title="แก้ใบเสร็จ"><i class="fa-solid fa-pen-to-square"></i></button>` : ''}
+          </div>` : '';
+
+        const upsellBtns = (canPayBefore || canSellPackage) ? `
+          <div class="flex gap-1 mt-2">
+            ${canPayBefore ? `<button onclick="openPaymentBeforeService_('${esc(b.bookingId)}', false)" class="flex-1 text-[10px] py-1.5 bg-emerald-50 text-emerald-700 rounded-md hover:bg-emerald-100 transition font-bold"><i class="fa-solid fa-money-bill-wave"></i> รับเงิน</button>` : ''}
+            ${canSellPackage ? `<button onclick="openSellPackageFromCard_('${esc(b.lineUid)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-orange-50 text-orange-700 rounded-md hover:bg-orange-100 transition font-bold"><i class="fa-solid fa-box-open"></i> ขายแพ็กเกจ</button>` : ''}
+          </div>` : '';
+
         const adminActionBtns = (canReschedule || canCancel || canEdit) ? `
           <div class="flex gap-1 mt-2 pt-2 border-t border-gray-100">
             ${canEdit ? `<button onclick="openEditBookingModal('${esc(b.bookingId)}','${esc(b.plate)}','${esc(b.serviceIds)}')" class="flex-1 text-[10px] py-1.5 bg-cyan-50 text-cyan-600 rounded-md hover:bg-cyan-100 transition font-bold"><i class="fa-solid fa-pen"></i> แก้คิว</button>` : ''}
@@ -1393,7 +1417,7 @@
           </div>` : '';
 
         const cardHtml = `
-          <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 card-hover relative overflow-hidden">
+          <div class="bg-white p-4 rounded-2xl shadow-sm border ${isPaid ? 'border-green-300' : 'border-gray-100'} card-hover relative overflow-hidden">
             <div class="flex justify-between items-start mb-2">
               <span class="text-xl font-black text-gray-800">${esc(b.plate)}</span>
               <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">${esc(timeStr)} น.</span>
@@ -1404,7 +1428,9 @@
               <span class="text-[10px] font-normal text-gray-400">(${esc(b.lineType)})</span>
             </p>
             <div class="mb-1">${valetBadge}</div>
+            ${paymentBadge}
             ${getActionButton(b)}
+            ${upsellBtns}
             ${adminActionBtns}
           </div>`;
 
@@ -1508,8 +1534,34 @@
     }
 
     async function updateStatus(bookingId, newStatus) {
-      // 💰 F2.4: ถ้ากำลังจะ complete → เปิด Payment modal ก่อน
+      // 💰 F2.4 / F2.5f: ถ้ากำลังจะ complete
       if (newStatus === 'completed') {
+        const b = (window.adminBookingsCache || []).find(x => x.bookingId === bookingId);
+        // 🆕 F2.5f: ถ้าจ่ายแล้ว → ข้าม Payment Modal ไปเลย แค่ confirm
+        if (b && b.paymentStatus === 'paid') {
+          const ok = await Swal.fire({
+            title: '✅ จ่ายเงินแล้ว — ปิดงานเลย?',
+            html: `<div class="text-left text-sm">
+              <p class="text-gray-600">คิวนี้รับเงินไว้ก่อนหน้าแล้ว:</p>
+              <p class="font-bold text-emerald-700 mt-2">${b.paymentMethod === 'package' ? '📦 หักจากแพ็กเกจ' : '💰 ' + (b.paymentMethod || '-') + (b.paymentAmount ? ' · ' + b.paymentAmount.toLocaleString() + '.-' : '')}</p>
+            </div>`,
+            icon: 'success', showCancelButton: true,
+            confirmButtonText: '✅ ปิดงาน + บวกแต้ม',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#16a34a'
+          });
+          if (!ok.isConfirmed) return;
+          Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
+          try {
+            const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: 'completed' });
+            const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+            const result = await r.json();
+            if (result.status === 'success') {
+              Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ปิดงานเรียบร้อย', timer: 2000 }).then(() => loadAdminData());
+            } else throw new Error(result.message);
+          } catch (e) { Swal.fire('Error', e.message, 'error'); }
+          return;
+        }
         return openPaymentModal_(bookingId);
       }
 
@@ -1760,7 +1812,39 @@
     }
 
     // 💰 F2.4: Payment modal — เปิดเมื่อ admin กด "ล้างเสร็จ"
-    async function openPaymentModal_(bookingId) {
+    // 🆕 F2.5f: pay-before-service wrapper — เปิด Payment Modal แบบไม่ complete
+    async function openPaymentBeforeService_(bookingId, isEdit) {
+      return openPaymentModal_(bookingId, { completeAfter: false, isEdit: !!isEdit });
+    }
+
+    // 🆕 F2.5f: ขายแพ็กเกจจากการ์ด → เปิด CRM modal แล้วสลับไป tab แพ็กเกจ
+    async function openSellPackageFromCard_(lineUid, plate) {
+      if (!lineUid || lineUid === 'WALKIN_NEW') {
+        return Swal.fire('แจ้งเตือน', 'ลูกค้ารายนี้ไม่มีบัญชี LINE — ขายแพ็กเกจไม่ได้', 'warning');
+      }
+      // ดึงชื่อลูกค้าจาก searchUser
+      Swal.fire({ title: 'กำลังเปิด CRM...', didOpen: () => Swal.showLoading() });
+      try {
+        const payload = new URLSearchParams({ action: 'searchUser', uid: lineUid });
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await r.json();
+        let displayName = plate || lineUid;
+        if (result.status === 'success' && result.data && result.data.name) {
+          displayName = result.data.name + (plate ? ` (${plate})` : '');
+        }
+        Swal.close();
+        // เปิด CRM แล้วสลับไป tab packages
+        openCrmModal(lineUid, displayName);
+        setTimeout(() => { if (typeof switchCrmTab === 'function') switchCrmTab('packages'); }, 200);
+      } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+      }
+    }
+
+    async function openPaymentModal_(bookingId, opts) {
+      opts = opts || {};
+      const completeAfter = opts.completeAfter !== false;  // default: true (ล้างเสร็จ)
+      const isEdit = !!opts.isEdit;
       // ค้น booking จาก cache เพื่อคำนวนราคาประเมิน
       const b = (window.adminBookingsCache || []).find(x => x.bookingId === bookingId);
       if (!b) return Swal.fire('Error', 'ไม่พบ booking ใน cache — ลองกด อัปเดต ก่อน', 'error');
@@ -1877,22 +1961,47 @@
           </div>
         </div>`;
 
+      // 🆕 F2.5f: title / button label ตาม mode
+      const modalTitle = completeAfter ? '💰 บันทึก + ล้างเสร็จ' : (isEdit ? '🔧 แก้ใบเสร็จ' : '💵 รับเงินก่อนล้าง');
+      const confirmText = completeAfter
+        ? '<i class="fa-solid fa-check"></i> บันทึก + ล้างเสร็จ'
+        : (isEdit ? '<i class="fa-solid fa-save"></i> แก้ใบเสร็จ' : '<i class="fa-solid fa-money-bill-wave"></i> รับเงิน');
+
       const res = await Swal.fire({
-        title: '💰 บันทึกการจ่ายเงิน',
+        title: modalTitle,
         html: html,
         showCancelButton: true,
-        showDenyButton: true,
-        confirmButtonText: '<i class="fa-solid fa-check"></i> บันทึก + ล้างเสร็จ',
+        showDenyButton: completeAfter,   // 🆕 F2.5f: ปุ่ม "ข้าม" แสดงเฉพาะ mode complete
+        confirmButtonText: confirmText,
         denyButtonText: 'ข้าม (ล้างเสร็จไม่บันทึก)',
         cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#16a34a',
+        confirmButtonColor: completeAfter ? '#16a34a' : '#0ea5e9',
         denyButtonColor: '#9ca3af',
         width: 460,
         // 🛡️ F2.5e: lock — กัน admin คลิกนอกหรือกด ESC โดยไม่ตั้งใจ
         //   เพราะถ้าปิดโดยไม่ตั้งใจ state วิธีจ่าย (เช่น PromptPay) จะหาย → ตอนเปิดใหม่ default = cash → กระทบยอดเพี้ยน
         allowOutsideClick: false,
         allowEscapeKey: false,
-        didOpen: () => { _recalcNetAmount(); _updatePaymentQR(); }   // 💰 F2.4b + F1.5b: set display ครั้งแรก + render QR
+        didOpen: () => {
+          _recalcNetAmount();
+          _updatePaymentQR();
+          // 🆕 F2.5f: ถ้า isEdit → pre-fill ค่าเดิมจาก cache
+          if (isEdit) {
+            const amtEl = document.getElementById('payAmount');
+            const dispEl = document.getElementById('payAmountDisplay');
+            const methodEl = document.getElementById('payMethod');
+            if (amtEl && b.paymentAmount > 0) {
+              amtEl.value = b.paymentAmount;
+              if (dispEl) dispEl.textContent = b.paymentAmount.toLocaleString();
+            }
+            if (methodEl && b.paymentMethod) {
+              for (let i = 0; i < methodEl.options.length; i++) {
+                if (methodEl.options[i].value === b.paymentMethod) { methodEl.selectedIndex = i; break; }
+              }
+              _updatePaymentQR();
+            }
+          }
+        }
       });
 
       if (res.isConfirmed) {
@@ -1917,23 +2026,27 @@
           const payResult = await payRes.json();
           if (payResult.status !== 'success') throw new Error('บันทึกการจ่ายไม่สำเร็จ: ' + (payResult.message || ''));
 
-          // 2. update status → completed
-          const statusPayload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: 'completed' });
-          const statusRes = await fetch(API_URL, { method: 'POST', body: withAuth(statusPayload) });
-          const statusResult = await statusRes.json();
-          if (statusResult.status !== 'success') throw new Error(statusResult.message);
+          // 2. 🆕 F2.5f: update status → completed เฉพาะ mode complete
+          if (completeAfter) {
+            const statusPayload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: 'completed' });
+            const statusRes = await fetch(API_URL, { method: 'POST', body: withAuth(statusPayload) });
+            const statusResult = await statusRes.json();
+            if (statusResult.status !== 'success') throw new Error(statusResult.message);
+          }
 
           // 📦 F2.5c: ถ้าหักจากแพ็กเกจ → แสดงข้อความพิเศษ
+          // 🆕 F2.5f: title ตาม mode (complete vs before-service vs edit)
+          const tail = completeAfter ? ' + ล้างเสร็จ' : (isEdit ? ' (แก้ใบเสร็จ)' : ' (รับเงินก่อนล้าง)');
           let successMsg;
           if (payResult.deductedPackage) {
             const dp = payResult.deductedPackage;
-            successMsg = `📦 หัก ${dp.name} 1 ครั้ง<br><b>เหลือ ${dp.remaining}/${dp.total} ครั้ง</b>`;
+            successMsg = `📦 หัก ${dp.name} 1 ครั้ง<br><b>เหลือ ${dp.remaining}/${dp.total} ครั้ง</b>${tail}`;
           } else if (discountAmt > 0) {
-            successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (ลด ${discountAmt}.-) + ล้างเสร็จ`;
+            successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (ลด ${discountAmt}.-)${tail}`;
           } else {
-            successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method}) + ล้างเสร็จ`;
+            successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method})${tail}`;
           }
-          Swal.fire({ icon: 'success', title: 'สำเร็จ!', html: successMsg, timer: 3000 }).then(() => loadAdminData());
+          Swal.fire({ icon: 'success', title: 'สำเร็จ!', html: successMsg, timer: 2500 }).then(() => loadAdminData());
         } catch (e) { Swal.fire('Error', e.message, 'error'); }
       } else if (res.isDenied) {
         // ข้าม payment — complete อย่างเดียว
@@ -1952,45 +2065,102 @@
     // ==============================================
     // ➕ 2. ระบบ Walk-in
     // ==============================================
-    function renderWiServices() {
-      const size = document.getElementById('wiSize').value; const line = document.getElementById('wiLine').value; const sel = document.getElementById('wiService');
-      // 🆕 (Bug A5): จำค่าที่เลือกไว้ก่อน rebuild — restore กลับหลังถ้ายังมีใน options
-      const prevValue = sel.value;
-      sel.innerHTML = '<option value="" disabled selected>-- กรุณาเลือกแพ็กเกจบริการ --</option>';
-      if(adminServices.length === 0) return;
-      const grouped = adminServices.reduce((acc, obj) => { const k = obj.category || 'บริการทั่วไป'; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {});
-      for (const cat in grouped) {
-        let optgroup = document.createElement('optgroup'); optgroup.label = `📍 ${cat}`; let hasItem = false;
-        grouped[cat].forEach(s => {
-          const price = size === 'M' ? (s.price_m || s.pricem) : (size === 'L' ? (s.price_l || s.pricel) : (s.price_xl || s.pricexl)); 
-          const time = s.std_time_mins || s.stdtime || s.std_time || 0;
-          const sName = s.service_name || s.name || '';
-          const isQuick = String(sName).includes('ด่วน'); const isNormal = String(sName).includes('ปกติ') || String(sName).includes('ภายนอก') || String(sName).includes('พนักงาน');
-          let shouldShow = false; if (line === 'LINE1' && isQuick) shouldShow = true; if (line === 'LINE2' && isNormal) shouldShow = true; if (!isQuick && !isNormal) shouldShow = true; 
-          if (shouldShow) { hasItem = true; const opt = document.createElement('option'); opt.value = s.service_id || s.id; opt.textContent = `${sName} | ⏱️ ${time} นาที | 💰 ${price}.-`; optgroup.appendChild(opt); }
-        });
-        if(hasItem) sel.appendChild(optgroup);
-      }
-      // 🆕 (Bug A5): restore selection ถ้ายังมีใน options ใหม่
-      if (prevValue) {
-        const exists = Array.from(sel.options).some(o => o.value === prevValue);
-        if (exists) sel.value = prevValue;
-      }
+    // 🆕 F2.5f: helper — service เป็น LINE1 (ด่วน/เครื่อง) หรือ LINE2 (ปกติ/คน)
+    function _wiDetectLine(serviceName) {
+      const n = String(serviceName || '');
+      if (n.includes('ด่วน') || n.includes('เครื่อง')) return 'LINE1';
+      return 'LINE2';
     }
 
-    function setWiLine(type) {
-      document.getElementById('wiLine').value = type;
-      if(type === 'LINE1') { document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition"; document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition"; }
-      else { document.getElementById('wiBtnLine2').className = "flex-1 py-3 bg-gray-800 text-white rounded-xl text-sm font-bold shadow transition"; document.getElementById('wiBtnLine1').className = "flex-1 py-3 bg-gray-200 text-gray-600 rounded-xl text-sm font-bold transition"; }
-      // 🆕 reset เวลาตอนเปลี่ยน line type (step size ต่างกัน)
-      const tInp = document.getElementById('wiTime');
-      const tDisp = document.getElementById('wiTimeDisplay');
-      if (tInp) tInp.value = '';
-      if (tDisp) tDisp.innerText = '- - : - -';
-      const badge = document.getElementById('wiStatusBadge');
-      if (badge) badge.classList.add('hidden');
-      renderWiServices();
+    function renderWiServices() {
+      const size = document.getElementById('wiSize').value;
+      const grid = document.getElementById('wiServiceGrid');
+      if (!grid) return;
+      // 🆕 F2.5f: จำค่าที่เลือกไว้ (multi)
+      const prevChecked = new Set(
+        Array.from(grid.querySelectorAll('input.wi-svc-cb:checked')).map(el => el.value)
+      );
+      grid.innerHTML = '';
+      if (adminServices.length === 0) {
+        grid.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">ยังไม่มีบริการในระบบ</p>';
+        return;
+      }
+      const grouped = adminServices.reduce((acc, obj) => {
+        const k = obj.category || 'บริการทั่วไป';
+        if (!acc[k]) acc[k] = [];
+        acc[k].push(obj);
+        return acc;
+      }, {});
+
+      for (const cat in grouped) {
+        const wrap = document.createElement('div');
+        wrap.className = 'space-y-1';
+        wrap.innerHTML = `<p class="text-[10px] font-bold text-gray-500">📍 ${cat}</p>`;
+        grouped[cat].forEach(s => {
+          const price = size === 'M' ? (s.price_m || s.pricem) : (size === 'L' ? (s.price_l || s.pricel) : (s.price_xl || s.pricexl));
+          const time = s.std_time_mins || s.stdtime || s.std_time || 0;
+          const sName = s.service_name || s.name || '';
+          const sId = s.service_id || s.id;
+          const lineDetected = _wiDetectLine(sName);
+          const lineBadge = lineDetected === 'LINE1' ? '⚡ ด่วน' : '🧤 ปกติ';
+          const lineColor = lineDetected === 'LINE1' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700';
+          const checked = prevChecked.has(String(sId)) ? 'checked' : '';
+          const row = document.createElement('label');
+          row.className = 'flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-green-400 has-[:checked]:border-green-500 has-[:checked]:bg-green-50 transition';
+          row.innerHTML = `
+            <input type="checkbox" class="wi-svc-cb w-4 h-4 accent-green-600" value="${sId}" data-price="${price}" data-time="${time}" data-line="${lineDetected}" data-name="${sName.replace(/"/g,'&quot;')}" onchange="_updateWiSummary()" ${checked}>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-gray-800 truncate">${sName} <span class="ml-1 px-1 py-0.5 rounded text-[9px] ${lineColor}">${lineBadge}</span></div>
+              <div class="text-[10px] text-gray-500">⏱️ ${time} นาที · 💰 ${price}.-</div>
+            </div>`;
+          wrap.appendChild(row);
+        });
+        grid.appendChild(wrap);
+      }
+      _updateWiSummary();
     }
+
+    // 🆕 F2.5f: คำนวนยอด + เวลา + auto-detect line type จาก checkboxes
+    function _updateWiSummary() {
+      const checkboxes = document.querySelectorAll('input.wi-svc-cb:checked');
+      let totalTime = 0, totalPrice = 0;
+      const ids = [], names = [];
+      let hasLINE1 = false, hasLINE2 = false;
+      checkboxes.forEach(cb => {
+        totalTime  += parseInt(cb.dataset.time) || 0;
+        totalPrice += parseFloat(cb.dataset.price) || 0;
+        ids.push(cb.value);
+        names.push(cb.dataset.name);
+        if (cb.dataset.line === 'LINE1') hasLINE1 = true;
+        else hasLINE2 = true;
+      });
+
+      // ถ้ามี LINE1 อยู่ → booking.lineType = LINE1 (slot conflict ใช้ pipeline)
+      // ถ้าเป็น LINE2 อย่างเดียว → LINE2
+      const autoLine = hasLINE1 ? 'LINE1' : 'LINE2';
+      const lineLabel = hasLINE1 && hasLINE2 ? '⚡ ด่วน + 🧤 ปกติ (mix)'
+                      : hasLINE1 ? '⚡ ด่วน (เครื่อง)' : '🧤 ปกติ (คน)';
+
+      const hSvc = document.getElementById('wiService');
+      const hLine = document.getElementById('wiLine');
+      if (hSvc) hSvc.value = ids.join(',');
+      if (hLine) hLine.value = autoLine;
+
+      const sumWrap = document.getElementById('wiSummary');
+      const tEl = document.getElementById('wiTotalTime');
+      const pEl = document.getElementById('wiTotalPrice');
+      const lEl = document.getElementById('wiAutoLine');
+      if (sumWrap) sumWrap.classList.toggle('hidden', ids.length === 0);
+      if (tEl) tEl.textContent = totalTime + ' นาที';
+      if (pEl) pEl.textContent = totalPrice.toLocaleString() + '.-';
+      if (lEl) lEl.textContent = lineLabel;
+
+      // refresh slot info
+      if (typeof updateWiSlotInfo === 'function') updateWiSlotInfo();
+    }
+
+    // 🆕 F2.5f: kept-for-compat (เผื่อมี code อื่นเรียก setWiLine) — เป็น no-op
+    function setWiLine() { /* line type auto-detected from selected services */ }
 
     document.getElementById('wiPlate').addEventListener('blur', async (e) => {
       const plate = e.target.value; if(plate.length < 3) return;
@@ -2257,13 +2427,16 @@
     // 🆕 รอบ 8: Walk-in slot picker (เหมือนฝั่งลูกค้า แต่ skipMinStart)
     // ==============================================
 
-    // helper: คำนวน totalT (duration นาที) จาก serviceId ปัจจุบัน
+    // helper: คำนวน totalT (duration นาที) จาก serviceIds (รองรับ comma-separated)
     function _wiGetTotalTime() {
-      const sId = document.getElementById('wiService').value;
-      if (!sId || !adminServices) return 30;
-      const svc = adminServices.find(s => String(s.service_id) === String(sId));
-      if (!svc) return 30;
-      return parseInt(svc.std_time_mins || svc.stdtime || svc.std_time || 30) || 30;
+      const raw = document.getElementById('wiService').value;
+      if (!raw || !adminServices) return 30;
+      let total = 0;
+      String(raw).split(',').forEach(id => {
+        const svc = adminServices.find(s => String(s.service_id) === String(id).trim());
+        if (svc) total += parseInt(svc.std_time_mins || svc.stdtime || svc.std_time || 0) || 0;
+      });
+      return total > 0 ? total : 30;
     }
 
     // เปิด slot picker เหมือนฝั่งลูกค้า แต่:
@@ -2475,16 +2648,21 @@
         serviceIds:  b.serviceIds || '',          // raw IDs จาก server (สำหรับ duration)
         serviceText: b.serviceText,                // human-readable
         lineTypeRaw: b.lineTypeRaw || 'LINE2',    // 'LINE1' หรือ 'LINE2' ตรงๆ
-        branchId:    b.branchId || ''
+        branchId:    b.branchId || '',
+        // 🆕 F2.5f: payment fields
+        paymentMethod: b.paymentMethod || '',
+        paymentAmount: b.paymentAmount || 0,
+        paymentStatus: b.paymentStatus || ''
       }));
     }
 
     document.getElementById('walkInForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      // 🆕 F2.5f: serviceId เป็น comma-separated จาก checkbox grid
       const serviceId = document.getElementById('wiService').value;
       const date = document.getElementById('wiDate').value;
       const time = document.getElementById('wiTime').value;
-      if (!serviceId) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแพ็กเกจบริการ', 'warning');
+      if (!serviceId || !serviceId.trim()) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการอย่างน้อย 1 รายการ', 'warning');
       if (!date || !time) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันและเวลา', 'warning');
 
       const bookingDateTime = date + 'T' + time;
