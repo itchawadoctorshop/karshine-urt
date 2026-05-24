@@ -343,6 +343,7 @@
          <button onclick="switchConfigTab('branches')" id="tab-branches" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">สาขา</button>
          <button onclick="switchConfigTab('payments')" id="tab-payments" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">ชำระเงิน</button>
          <button onclick="switchConfigTab('closures')" id="tab-closures" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">🚫 วันปิดร้าน</button>
+         <button onclick="switchConfigTab('rewards')" id="tab-rewards" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">🎁 แต้ม</button>
       </div>
 
       <div id="content-services" class="config-content block">
@@ -376,6 +377,89 @@
          <div id="configClosuresList" class="space-y-3">
            <div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div>
          </div>
+      </div>
+
+      <!-- 🎁 F1.5a: Reward Rules tab -->
+      <div id="content-rewards" class="config-content hidden">
+        <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-2xl text-xs text-yellow-800">
+          💡 ตั้งกฎสะสมแต้ม → ลูกค้าจะได้แต้มอัตโนมัติเมื่อล้างเสร็จ ตามฐาน + segment multiplier
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-4">
+          <!-- Enabled toggle -->
+          <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+            <div>
+              <label class="text-sm font-bold text-gray-800">สถานะระบบ</label>
+              <p class="text-[10px] text-gray-500">ปิดเมื่อต้องการหยุดสะสมแต้มชั่วคราว</p>
+            </div>
+            <label class="inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="rewardEnabled" class="w-5 h-5 accent-emerald-500">
+              <span class="ml-2 text-sm font-bold text-emerald-700" id="rewardEnabledLabel">เปิดใช้งาน</span>
+            </label>
+          </div>
+
+          <!-- Base rate -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">ฐาน: ทุก ___ บาท = 1 แต้ม</label>
+              <input type="number" id="rewardBahtPerPoint" min="1" step="1" class="w-full mt-1 p-3 border border-gray-300 rounded-xl text-sm font-bold text-yellow-700" placeholder="100">
+              <p class="text-[10px] text-gray-400 mt-1">เช่น 100 = ทุก 100 บาท ได้ 1 แต้ม</p>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">ขั้นต่ำได้แต้ม (บาท)</label>
+              <input type="number" id="rewardMinPurchase" min="0" step="1" class="w-full mt-1 p-3 border border-gray-300 rounded-xl text-sm font-bold text-gray-700" placeholder="0">
+              <p class="text-[10px] text-gray-400 mt-1">0 = ไม่จำกัด · ใส่เลขถ้าอยากจำกัด</p>
+            </div>
+          </div>
+
+          <!-- Multipliers -->
+          <div>
+            <p class="text-xs font-bold text-gray-700 mb-2">🎯 Multiplier ตามกลุ่มลูกค้า</p>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                <span class="text-xs font-bold text-blue-800">🆕 ลูกค้าใหม่</span>
+                <div class="flex items-center gap-1">
+                  <input type="number" id="rewardMultiplierNew" min="0" step="0.1" class="w-16 p-1.5 border border-blue-300 rounded-md text-sm text-right font-bold">
+                  <span class="text-xs text-blue-700">เท่า</span>
+                </div>
+              </label>
+              <label class="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-lg">
+                <span class="text-xs font-bold text-green-800">💚 ขาประจำ</span>
+                <div class="flex items-center gap-1">
+                  <input type="number" id="rewardMultiplierRegular" min="0" step="0.1" class="w-16 p-1.5 border border-green-300 rounded-md text-sm text-right font-bold">
+                  <span class="text-xs text-green-700">เท่า</span>
+                </div>
+              </label>
+              <label class="flex items-center justify-between p-2 bg-yellow-50 border border-yellow-300 rounded-lg">
+                <span class="text-xs font-bold text-yellow-800">⭐ VIP</span>
+                <div class="flex items-center gap-1">
+                  <input type="number" id="rewardMultiplierVip" min="0" step="0.1" class="w-16 p-1.5 border border-yellow-300 rounded-md text-sm text-right font-bold">
+                  <span class="text-xs text-yellow-700">เท่า</span>
+                </div>
+              </label>
+              <label class="flex items-center justify-between p-2 bg-gray-50 border border-gray-300 rounded-lg">
+                <span class="text-xs font-bold text-gray-800">😴 หาย</span>
+                <div class="flex items-center gap-1">
+                  <input type="number" id="rewardMultiplierDormant" min="0" step="0.1" class="w-16 p-1.5 border border-gray-300 rounded-md text-sm text-right font-bold">
+                  <span class="text-xs text-gray-700">เท่า</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <p class="text-[10px] font-bold text-emerald-700 uppercase mb-2">🧮 ตัวอย่างการคำนวน (ลูกค้าจ่าย 300 บาท)</p>
+            <div id="rewardPreview" class="text-xs text-emerald-900 space-y-1">
+              <p>คำนวนจากค่าที่ใส่ด้านบน...</p>
+            </div>
+          </div>
+
+          <!-- Save -->
+          <button type="button" onclick="saveRewardRules_()" class="w-full bg-yellow-500 hover:bg-yellow-400 text-white py-3 rounded-xl font-bold shadow transition active:scale-95">
+            <i class="fa-solid fa-save mr-1"></i> บันทึกกฎสะสมแต้ม
+          </button>
+        </div>
       </div>
     </div>
   </section>
@@ -3744,11 +3828,123 @@
       const activeClass = "px-4 py-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap transition";
       const inactiveClass = "px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition";
 
-      ['services', 'packages', 'branches', 'payments', 'closures'].forEach(t => {
+      ['services', 'packages', 'branches', 'payments', 'closures', 'rewards'].forEach(t => {
         const el = document.getElementById('tab-' + t);
         if (el) el.className = tab === t ? activeClass : inactiveClass;
       });
+      // 🎁 F1.5a: auto-load rules ตอนกดเข้า tab รางวัล
+      if (tab === 'rewards') loadRewardRules_();
     }
+
+    // ==========================================
+    // 🎁 F1.5a: Reward Rules editor
+    // ==========================================
+    async function loadRewardRules_() {
+      try {
+        const payload = new URLSearchParams({ action: 'getRewardRules' });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status !== 'success' || !result.data) return;
+        const r = result.data;
+        document.getElementById('rewardEnabled').checked = (r.enabled === true || r.enabled === 'true');
+        document.getElementById('rewardBahtPerPoint').value = r.baht_per_point || 100;
+        document.getElementById('rewardMinPurchase').value = r.min_purchase_thb || 0;
+        document.getElementById('rewardMultiplierNew').value = r.new_multiplier || 1.0;
+        document.getElementById('rewardMultiplierRegular').value = r.regular_multiplier || 1.5;
+        document.getElementById('rewardMultiplierVip').value = r.vip_multiplier || 2.0;
+        document.getElementById('rewardMultiplierDormant').value = r.dormant_multiplier || 1.0;
+        _updateRewardEnabledLabel();
+        _updateRewardPreview();
+      } catch (e) { console.error('loadRewardRules error:', e); }
+    }
+
+    function _updateRewardEnabledLabel() {
+      const cb = document.getElementById('rewardEnabled');
+      const lbl = document.getElementById('rewardEnabledLabel');
+      if (!cb || !lbl) return;
+      lbl.textContent = cb.checked ? '✅ เปิดใช้งาน' : '⏸️ ปิดใช้งาน';
+      lbl.className = 'ml-2 text-sm font-bold ' + (cb.checked ? 'text-emerald-700' : 'text-gray-500');
+    }
+
+    function _updateRewardPreview() {
+      const enabled = document.getElementById('rewardEnabled').checked;
+      const baht = parseFloat(document.getElementById('rewardBahtPerPoint').value) || 100;
+      const min = parseFloat(document.getElementById('rewardMinPurchase').value) || 0;
+      const mNew = parseFloat(document.getElementById('rewardMultiplierNew').value) || 1.0;
+      const mReg = parseFloat(document.getElementById('rewardMultiplierRegular').value) || 1.0;
+      const mVip = parseFloat(document.getElementById('rewardMultiplierVip').value) || 1.0;
+      const mDor = parseFloat(document.getElementById('rewardMultiplierDormant').value) || 1.0;
+      const preview = document.getElementById('rewardPreview');
+      if (!preview) return;
+      if (!enabled) {
+        preview.innerHTML = '<p class="text-gray-500 italic">⏸️ ระบบปิดอยู่ — ลูกค้าจะไม่ได้แต้ม</p>';
+        return;
+      }
+      const amount = 300;
+      if (amount < min) {
+        preview.innerHTML = `<p class="text-gray-500 italic">300 บาท &lt; ขั้นต่ำ ${min} บาท → 0 แต้ม</p>`;
+        return;
+      }
+      const basePts = amount / baht;
+      const fmt = (m) => Math.floor(basePts * m);
+      preview.innerHTML = `
+        <p>ฐาน: 300฿ / ${baht} = <b>${basePts}</b> แต้มฐาน</p>
+        <div class="grid grid-cols-2 gap-1 mt-1 text-[11px]">
+          <div>🆕 ใหม่ × ${mNew} = <b>${fmt(mNew)}</b> แต้ม</div>
+          <div>💚 ขาประจำ × ${mReg} = <b>${fmt(mReg)}</b> แต้ม</div>
+          <div>⭐ VIP × ${mVip} = <b>${fmt(mVip)}</b> แต้ม</div>
+          <div>😴 หาย × ${mDor} = <b>${fmt(mDor)}</b> แต้ม</div>
+        </div>`;
+    }
+
+    async function saveRewardRules_() {
+      const enabled = document.getElementById('rewardEnabled').checked;
+      const baht_per_point = parseFloat(document.getElementById('rewardBahtPerPoint').value);
+      const min_purchase_thb = parseFloat(document.getElementById('rewardMinPurchase').value);
+      const new_multiplier = parseFloat(document.getElementById('rewardMultiplierNew').value);
+      const regular_multiplier = parseFloat(document.getElementById('rewardMultiplierRegular').value);
+      const vip_multiplier = parseFloat(document.getElementById('rewardMultiplierVip').value);
+      const dormant_multiplier = parseFloat(document.getElementById('rewardMultiplierDormant').value);
+
+      // validation
+      if (isNaN(baht_per_point) || baht_per_point <= 0) return Swal.fire('แจ้งเตือน', 'baht_per_point ต้อง > 0', 'warning');
+      if (isNaN(min_purchase_thb) || min_purchase_thb < 0) return Swal.fire('แจ้งเตือน', 'ขั้นต่ำต้องเป็นตัวเลข ≥ 0', 'warning');
+      const checkMult = (v, n) => { if (isNaN(v) || v < 0) throw new Error(n + ' ต้อง ≥ 0'); };
+      try {
+        checkMult(new_multiplier, 'multiplier ใหม่');
+        checkMult(regular_multiplier, 'multiplier ขาประจำ');
+        checkMult(vip_multiplier, 'multiplier VIP');
+        checkMult(dormant_multiplier, 'multiplier หาย');
+      } catch (e) { return Swal.fire('แจ้งเตือน', e.message, 'warning'); }
+
+      Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+      try {
+        const payload = new URLSearchParams({
+          action: 'saveRewardRules',
+          enabled: enabled,
+          baht_per_point: baht_per_point,
+          min_purchase_thb: min_purchase_thb,
+          new_multiplier: new_multiplier,
+          regular_multiplier: regular_multiplier,
+          vip_multiplier: vip_multiplier,
+          dormant_multiplier: dormant_multiplier
+        });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status === 'success') {
+          Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', text: 'อัปเดต ' + (result.updated || 0) + ' ค่า', timer: 2000 });
+        } else throw new Error(result.message);
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    }
+
+    // wire inputs → live preview
+    document.addEventListener('DOMContentLoaded', () => {
+      ['rewardEnabled','rewardBahtPerPoint','rewardMinPurchase','rewardMultiplierNew','rewardMultiplierRegular','rewardMultiplierVip','rewardMultiplierDormant'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', () => { _updateRewardEnabledLabel(); _updateRewardPreview(); });
+        if (el) el.addEventListener('change', () => { _updateRewardEnabledLabel(); _updateRewardPreview(); });
+      });
+    });
 
     async function loadStoreConfig() {
       const svcsContainer = document.getElementById('configServicesList');
