@@ -401,8 +401,13 @@
       try {
         const res = await fetch(`${API_URL}?action=getInitialBookingData&lineUid=${userUid}&t=${Date.now()}`);
         const data = await res.json();
-        masterData = data.data; 
-        
+        // 🚨 FIX: เช็ค response shape — backend อาจ return {status:'error'} โดยไม่มี data
+        if (!data || data.status === 'error' || !data.data) {
+          const errMsg = (data && data.message) ? data.message : 'เซิร์ฟเวอร์ไม่ส่งข้อมูล (status='+(data && data.status)+')';
+          throw new Error(errMsg);
+        }
+        masterData = data.data || {};
+
         document.getElementById('userPoints').innerText = masterData.points || 0;
         document.getElementById('profilePoints').innerText = masterData.points || 0;
         document.getElementById('profileVisits').innerText = masterData.visitCount || 0;
