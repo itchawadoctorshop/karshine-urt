@@ -401,11 +401,7 @@
       try {
         const res = await fetch(`${API_URL}?action=getInitialBookingData&lineUid=${userUid}&t=${Date.now()}`);
         const data = await res.json();
-        masterData = data.data || {};
-	masterData.points = masterData.points || 0;
-	masterData.visitCount = masterData.visitCount || 0;
-	masterData.packages = masterData.packages || [];
-	masterData.bookings = masterData.bookings || []; 
+        masterData = data.data; 
         
         document.getElementById('userPoints').innerText = masterData.points || 0;
         document.getElementById('profilePoints').innerText = masterData.points || 0;
