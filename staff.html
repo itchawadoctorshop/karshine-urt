@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Karshine URT — เช็คอินพนักงาน</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&display=swap');
+    body { font-family: 'Kanit', sans-serif; background: linear-gradient(135deg, #f0f9ff 0%, #fef3c7 100%); min-height: 100vh; }
+    .pulse-ring { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+      50% { box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
+    }
+    .pulse-ring-blue {
+      animation: pulseBlue 2s ease-in-out infinite;
+    }
+    @keyframes pulseBlue {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
+      50% { box-shadow: 0 0 0 18px rgba(59, 130, 246, 0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; }
+  </style>
+</head>
+<body class="text-gray-800 pb-12">
+
+  <!-- LOADING SPLASH -->
+  <div id="splash" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white">
+    <i class="fa-solid fa-circle-notch fa-spin text-5xl text-blue-500 mb-4"></i>
+    <p class="text-gray-500">กำลังเชื่อมต่อ LINE...</p>
+  </div>
+
+  <!-- ERROR (not employee / inactive / etc) -->
+  <div id="errorScreen" class="hidden fixed inset-0 z-40 flex flex-col items-center justify-center bg-white p-6 text-center">
+    <i class="fa-solid fa-circle-exclamation text-6xl text-red-500 mb-4"></i>
+    <h2 class="text-xl font-bold text-gray-800 mb-2">ไม่สามารถใช้งานได้</h2>
+    <p id="errorMessage" class="text-gray-600 max-w-sm">-</p>
+    <button onclick="location.reload()" class="mt-6 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold active:scale-95">
+      <i class="fa-solid fa-arrows-rotate mr-1"></i> ลองใหม่
+    </button>
+  </div>
+
+  <!-- HEADER -->
+  <header class="bg-gradient-to-r from-blue-600 to-emerald-500 text-white p-5 shadow-md">
+    <div class="flex items-center gap-3">
+      <i class="fa-solid fa-user-clock text-3xl"></i>
+      <div>
+        <h1 class="text-lg font-bold tracking-wide leading-none">Karshine URT</h1>
+        <p class="text-[11px] opacity-90">ระบบเช็คอินพนักงาน</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- PROFILE CARD -->
+  <div id="profileCard" class="mx-4 mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hidden fade-in">
+    <div class="flex items-center gap-3">
+      <div id="profileAvatar" class="w-14 h-14 rounded-full bg-gradient-to-br from-blue-100 to-emerald-100 flex items-center justify-center text-2xl">👷</div>
+      <div class="flex-1">
+        <p id="profileName" class="font-bold text-gray-800 text-base">-</p>
+        <p id="profileMeta" class="text-xs text-gray-500">-</p>
+      </div>
+      <span id="profileStateBadge" class="badge bg-gray-100 text-gray-600">-</span>
+    </div>
+  </div>
+
+  <!-- TODAY STATUS CARD -->
+  <div id="todayCard" class="mx-4 mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hidden fade-in">
+    <p class="text-[11px] font-bold text-gray-400 uppercase mb-2">📅 วันนี้</p>
+    <div class="grid grid-cols-3 gap-2 text-center">
+      <div class="bg-emerald-50 rounded-xl p-2">
+        <p class="text-[10px] text-emerald-700 font-bold">เช็คอิน</p>
+        <p id="todayIn" class="text-lg font-bold text-emerald-700 mt-1">-</p>
+      </div>
+      <div class="bg-blue-50 rounded-xl p-2">
+        <p class="text-[10px] text-blue-700 font-bold">เช็คเอาท์</p>
+        <p id="todayOut" class="text-lg font-bold text-blue-700 mt-1">-</p>
+      </div>
+      <div class="bg-amber-50 rounded-xl p-2">
+        <p class="text-[10px] text-amber-700 font-bold">รวมชั่วโมง</p>
+        <p id="todayHours" class="text-lg font-bold text-amber-700 mt-1">-</p>
+      </div>
+    </div>
+    <p id="todayFlag" class="hidden mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">-</p>
+  </div>
+
+  <!-- ACTION BUTTON -->
+  <div id="actionWrap" class="mx-4 mt-6 hidden fade-in">
+    <button id="actionBtn" onclick="doAction()"
+      class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-lg font-bold py-5 rounded-2xl shadow-lg active:scale-95 pulse-ring transition-all">
+      <i class="fa-solid fa-location-crosshairs mr-2"></i>
+      <span id="actionBtnText">เช็คอิน</span>
+    </button>
+    <p id="gpsHint" class="text-[11px] text-gray-500 text-center mt-2">📍 ระบบจะตรวจสอบตำแหน่งของคุณ</p>
+  </div>
+
+  <!-- HISTORY 7 DAYS -->
+  <div id="historyCard" class="mx-4 mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hidden fade-in">
+    <p class="text-[11px] font-bold text-gray-400 uppercase mb-3">📋 ประวัติ 7 วัน</p>
+    <div id="historyBody" class="space-y-2 text-xs"></div>
+  </div>
+
+  <script>
+    // ⚙️ CONFIG (ตั้งค่าก่อน deploy)
+    const API_URL = "https://script.google.com/macros/s/AKfycbx-lKOiMMp2enXoijV6rLpqoG-UQzjgamF_QUVS9d9QHGi_ouY7k8hIZya91PPBiwan/exec";
+    // 🆕 LIFF ID สำหรับ staff (สร้างใหม่ใน LINE Developers — endpoint = staff.html)
+    //    ใส่ค่าเดียวกับลูกค้าได้ถ้าจะใช้ LIFF เดียว — แต่ spec แนะนำให้แยก
+    const LIFF_ID = "2009981892-zcJLvKuH";
+
+    let userUid = "";
+    let userName = "";
+    let _statusCache = null;
+    let _busy = false;
+
+    function showError(msg) {
+      const splash = document.getElementById('splash');
+      const err = document.getElementById('errorScreen');
+      const msgEl = document.getElementById('errorMessage');
+      if (splash) splash.classList.add('hidden');
+      if (msgEl) msgEl.textContent = msg || 'เกิดข้อผิดพลาด';
+      if (err) err.classList.remove('hidden');
+    }
+
+    function hideSplash() {
+      const splash = document.getElementById('splash');
+      if (splash) splash.classList.add('hidden');
+    }
+
+    async function bootLiff() {
+      try {
+        if (!LIFF_ID || LIFF_ID.startsWith('REPLACE')) {
+          // 🛠️ Dev mode — fallback URL param ?uid=Uxxxx
+          const params = new URLSearchParams(location.search);
+          userUid = params.get('uid') || '';
+          if (!userUid) {
+            showError('ยังไม่ได้ตั้งค่า LIFF_ID — แจ้ง Manager (หรือเปิดด้วย ?uid=Uxxx เพื่อทดสอบ)');
+            return;
+          }
+          userName = 'ทดสอบ';
+        } else {
+          await liff.init({ liffId: LIFF_ID });
+          if (!liff.isLoggedIn()) { liff.login(); return; }
+          const profile = await liff.getProfile();
+          userUid = profile.userId;
+          userName = profile.displayName || '';
+        }
+        await loadStatus();
+      } catch (e) {
+        console.error(e);
+        showError('เชื่อมต่อ LINE ไม่สำเร็จ: ' + (e.message || e));
+      }
+    }
+
+    async function loadStatus() {
+      try {
+        const params = new URLSearchParams({ action: 'getEmployeeStatus', lineUid: userUid, t: Date.now() });
+        const res = await fetch(API_URL, { method: 'POST', body: params });
+        const result = await res.json();
+        if (result.status !== 'success') {
+          // ❌ ไม่ใช่พนักงาน / inactive
+          showError(result.message || 'ไม่สามารถดึงข้อมูลได้');
+          return;
+        }
+        _statusCache = result.data;
+        renderStatus(result.data);
+        hideSplash();
+      } catch (e) {
+        showError('เกิดข้อผิดพลาด: ' + (e.message || e));
+      }
+    }
+
+    function renderStatus(d) {
+      // Profile
+      document.getElementById('profileCard').classList.remove('hidden');
+      document.getElementById('todayCard').classList.remove('hidden');
+      document.getElementById('actionWrap').classList.remove('hidden');
+      document.getElementById('historyCard').classList.remove('hidden');
+
+      document.getElementById('profileName').textContent = d.profile.name + (d.profile.nickname ? ' (' + d.profile.nickname + ')' : '');
+      document.getElementById('profileMeta').textContent = (d.profile.role || '-') + ' · ' + d.profile.employee_id;
+
+      const badge = document.getElementById('profileStateBadge');
+      if (d.state === 'checked_in') {
+        badge.textContent = '🟢 กำลังทำงาน';
+        badge.className = 'badge bg-emerald-100 text-emerald-700';
+      } else if (d.state === 'checked_out') {
+        badge.textContent = '✅ เสร็จงานวันนี้';
+        badge.className = 'badge bg-blue-100 text-blue-700';
+      } else {
+        badge.textContent = '⏰ ยังไม่เช็คอิน';
+        badge.className = 'badge bg-gray-100 text-gray-600';
+      }
+
+      // Today
+      const t = d.today || {};
+      document.getElementById('todayIn').textContent  = t.check_in_time  || '-';
+      document.getElementById('todayOut').textContent = t.check_out_time || '-';
+      document.getElementById('todayHours').textContent = t.total_hours ? (t.total_hours + ' ชม.') : '-';
+      const flagEl = document.getElementById('todayFlag');
+      if (t.flag) { flagEl.textContent = '⚠️ ' + t.flag; flagEl.classList.remove('hidden'); }
+      else { flagEl.classList.add('hidden'); }
+
+      // Action button
+      const btn = document.getElementById('actionBtn');
+      const txt = document.getElementById('actionBtnText');
+      const hint = document.getElementById('gpsHint');
+      btn.classList.remove('hidden');
+      if (d.state === 'checked_in') {
+        // → next action = checkout
+        btn.className = 'w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-lg font-bold py-5 rounded-2xl shadow-lg active:scale-95 pulse-ring-blue transition-all';
+        txt.innerHTML = '<i class="fa-solid fa-right-from-bracket mr-2"></i> เช็คเอาท์';
+        hint.textContent = '📍 GPS นอกพื้นที่ยังเช็คเอาท์ได้ แต่จะ flag ในรายงาน';
+      } else if (d.state === 'checked_out') {
+        // เสร็จแล้ว — ล็อกปุ่ม
+        btn.className = 'w-full bg-gray-200 text-gray-500 text-lg font-bold py-5 rounded-2xl shadow-inner cursor-not-allowed';
+        txt.innerHTML = '<i class="fa-solid fa-circle-check mr-2"></i> เสร็จงานแล้ววันนี้';
+        btn.disabled = true;
+        hint.textContent = 'พรุ่งนี้กลับมาเช็คอินใหม่ได้เลย';
+      } else {
+        // idle → checkin
+        btn.className = 'w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-lg font-bold py-5 rounded-2xl shadow-lg active:scale-95 pulse-ring transition-all';
+        txt.innerHTML = '<i class="fa-solid fa-location-crosshairs mr-2"></i> เช็คอิน';
+        hint.textContent = '📍 ต้องอยู่ในพื้นที่สาขา';
+      }
+
+      // History
+      renderHistory(d.history7 || []);
+    }
+
+    function renderHistory(rows) {
+      const body = document.getElementById('historyBody');
+      if (!rows || rows.length === 0) {
+        body.innerHTML = '<p class="text-center text-gray-400 py-4">ยังไม่มีประวัติ</p>';
+        return;
+      }
+      const fmtDate = (s) => { const p = String(s).split('-'); return p.length === 3 ? (p[2] + '/' + p[1]) : s; };
+      const dows = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+      body.innerHTML = rows.map(r => {
+        let dowText = '';
+        try {
+          const d = new Date(r.date);
+          dowText = isNaN(d.getTime()) ? '' : (' ' + dows[d.getDay()]);
+        } catch (e) {}
+        const hours = r.total_hours ? (parseFloat(r.total_hours).toFixed(2) + ' ชม.') : '-';
+        const flagBadge = r.flag ? '<span class="ml-1 text-amber-600">⚠️</span>' : '';
+        return `
+          <div class="flex items-center justify-between border-b border-gray-100 pb-2 last:border-b-0">
+            <div>
+              <p class="font-bold text-gray-700">${fmtDate(r.date)}<span class="text-gray-400 font-normal text-[10px]">${dowText}</span> ${flagBadge}</p>
+              <p class="text-[10px] text-gray-500">${r.check_in_time || '-'} → ${r.check_out_time || '-'}</p>
+            </div>
+            <span class="font-bold text-emerald-600">${hours}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 🎬 ปุ่มกด: ตัดสินใจตาม state แล้วเรียก checkin/checkout
+    async function doAction() {
+      if (_busy) return;
+      const state = _statusCache ? _statusCache.state : 'idle';
+      if (state === 'checked_out') return;  // ล็อก
+
+      _busy = true;
+      const btn = document.getElementById('actionBtn');
+      const txt = document.getElementById('actionBtnText');
+      const oldHtml = txt.innerHTML;
+      txt.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> กำลังหาตำแหน่ง...';
+      btn.disabled = true;
+
+      try {
+        const pos = await getGPS();
+        const action = (state === 'checked_in') ? 'employeeCheckOut' : 'employeeCheckIn';
+        txt.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> กำลังบันทึก...';
+
+        const params = new URLSearchParams({
+          action: action,
+          lineUid: userUid,
+          lat: String(pos.lat),
+          lng: String(pos.lng),
+          accuracy: String(pos.accuracy || 0)
+        });
+        const res = await fetch(API_URL, { method: 'POST', body: params });
+        const result = await res.json();
+
+        if (result.status === 'success') {
+          const d = result.data || {};
+          let html = '';
+          if (action === 'employeeCheckIn') {
+            html = `<p class="mb-2">เช็คอินสำเร็จเวลา <b>${d.time}</b></p><p class="text-xs text-gray-500">ระยะจากสาขา: ${d.distance} ม.</p>`;
+          } else {
+            html = `<p class="mb-2">เช็คเอาท์สำเร็จเวลา <b>${d.check_out_time}</b></p>
+                    <p class="text-xs text-gray-500">รวมชั่วโมงทำงาน: <b class="text-amber-600">${d.total_hours} ชม.</b></p>
+                    <p class="text-[10px] text-gray-400 mt-1">ระยะ: ${d.distance} ม. ${d.in_range ? '✓ ในพื้นที่' : '⚠️ นอกพื้นที่'}</p>`;
+          }
+          await Swal.fire({
+            icon: 'success',
+            title: result.message,
+            html: html,
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: action === 'employeeCheckIn' ? '#10B981' : '#3B82F6'
+          });
+          await loadStatus();
+        } else {
+          // โครงสร้าง error: { status, code, message, distance?, radius? }
+          let html = result.message || 'เกิดข้อผิดพลาด';
+          if (result.code === 'OUT_OF_RANGE' && typeof result.distance !== 'undefined') {
+            html = `${result.message}<br><br><div class="text-xs text-gray-500">รัศมีที่อนุญาต: ${result.radius || 100} เมตร</div>`;
+          }
+          await Swal.fire({
+            icon: result.code === 'ALREADY_IN' || result.code === 'NOT_CHECKED_IN' ? 'info' : 'warning',
+            title: 'ไม่สำเร็จ',
+            html: html,
+            confirmButtonText: 'ตกลง'
+          });
+          await loadStatus();
+        }
+      } catch (e) {
+        if (e && e.code === 'GPS_DENIED') {
+          const r = await Swal.fire({
+            icon: 'error',
+            title: 'ไม่อนุญาตให้เข้าถึงตำแหน่ง',
+            html: 'กรุณาเปิดสิทธิ์ GPS ที่ Setting ของเบราว์เซอร์ / LINE แล้วลองใหม่',
+            confirmButtonText: 'ลองใหม่',
+            showCancelButton: true,
+            cancelButtonText: 'ยกเลิก'
+          });
+          if (r.isConfirmed) { _busy = false; return doAction(); }
+        } else {
+          await Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: e.message || String(e) });
+        }
+      } finally {
+        _busy = false;
+        // reset button (loadStatus จะ re-render อยู่แล้ว)
+        btn.disabled = false;
+        txt.innerHTML = oldHtml;
+      }
+    }
+
+    // 📍 ขอ GPS แบบ Promise — reject พร้อม code = 'GPS_DENIED' ถ้า user ปฏิเสธ
+    function getGPS() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          const e = new Error('เบราว์เซอร์ไม่รองรับ GPS'); e.code = 'NO_GEO'; return reject(e);
+        }
+        navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+          (err) => {
+            const e = new Error(err.message || 'GPS error');
+            if (err.code === 1) e.code = 'GPS_DENIED';
+            else e.code = 'GPS_FAIL';
+            reject(e);
+          },
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+      });
+    }
+
+    // boot
+    document.addEventListener('DOMContentLoaded', bootLiff);
+  </script>
+</body>
+</html>
