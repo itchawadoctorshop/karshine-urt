@@ -40,6 +40,8 @@
       box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
     }
     .range-active:hover { background: #1d4ed8 !important; }
+    /* 👷 Employee badges */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
   </style>
 </head>
 <body class="text-gray-800 pb-24">
@@ -398,6 +400,7 @@
          <button onclick="switchConfigTab('payments')" id="tab-payments" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">ชำระเงิน</button>
          <button onclick="switchConfigTab('closures')" id="tab-closures" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">🚫 วันปิดร้าน</button>
          <button onclick="switchConfigTab('rewards')" id="tab-rewards" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">🎁 แต้ม</button>
+         <button onclick="switchConfigTab('employees')" id="tab-employees" class="px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition">👷 พนักงาน</button>
       </div>
 
       <div id="content-services" class="config-content block">
@@ -513,6 +516,49 @@
           <button type="button" onclick="saveRewardRules_()" class="w-full bg-yellow-500 hover:bg-yellow-400 text-white py-3 rounded-xl font-bold shadow transition active:scale-95">
             <i class="fa-solid fa-save mr-1"></i> บันทึกกฎสะสมแต้ม
           </button>
+        </div>
+      </div>
+
+      <!-- 👷 Employee Check-in tab -->
+      <div id="content-employees" class="config-content hidden">
+        <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800">
+          💡 รายชื่อพนักงาน + สถานะวันนี้ — ใช้ระบบเช็คอินผ่าน LIFF บน LINE
+          (ต้องตั้งค่า Script Properties: <code class="px-1 bg-white rounded">BRANCH_LAT</code>, <code class="px-1 bg-white rounded">BRANCH_LNG</code>, <code class="px-1 bg-white rounded">BRANCH_RADIUS_M</code>)
+        </div>
+
+        <!-- Action bar -->
+        <div class="flex flex-wrap gap-2 items-center mb-3">
+          <button type="button" onclick="loadEmployees_()" class="px-3 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-xs font-bold rounded-lg active:scale-95">
+            <i class="fa-solid fa-arrows-rotate mr-1"></i> รีเฟรช
+          </button>
+          <input type="month" id="empReportMonth" class="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
+          <button type="button" onclick="exportEmployeesCsv_()" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded-lg active:scale-95">
+            <i class="fa-solid fa-file-csv mr-1"></i> Export CSV (รายเดือน)
+          </button>
+          <button type="button" onclick="setupEmployeeSheets_()" class="ml-auto px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-bold rounded-lg active:scale-95">
+            <i class="fa-solid fa-table-list mr-1"></i> สร้างชีต (one-time)
+          </button>
+        </div>
+
+        <!-- Summary -->
+        <div id="empSummary" class="grid grid-cols-3 gap-2 mb-3 text-center">
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-2">
+            <p class="text-[10px] font-bold text-emerald-700 uppercase">🟢 กำลังทำงาน</p>
+            <p class="text-xl font-bold text-emerald-700 mt-1"><span id="empCheckedIn">-</span></p>
+          </div>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-2">
+            <p class="text-[10px] font-bold text-blue-700 uppercase">✅ เสร็จงานวันนี้</p>
+            <p class="text-xl font-bold text-blue-700 mt-1"><span id="empCheckedOut">-</span></p>
+          </div>
+          <div class="bg-gray-50 border border-gray-200 rounded-xl p-2">
+            <p class="text-[10px] font-bold text-gray-700 uppercase">⏰ ยังไม่เข้างาน</p>
+            <p class="text-xl font-bold text-gray-700 mt-1"><span id="empIdle">-</span></p>
+          </div>
+        </div>
+
+        <!-- Employee list -->
+        <div id="employeesList" class="space-y-2">
+          <div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>
         </div>
       </div>
     </div>
@@ -4145,12 +4191,21 @@
       const activeClass = "px-4 py-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap transition";
       const inactiveClass = "px-4 py-2 text-sm font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 whitespace-nowrap transition";
 
-      ['services', 'packages', 'branches', 'payments', 'closures', 'rewards'].forEach(t => {
+      ['services', 'packages', 'branches', 'payments', 'closures', 'rewards', 'employees'].forEach(t => {
         const el = document.getElementById('tab-' + t);
         if (el) el.className = tab === t ? activeClass : inactiveClass;
       });
       // 🎁 F1.5a: auto-load rules ตอนกดเข้า tab รางวัล
       if (tab === 'rewards') loadRewardRules_();
+      // 👷 auto-load employees ตอนกดเข้า tab พนักงาน
+      if (tab === 'employees') {
+        loadEmployees_();
+        const m = document.getElementById('empReportMonth');
+        if (m && !m.value) {
+          const now = new Date();
+          m.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        }
+      }
     }
 
     // ==========================================
@@ -4262,6 +4317,168 @@
         if (el) el.addEventListener('change', () => { _updateRewardEnabledLabel(); _updateRewardPreview(); });
       });
     });
+
+    // ==========================================
+    // 👷 Employee Check-in — Admin view
+    // ==========================================
+    let _empCache = { employees: [], date: '' };
+
+    async function loadEmployees_() {
+      const listEl = document.getElementById('employeesList');
+      if (listEl) listEl.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>';
+      try {
+        const payload = new URLSearchParams({ action: 'getAllEmployeesStatus', t: Date.now() });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status !== 'success' || !result.data) {
+          if (listEl) listEl.innerHTML = '<p class="text-center py-6 text-red-500 text-sm">โหลดไม่สำเร็จ: ' + (result.message || '-') + '</p>';
+          return;
+        }
+        _empCache = result.data;
+        renderEmployees_();
+      } catch (e) {
+        if (listEl) listEl.innerHTML = '<p class="text-center py-6 text-red-500 text-sm">เกิดข้อผิดพลาด: ' + (e.message || e) + '</p>';
+      }
+    }
+
+    function renderEmployees_() {
+      const listEl = document.getElementById('employeesList');
+      if (!listEl) return;
+      const emps = _empCache.employees || [];
+      let cIn = 0, cOut = 0, cIdle = 0;
+      emps.forEach(e => {
+        if (!e.active) return;  // ไม่นับ inactive ใน summary
+        if (e.state === 'checked_in') cIn++;
+        else if (e.state === 'checked_out') cOut++;
+        else cIdle++;
+      });
+      document.getElementById('empCheckedIn').textContent  = cIn;
+      document.getElementById('empCheckedOut').textContent = cOut;
+      document.getElementById('empIdle').textContent       = cIdle;
+
+      if (emps.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-center py-8 text-gray-500 text-sm">
+            <p class="mb-2">📭 ยังไม่มีพนักงานในระบบ</p>
+            <p class="text-xs text-gray-400">เพิ่มแถวใน Sheet "Employees" ของ Google Sheets แล้วกดรีเฟรช</p>
+          </div>`;
+        return;
+      }
+
+      const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+      const stateBadge = (st, active) => {
+        if (!active) return '<span class="badge bg-red-100 text-red-700">⛔ ปิดใช้งาน</span>';
+        if (st === 'checked_in') return '<span class="badge bg-emerald-100 text-emerald-700">🟢 ทำงาน</span>';
+        if (st === 'checked_out') return '<span class="badge bg-blue-100 text-blue-700">✅ เลิกงาน</span>';
+        return '<span class="badge bg-gray-100 text-gray-600">⏰ ยังไม่เข้า</span>';
+      };
+
+      listEl.innerHTML = emps.map(e => {
+        const t = e.today || {};
+        const hours = t.total_hours ? (parseFloat(t.total_hours).toFixed(2) + ' ชม.') : '-';
+        const flagBadge = t.flag ? '<p class="text-[10px] text-amber-700 mt-1">⚠️ ' + escapeHtml(t.flag) + '</p>' : '';
+        return `
+          <div class="bg-white border border-gray-200 rounded-xl p-3 ${!e.active ? 'opacity-60' : ''}">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <p class="font-bold text-gray-800 truncate">${escapeHtml(e.name)} ${e.nickname ? '<span class="text-gray-400 text-xs font-normal">(' + escapeHtml(e.nickname) + ')</span>' : ''}</p>
+                <p class="text-[10px] text-gray-500">${escapeHtml(e.role || '-')} · ${escapeHtml(e.employee_id || '-')}${e.phone ? ' · ☎️ ' + escapeHtml(e.phone) : ''}</p>
+              </div>
+              ${stateBadge(e.state, e.active)}
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-2 text-center text-xs">
+              <div class="bg-emerald-50 rounded-lg py-1">
+                <span class="text-[10px] text-emerald-700">เข้า</span>
+                <p class="font-bold text-emerald-700">${escapeHtml(t.check_in_time || '-')}</p>
+              </div>
+              <div class="bg-blue-50 rounded-lg py-1">
+                <span class="text-[10px] text-blue-700">ออก</span>
+                <p class="font-bold text-blue-700">${escapeHtml(t.check_out_time || '-')}</p>
+              </div>
+              <div class="bg-amber-50 rounded-lg py-1">
+                <span class="text-[10px] text-amber-700">รวม</span>
+                <p class="font-bold text-amber-700">${hours}</p>
+              </div>
+            </div>
+            ${flagBadge}
+          </div>`;
+      }).join('');
+    }
+
+    // 🛠️ create sheets (one-time)
+    async function setupEmployeeSheets_() {
+      try {
+        const payload = new URLSearchParams({ action: 'setupEmployeeSheets' });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status === 'success') {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'สร้างชีตเรียบร้อย', showConfirmButton: false, timer: 2000 });
+          loadEmployees_();
+        } else {
+          Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: result.message || '-' });
+        }
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+      }
+    }
+
+    // 📄 Export CSV (รายเดือน)
+    async function exportEmployeesCsv_() {
+      const monthEl = document.getElementById('empReportMonth');
+      if (!monthEl || !monthEl.value) {
+        Swal.fire({ icon: 'warning', title: 'กรุณาเลือกเดือน' });
+        return;
+      }
+      const month = monthEl.value;  // 'yyyy-MM'
+      try {
+        const payload = new URLSearchParams({ action: 'getEmployeeReport', month: month, t: Date.now() });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status !== 'success') {
+          Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: result.message || '-' });
+          return;
+        }
+        const rows = result.data.rows || [];
+        const summary = result.data.summary || [];
+        if (rows.length === 0) {
+          Swal.fire({ icon: 'info', title: 'ไม่มีข้อมูล', text: 'เดือน ' + month + ' ยังไม่มีบันทึก' });
+          return;
+        }
+        // Build CSV with BOM (Excel-friendly)
+        const escCsv = (v) => {
+          const s = String(v == null ? '' : v);
+          if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+          return s;
+        };
+        const headers = ['วันที่','รหัสพนักงาน','ชื่อ','ชื่อเล่น','ตำแหน่ง','LINE UID','เช็คอิน','ระยะเข้า (ม.)','ในพื้นที่ (เข้า)','เช็คเอาท์','ระยะออก (ม.)','ในพื้นที่ (ออก)','ชม.รวม','flag'];
+        const lines = [headers.join(',')];
+        rows.forEach(r => {
+          lines.push([
+            r.date, r.employee_id, r.name, r.nickname, r.role, r.line_uid,
+            r.check_in_time, r.check_in_distance, r.check_in_in_range,
+            r.check_out_time, r.check_out_distance, r.check_out_in_range,
+            r.total_hours, r.flag
+          ].map(escCsv).join(','));
+        });
+        // summary block
+        lines.push('');
+        lines.push('สรุปรายคน,');
+        lines.push(['รหัส','ชื่อ','ชื่อเล่น','จำนวนวัน','รวม ชม.','วัน flag'].join(','));
+        summary.forEach(s => {
+          lines.push([s.employee_id, s.name, s.nickname, s.days, s.total_hours, s.flagged_days].map(escCsv).join(','));
+        });
+
+        const csv = '﻿' + lines.join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'karshine-attendance-' + month + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+      }
+    }
 
     async function loadStoreConfig() {
       const svcsContainer = document.getElementById('configServicesList');
