@@ -18,6 +18,28 @@
     .section { display: none; }
     .section.active { display: block; animation: fadeIn 0.3s ease-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    /* 🆕 SPEC V.2: Date Range chip styles */
+    .range-btn {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      color: #4b5563;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .range-btn:hover { background: #f3f4f6; border-color: #9ca3af; }
+    .range-btn:active { transform: scale(0.96); }
+    .range-active {
+      background: #2563eb !important;
+      color: #ffffff !important;
+      border-color: #2563eb !important;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+    }
+    .range-active:hover { background: #1d4ed8 !important; }
   </style>
 </head>
 <body class="text-gray-800 pb-24">
@@ -97,7 +119,30 @@
 
   <!-- 📊 Tab "รายงาน" — แยกออกจาก board-section เพื่อให้กดคิวเจอ Kanban ทันที -->
   <section id="dashboard-section" class="section p-4 lg:p-6">
-    <!-- 📊 F0.4 Mini Dashboard — สรุปยอดวันนี้ -->
+    <!-- 🆕 SPEC V.2: Date Range Selector -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 mb-4 p-3">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs font-bold text-gray-500 mr-1">📅 ช่วงเวลา:</span>
+        <button type="button" id="rangeBtn-today"  onclick="setRangePreset('today')"  class="range-btn">วันนี้</button>
+        <button type="button" id="rangeBtn-week"   onclick="setRangePreset('week')"   class="range-btn">สัปดาห์นี้</button>
+        <button type="button" id="rangeBtn-month"  onclick="setRangePreset('month')"  class="range-btn">เดือนนี้</button>
+        <button type="button" id="rangeBtn-year"   onclick="setRangePreset('year')"   class="range-btn">ปีนี้</button>
+        <button type="button" id="rangeBtn-custom" onclick="setRangePreset('custom')" class="range-btn">กำหนดเอง</button>
+        <span id="rangeLabel" class="text-[11px] text-gray-500 ml-auto">-</span>
+      </div>
+      <!-- Custom date inputs (hidden by default) -->
+      <div id="rangeCustomBox" class="hidden mt-2 flex flex-wrap gap-2 items-center pt-2 border-t border-gray-100">
+        <label class="text-[11px] text-gray-500">จาก:</label>
+        <input type="date" id="rangeFrom" class="text-xs border border-gray-300 rounded-lg px-2 py-1">
+        <label class="text-[11px] text-gray-500">ถึง:</label>
+        <input type="date" id="rangeTo" class="text-xs border border-gray-300 rounded-lg px-2 py-1">
+        <button type="button" onclick="applyCustomRange()" class="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold active:scale-95">
+          <i class="fa-solid fa-check"></i> ใช้
+        </button>
+      </div>
+    </div>
+
+    <!-- 📊 F0.4 Mini Dashboard — สรุปยอดในช่วงเวลาที่เลือก -->
     <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">📋 คิววันนี้</p>
@@ -194,12 +239,18 @@
       </div>
     </div>
 
+    <!-- 🆕 SPEC V.2: Multi-day notice (แทน Reconciliation ตอน range > 1 day) -->
+    <div id="multiDayNotice" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
+      <p class="text-sm text-amber-800 font-bold">💡 กระทบยอดดูได้ทีละวันเท่านั้น</p>
+      <p class="text-xs text-amber-700 mt-1">กลับไปเลือก "วันนี้" หรือ "กำหนดเอง" (วันเดียว) เพื่อดูตารางกระทบยอดรายวัน</p>
+    </div>
+
     <!-- 💵 F2.5 — กระทบยอดรายวัน (Daily Reconciliation) -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
+    <div id="reconCard" class="bg-white rounded-2xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
       <div class="flex justify-between items-center px-4 py-3 bg-gradient-to-r from-emerald-50 to-blue-50 border-b">
         <div class="flex items-center gap-2">
           <span class="text-base font-bold text-gray-800">💵 กระทบยอดรายวัน</span>
-          <input type="date" id="reconDate" class="text-xs border rounded-lg px-2 py-1 ml-2" onchange="loadReconciliation()">
+          <input type="date" id="reconDate" class="text-xs border rounded-lg px-2 py-1 ml-2" onchange="_onReconDateChange()">
         </div>
         <div class="flex gap-2">
           <button type="button" onclick="toggleReconBody()" class="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 active:scale-95">
@@ -258,16 +309,18 @@
         </div>
         <p id="reconSavedInfo" class="text-[10px] text-gray-500 mt-2 hidden"></p>
 
-        <!-- Section B: ตารางประวัติบริการรายวัน (Group by Service) -->
-        <details class="mt-5 border-t pt-3" id="salesHistoryDetails" open>
-          <summary class="cursor-pointer text-sm font-bold text-gray-700 hover:text-blue-600 flex items-center justify-between">
-            <span>📋 ประวัติบริการวันนี้ (<span id="salesHistCount">0</span> รายการ)</span>
-            <span class="text-[10px] text-gray-400 font-normal">กดที่แต่ละบริการเพื่อดูรายละเอียด</span>
-          </summary>
-          <div id="salesHistoryBody" class="mt-3 space-y-2"></div>
-        </details>
-
       </div>
+    </div>
+
+    <!-- 📋 ประวัติบริการ (Sales History) — แยก card เพื่อให้แสดงทั้ง single-day + multi-day -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
+      <details id="salesHistoryDetails" open>
+        <summary class="cursor-pointer px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b flex items-center justify-between hover:from-blue-100 hover:to-indigo-100">
+          <span class="text-base font-bold text-gray-800">📋 ประวัติบริการ <span id="salesHistRangeLabel" class="text-xs font-normal text-gray-500"></span> (<span id="salesHistCount">0</span> รายการ)</span>
+          <span class="text-[10px] text-gray-400 font-normal">กดที่แต่ละบริการเพื่อดูรายละเอียด</span>
+        </summary>
+        <div id="salesHistoryBody" class="p-4 space-y-2"></div>
+      </details>
     </div>
   </section>
 
@@ -801,6 +854,253 @@
       return '🛠️ ' + parts.join(' · ');
     }
 
+
+    // ==========================================
+    // 📅 SPEC V.2 — Date Range Picker (Dashboard)
+    // ==========================================
+    //   _currentRange = { preset, startDate, endDate, isSingleDay }
+    //   preset: 'today' | 'week' | 'month' | 'year' | 'custom'
+    //   timezone: GMT+7 (Asia/Bangkok) — ใช้ Date object ของ browser (สมมุติ user อยู่ TH)
+    let _currentRange = { preset: 'today', startDate: '', endDate: '', isSingleDay: true };
+
+    // helper: yyyy-MM-dd จาก Date object (local timezone — สมมุติ GMT+7)
+    function _ymd(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return y + '-' + m + '-' + day;
+    }
+
+    // helper: format yyyy-MM-dd → dd/mm/yyyy
+    function _fmtDateRange(s) {
+      if (!s) return '';
+      const parts = s.split('-');
+      return parts.length === 3 ? (parts[2] + '/' + parts[1] + '/' + parts[0]) : s;
+    }
+
+    // คำนวน startDate/endDate จาก preset (return { startDate, endDate })
+    function calculateRange(preset) {
+      const now = new Date();
+      const today = _ymd(now);
+      if (preset === 'today') {
+        return { startDate: today, endDate: today };
+      }
+      if (preset === 'week') {
+        // จันทร์-วันนี้ (Mon = 1, Sun = 0 → ถ้าวันอาทิตย์ใช้ -6)
+        const dow = now.getDay();  // 0=Sun..6=Sat
+        const offset = (dow === 0) ? 6 : (dow - 1);  // ย้อนกลับไปจันทร์
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - offset);
+        return { startDate: _ymd(monday), endDate: today };
+      }
+      if (preset === 'month') {
+        const first = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { startDate: _ymd(first), endDate: today };
+      }
+      if (preset === 'year') {
+        const jan1 = new Date(now.getFullYear(), 0, 1);
+        return { startDate: _ymd(jan1), endDate: today };
+      }
+      // custom → return ค่าจาก input (ถ้ามี) — caller ต้องเซ็ตเอง
+      return { startDate: today, endDate: today };
+    }
+
+    // อัปเดต UI: highlight chip, แสดง label, แสดง/ซ่อน custom box + Reconciliation/Multi-day notice
+    function updateRangeUI() {
+      // 1) highlight chip
+      ['today','week','month','year','custom'].forEach(p => {
+        const btn = document.getElementById('rangeBtn-' + p);
+        if (!btn) return;
+        if (p === _currentRange.preset) btn.classList.add('range-active');
+        else btn.classList.remove('range-active');
+      });
+
+      // 2) show/hide custom box
+      const customBox = document.getElementById('rangeCustomBox');
+      if (customBox) {
+        if (_currentRange.preset === 'custom') customBox.classList.remove('hidden');
+        else customBox.classList.add('hidden');
+      }
+
+      // 3) range label
+      const lbl = document.getElementById('rangeLabel');
+      if (lbl) {
+        if (_currentRange.isSingleDay) {
+          lbl.textContent = _fmtDateRange(_currentRange.startDate);
+        } else {
+          lbl.textContent = _fmtDateRange(_currentRange.startDate) + ' → ' + _fmtDateRange(_currentRange.endDate);
+        }
+      }
+
+      // 4) Sales History label
+      const shLbl = document.getElementById('salesHistRangeLabel');
+      if (shLbl) {
+        shLbl.textContent = _currentRange.isSingleDay
+          ? ('· ' + _fmtDateRange(_currentRange.startDate))
+          : ('· ' + _fmtDateRange(_currentRange.startDate) + ' → ' + _fmtDateRange(_currentRange.endDate));
+      }
+
+      // 5) multi-day notice + reconciliation card visibility
+      const notice = document.getElementById('multiDayNotice');
+      const reconCard = document.getElementById('reconCard');
+      if (_currentRange.isSingleDay) {
+        if (notice) notice.classList.add('hidden');
+        if (reconCard) reconCard.classList.remove('hidden');
+      } else {
+        if (notice) notice.classList.remove('hidden');
+        if (reconCard) reconCard.classList.add('hidden');
+      }
+
+      // 6) ตั้งค่า reconDate input (ใช้สำหรับ single-day mode)
+      if (_currentRange.isSingleDay) {
+        const reconDate = document.getElementById('reconDate');
+        if (reconDate && reconDate.value !== _currentRange.startDate) {
+          reconDate.value = _currentRange.startDate;
+        }
+      }
+    }
+
+    // เปลี่ยน preset (today/week/month/year/custom)
+    function setRangePreset(preset) {
+      if (preset === 'custom') {
+        // open custom box โดยใช้ value ปัจจุบันเป็น default
+        const fromEl = document.getElementById('rangeFrom');
+        const toEl   = document.getElementById('rangeTo');
+        if (fromEl && !fromEl.value) fromEl.value = _currentRange.startDate || _ymd(new Date());
+        if (toEl   && !toEl.value)   toEl.value   = _currentRange.endDate   || _ymd(new Date());
+        _currentRange.preset = 'custom';
+        updateRangeUI();
+        return;  // รอ user กดปุ่ม "ใช้"
+      }
+      const r = calculateRange(preset);
+      _currentRange.preset = preset;
+      _currentRange.startDate = r.startDate;
+      _currentRange.endDate   = r.endDate;
+      _currentRange.isSingleDay = (r.startDate === r.endDate);
+      // persist
+      try {
+        localStorage.setItem('karshine_range_preset', preset);
+        localStorage.setItem('karshine_range_start', r.startDate);
+        localStorage.setItem('karshine_range_end',   r.endDate);
+      } catch (e) {}
+      updateRangeUI();
+      reloadDashboardWithRange();
+    }
+
+    // user กด "ใช้" หลังเลือก custom from/to
+    function applyCustomRange() {
+      const fromEl = document.getElementById('rangeFrom');
+      const toEl   = document.getElementById('rangeTo');
+      if (!fromEl || !toEl) return;
+      let from = fromEl.value, to = toEl.value;
+      if (!from || !to) {
+        Swal.fire({ icon: 'warning', title: 'กรุณาเลือกทั้งวันเริ่มและวันสิ้นสุด', timer: 2200, showConfirmButton: false });
+        return;
+      }
+      if (from > to) { const t = from; from = to; to = t; }  // swap
+      _currentRange.preset = 'custom';
+      _currentRange.startDate = from;
+      _currentRange.endDate   = to;
+      _currentRange.isSingleDay = (from === to);
+      try {
+        localStorage.setItem('karshine_range_preset', 'custom');
+        localStorage.setItem('karshine_range_start', from);
+        localStorage.setItem('karshine_range_end',   to);
+      } catch (e) {}
+      updateRangeUI();
+      reloadDashboardWithRange();
+    }
+
+    // reload ทุกอย่างใน dashboard ตาม _currentRange ปัจจุบัน
+    function reloadDashboardWithRange() {
+      loadDashboardSummary();           // ใช้ range
+      loadSegmentSummary();             // 🔧 segment คงเดิม (ไม่ขึ้นกับ range)
+      if (_currentRange.isSingleDay) {
+        // sync reconDate input + load reconciliation
+        const reconDate = document.getElementById('reconDate');
+        if (reconDate) reconDate.value = _currentRange.startDate;
+        loadReconciliation();           // reconciliation = single-day only
+      } else {
+        // multi-day: load sales history แยก (โดย skip reconciliation)
+        loadSalesHistoryRange();
+      }
+    }
+
+    // โหลดเฉพาะ sales history (multi-day mode) — ไม่ดึง reconciliation
+    async function loadSalesHistoryRange() {
+      try {
+        const payload = new URLSearchParams({
+          action: 'getDailySalesList',
+          startDate: _currentRange.startDate,
+          endDate:   _currentRange.endDate,
+          t: Date.now()
+        });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status === 'success' && result.data) {
+          _reconCache.salesRows = result.data.rows || [];
+          renderSalesHistory();
+        }
+      } catch (e) { console.error('Sales history (range) load error:', e); }
+    }
+
+    // ผูก reconDate input → ถ้า user เปลี่ยนวันจาก Reconciliation card → sync เข้า _currentRange
+    function _onReconDateChange() {
+      const reconDate = document.getElementById('reconDate');
+      if (!reconDate || !reconDate.value) return;
+      // ถ้าวันที่ตรงกับ preset อยู่แล้ว → load อย่างเดียว (ไม่ต้องเปลี่ยน preset)
+      if (_currentRange.isSingleDay && _currentRange.startDate === reconDate.value) {
+        loadReconciliation();
+        return;
+      }
+      // เปลี่ยน range เป็น custom single-day = reconDate.value
+      _currentRange.preset = 'custom';
+      _currentRange.startDate = reconDate.value;
+      _currentRange.endDate   = reconDate.value;
+      _currentRange.isSingleDay = true;
+      const fromEl = document.getElementById('rangeFrom');
+      const toEl   = document.getElementById('rangeTo');
+      if (fromEl) fromEl.value = reconDate.value;
+      if (toEl)   toEl.value   = reconDate.value;
+      try {
+        localStorage.setItem('karshine_range_preset', 'custom');
+        localStorage.setItem('karshine_range_start', reconDate.value);
+        localStorage.setItem('karshine_range_end',   reconDate.value);
+      } catch (e) {}
+      updateRangeUI();
+      reloadDashboardWithRange();
+    }
+
+    // โหลดค่า range ที่บันทึกไว้ + apply UI
+    function initRangeSelector() {
+      let preset = 'today';
+      let start = '', end = '';
+      try {
+        preset = localStorage.getItem('karshine_range_preset') || 'today';
+        start  = localStorage.getItem('karshine_range_start')  || '';
+        end    = localStorage.getItem('karshine_range_end')    || '';
+      } catch (e) {}
+
+      if (preset === 'custom' && start && end) {
+        _currentRange.preset = 'custom';
+        _currentRange.startDate = start;
+        _currentRange.endDate   = end;
+        _currentRange.isSingleDay = (start === end);
+        const fromEl = document.getElementById('rangeFrom');
+        const toEl   = document.getElementById('rangeTo');
+        if (fromEl) fromEl.value = start;
+        if (toEl)   toEl.value   = end;
+      } else {
+        // recalculate every load — preset ขึ้นกับวันที่ปัจจุบัน (week/month/year shift)
+        if (!['today','week','month','year'].includes(preset)) preset = 'today';
+        const r = calculateRange(preset);
+        _currentRange.preset = preset;
+        _currentRange.startDate = r.startDate;
+        _currentRange.endDate   = r.endDate;
+        _currentRange.isSingleDay = (r.startDate === r.endDate);
+      }
+      updateRangeUI();
+    }
 
     // ==========================================
     // 💵 F2.5 Daily Reconciliation
@@ -1427,10 +1727,14 @@
       } catch (e) { console.error(e); }
       finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
 
-      // 📊 F0.4 Dashboard — โหลดคู่กัน (ไม่ block board)
+      // 📊 F0.4 Dashboard — โหลดคู่กัน (ไม่ block board) — 🆕 SPEC V.2: ใช้ range
       loadDashboardSummary();
-      // 💵 F2.5 Reconciliation — โหลดคู่กัน
-      loadReconciliation();
+      // 💵 F2.5 Reconciliation — โหลดเฉพาะ single-day; multi-day โหลด sales history แทน
+      if (!_currentRange || _currentRange.isSingleDay !== false) {
+        loadReconciliation();
+      } else {
+        loadSalesHistoryRange();
+      }
       // 🏷️ F1.1 Segment summary — โหลดคู่กัน
       loadSegmentSummary();
     }
@@ -1506,7 +1810,13 @@
 
     async function loadDashboardSummary() {
       try {
-        const payload = new URLSearchParams({ action: 'getDashboardSummary', t: Date.now() });
+        // 🆕 SPEC V.2: ส่ง startDate/endDate ตาม _currentRange (fallback = today ถ้ายังไม่ init)
+        const sd = (_currentRange && _currentRange.startDate) ? _currentRange.startDate : '';
+        const ed = (_currentRange && _currentRange.endDate)   ? _currentRange.endDate   : '';
+        const params = { action: 'getDashboardSummary', t: Date.now() };
+        if (sd) params.startDate = sd;
+        if (ed) params.endDate   = ed;
+        const payload = new URLSearchParams(params);
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if (result.status === 'success' && result.data) {
@@ -1530,7 +1840,11 @@
           setText('dsPkgConsumedValue',  (d.packageConsumedValue || 0).toLocaleString());  // 🆕 F2.5c
           setText('dsNewUsers',          d.newUsersToday || 0);
           setText('dsUniqueCustomers',   (d.uniqueCustomersToday || 0) + ' คน');
-          setText('dsDate',              d.date ? d.date.split('-').reverse().join('/') : '-');
+          // 🆕 SPEC V.2: แสดง label ตาม range (single-day = วันเดียว, multi-day = ช่วง)
+          const dateLabel = (d.isSingleDay === false && d.startDate && d.endDate)
+            ? (d.startDate.split('-').reverse().join('/') + ' → ' + d.endDate.split('-').reverse().join('/'))
+            : (d.date ? d.date.split('-').reverse().join('/') : '-');
+          setText('dsDate', dateLabel);
           const now = new Date();
           setText('dsUpdatedAt', now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0'));
 
@@ -4543,6 +4857,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      // 🆕 SPEC V.2: init range selector ก่อน showSection — จะได้ apply กับ Dashboard ทันทีถ้าเปิด
+      initRangeSelector();
       showSection('board-section');
       // 🆕 (Bug A3): preload settings (branches/services/closures) — walk-in slot picker จะใช้
       loadStoreConfig();
