@@ -42,7 +42,62 @@
   </div>
 
   <section id="board-section" class="section active p-4 lg:p-6">
-    <!-- 📊 F0.4 Mini Dashboard — สรุปยอดวันนี้ (รีเฟรชพร้อม Kanban) -->
+    <!-- 🚗 F0.2 Valet: ขยายเป็น 5 swim lanes (scroll ซ้าย-ขวาบนมือถือ) — Dashboard ย้ายไป Tab "รายงาน" -->
+    <div class="overflow-x-auto pb-2">
+      <div class="grid gap-4 items-start" style="grid-template-columns: repeat(5, minmax(220px, 1fr)); min-width: 1100px;" id="board">
+
+        <!-- Lane 1: 🚗 ต้องไปรับ (valet_pickup_pending) -->
+        <div class="bg-orange-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-orange-400">
+          <h2 class="font-bold text-orange-800 mb-4 pb-2 border-b border-orange-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-car-on text-orange-500 mr-1"></i> ต้องไปรับ</span>
+            <span id="countValetPickup" class="bg-orange-200 text-orange-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colValetPickup" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 2: รอเช็คอิน (pending / confirmed) -->
+        <div class="bg-gray-200 rounded-2xl p-4 shadow-inner min-h-[500px]">
+          <h2 class="font-bold text-gray-600 mb-4 pb-2 border-b border-gray-300 flex justify-between items-center">
+            <span><i class="fa-regular fa-clock text-orange-500 mr-1"></i> รอเช็คอิน</span>
+            <span id="countPending" class="bg-gray-300 text-gray-700 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colPending" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 3: รถจอดรอคิว (checked_in) -->
+        <div class="bg-blue-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
+          <h2 class="font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-location-dot text-blue-500 mr-1"></i> รถจอดรอคิว</span>
+            <span id="countCheckedIn" class="bg-blue-200 text-blue-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colCheckedIn" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 4: กำลังให้บริการ (in_progress) -->
+        <div class="bg-green-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
+          <h2 class="font-bold text-green-800 mb-4 pb-2 border-b border-green-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-hands-bubbles text-green-500 mr-1"></i> กำลังให้บริการ</span>
+            <span id="countInProgress" class="bg-green-200 text-green-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colInProgress" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 5: 📦 รอส่งกลับ (valet_dropoff_pending) -->
+        <div class="bg-purple-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-purple-400">
+          <h2 class="font-bold text-purple-800 mb-4 pb-2 border-b border-purple-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-truck-fast text-purple-500 mr-1"></i> รอส่งกลับ</span>
+            <span id="countValetDropoff" class="bg-purple-200 text-purple-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colValetDropoff" class="space-y-3"></div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- 📊 Tab "รายงาน" — แยกออกจาก board-section เพื่อให้กดคิวเจอ Kanban ทันที -->
+  <section id="dashboard-section" class="section p-4 lg:p-6">
+    <!-- 📊 F0.4 Mini Dashboard — สรุปยอดวันนี้ -->
     <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">📋 คิววันนี้</p>
@@ -52,14 +107,12 @@
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">💰 รับเงินวันนี้ <span class="text-[8px] text-gray-300 normal-case">(paid only)</span></p>
         <p class="text-2xl font-bold text-green-600 mt-1"><span id="dsRevenueToday">-</span><span class="text-sm text-gray-400">.-</span></p>
-        <!-- 🆕 breakdown แสดงเฉพาะตอนมีส่วนลด -->
         <div id="dsBreakdown" class="hidden text-[10px] mt-1 space-y-0.5 border-t border-gray-100 pt-1">
           <p class="text-gray-500">ยอดเต็ม: <span id="dsGrossRevenue" class="font-bold text-gray-700">-</span>.-</p>
           <p class="text-amber-600">🎁 ส่วนลด: <span id="dsDiscountToday">-</span>.-</p>
         </div>
         <p class="text-[10px] text-gray-400 mt-1">เฉลี่ย/บิล <span id="dsAvgPerBill">-</span>.-</p>
       </div>
-      <!-- 💰 F2.4 / F2.5c: Card รวม Unpaid + Package consumption -->
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">⏳ ค้างจ่าย + 📦 หักแพ็กเกจ</p>
         <p class="text-2xl font-bold mt-1">
@@ -213,58 +266,6 @@
           </summary>
           <div id="salesHistoryBody" class="mt-3 space-y-2"></div>
         </details>
-
-      </div>
-    </div>
-
-    <!-- 🚗 F0.2 Valet: ขยายเป็น 5 swim lanes (scroll ซ้าย-ขวาบนมือถือ) -->
-    <div class="overflow-x-auto pb-2">
-      <div class="grid gap-4 items-start" style="grid-template-columns: repeat(5, minmax(220px, 1fr)); min-width: 1100px;" id="board">
-
-        <!-- Lane 1: 🚗 ต้องไปรับ (valet_pickup_pending) -->
-        <div class="bg-orange-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-orange-400">
-          <h2 class="font-bold text-orange-800 mb-4 pb-2 border-b border-orange-200 flex justify-between items-center">
-            <span><i class="fa-solid fa-car-on text-orange-500 mr-1"></i> ต้องไปรับ</span>
-            <span id="countValetPickup" class="bg-orange-200 text-orange-800 px-2 rounded-full text-xs py-1">0</span>
-          </h2>
-          <div id="colValetPickup" class="space-y-3"></div>
-        </div>
-
-        <!-- Lane 2: รอเช็คอิน (pending / confirmed) -->
-        <div class="bg-gray-200 rounded-2xl p-4 shadow-inner min-h-[500px]">
-          <h2 class="font-bold text-gray-600 mb-4 pb-2 border-b border-gray-300 flex justify-between items-center">
-            <span><i class="fa-regular fa-clock text-orange-500 mr-1"></i> รอเช็คอิน</span>
-            <span id="countPending" class="bg-gray-300 text-gray-700 px-2 rounded-full text-xs py-1">0</span>
-          </h2>
-          <div id="colPending" class="space-y-3"></div>
-        </div>
-
-        <!-- Lane 3: รถจอดรอคิว (checked_in) -->
-        <div class="bg-blue-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
-          <h2 class="font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200 flex justify-between items-center">
-            <span><i class="fa-solid fa-location-dot text-blue-500 mr-1"></i> รถจอดรอคิว</span>
-            <span id="countCheckedIn" class="bg-blue-200 text-blue-800 px-2 rounded-full text-xs py-1">0</span>
-          </h2>
-          <div id="colCheckedIn" class="space-y-3"></div>
-        </div>
-
-        <!-- Lane 4: กำลังให้บริการ (in_progress) -->
-        <div class="bg-green-50 rounded-2xl p-4 shadow-inner min-h-[500px]">
-          <h2 class="font-bold text-green-800 mb-4 pb-2 border-b border-green-200 flex justify-between items-center">
-            <span><i class="fa-solid fa-hands-bubbles text-green-500 mr-1"></i> กำลังให้บริการ</span>
-            <span id="countInProgress" class="bg-green-200 text-green-800 px-2 rounded-full text-xs py-1">0</span>
-          </h2>
-          <div id="colInProgress" class="space-y-3"></div>
-        </div>
-
-        <!-- Lane 5: 📦 รอส่งกลับ (valet_dropoff_pending) -->
-        <div class="bg-purple-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-purple-400">
-          <h2 class="font-bold text-purple-800 mb-4 pb-2 border-b border-purple-200 flex justify-between items-center">
-            <span><i class="fa-solid fa-truck-fast text-purple-500 mr-1"></i> รอส่งกลับ</span>
-            <span id="countValetDropoff" class="bg-purple-200 text-purple-800 px-2 rounded-full text-xs py-1">0</span>
-          </h2>
-          <div id="colValetDropoff" class="space-y-3"></div>
-        </div>
 
       </div>
     </div>
@@ -702,6 +703,7 @@
   <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-between px-2 pb-6 lg:pb-3 pt-2 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.1)]">
     <button onclick="showSection('board-section')" id="nav-board" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all nav-active"><i class="fa-solid fa-clipboard-list text-xl"></i><span class="text-[9px] font-bold">กระดานคิว</span></button>
     <button onclick="showSection('walkin-section')" id="nav-walkin" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-car-burst text-xl"></i><span class="text-[9px] font-bold">Walk-in</span></button>
+    <button onclick="showSection('dashboard-section')" id="nav-dashboard" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-chart-line text-xl"></i><span class="text-[9px] font-bold">รายงาน</span></button>
     <button onclick="showSection('settings-section')" id="nav-settings" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-users text-xl"></i><span class="text-[9px] font-bold">ลูกค้า (CRM)</span></button>
     <button onclick="showSection('config-section')" id="nav-config" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-gears text-xl"></i><span class="text-[9px] font-bold">ตั้งค่าร้าน</span></button>
   </nav>
@@ -1407,8 +1409,9 @@
       window.scrollTo(0,0);
       
       if(id === 'board-section') loadAdminData();
+      if(id === 'dashboard-section') loadAdminData();
       if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); }
-      if(id === 'config-section') loadStoreConfig(); 
+      if(id === 'config-section') loadStoreConfig();
     }
 
     // ==============================================
@@ -4524,7 +4527,7 @@
         Swal.fire('Error', e.message, 'error');
       }
     }
-    // ── End Photo Modal ───────────────────────────────────ฟ────────
+    // ── End Photo Modal ───────────────────────────────────────────
 
     // 🛡️ F2.5e: เช็คก่อน auto-refresh — ถ้า modal เปิดอยู่ห้าม reload (กัน state หาย ตอน admin กำลังกรอกข้อมูลจ่ายเงิน)
     function _shouldSkipAutoRefresh() {
