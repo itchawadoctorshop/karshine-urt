@@ -8,6 +8,8 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <!-- 💰 F2.4b: QR code generator สำหรับ PromptPay -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <!-- 📊 Sales Tracker: Chart.js for revenue+weather chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
@@ -42,6 +44,16 @@
     .range-active:hover { background: #1d4ed8 !important; }
     /* 👷 Employee badges */
     .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    /* 📊 Sales Tracker */
+    .st-progress { background: #f3f4f6; border-radius: 9999px; height: 22px; overflow: hidden; }
+    .st-progress-fill { height: 100%; border-radius: 9999px; transition: width 0.5s ease; }
+    .st-fill-floor { background: linear-gradient(90deg, #fecaca, #ef4444); }
+    .st-fill-target { background: linear-gradient(90deg, #fef3c7, #f59e0b); }
+    .st-fill-stretch { background: linear-gradient(90deg, #d1fae5, #10b981); }
+    .st-status-stretch { background-color: #d1fae5 !important; color: #065f46 !important; }
+    .st-status-target { background-color: #fef3c7 !important; color: #92400e !important; }
+    .st-status-floor { background-color: #fed7aa !important; color: #9a3412 !important; }
+    .st-status-below { background-color: #fecaca !important; color: #991b1b !important; }
   </style>
 </head>
 <body class="text-gray-800 pb-24">
@@ -799,12 +811,151 @@
     </div>
   </div>
 
+  <!-- 📊 Sales Tracker Section -->
+  <section id="sales-tracker-section" class="section p-4 lg:p-6">
+    <div class="max-w-6xl mx-auto">
+
+      <!-- Header + Controls -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <i class="fa-solid fa-chart-mixed text-blue-600"></i> Sales Tracker
+          </h2>
+          <button onclick="stRefreshToday()" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition active:scale-95">
+            <i class="fa-solid fa-bolt"></i> อัปเดทวันนี้
+          </button>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="stSetRange('today')" id="st-range-today" class="range-btn">วันนี้</button>
+          <button onclick="stSetRange('week')" id="st-range-week" class="range-btn">7 วัน</button>
+          <button onclick="stSetRange('month')" id="st-range-month" class="range-btn range-active">เดือนนี้</button>
+          <button onclick="stSetRange('custom')" id="st-range-custom" class="range-btn">กำหนดเอง</button>
+          <input type="date" id="st-start" class="hidden text-xs px-2 py-1 border border-gray-300 rounded-lg">
+          <input type="date" id="st-end" class="hidden text-xs px-2 py-1 border border-gray-300 rounded-lg">
+          <button onclick="stLoadData()" id="st-apply" class="hidden bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-bold">ใช้</button>
+        </div>
+      </div>
+
+      <div id="st-loading" class="text-center py-10 text-gray-500 hidden">
+        <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-2 text-blue-500"></i>
+        <p class="text-sm">กำลังโหลดข้อมูล...</p>
+      </div>
+
+      <div id="st-empty" class="text-center py-10 hidden bg-white rounded-xl shadow-sm border border-gray-200">
+        <i class="fa-solid fa-inbox text-4xl text-gray-300 mb-3"></i>
+        <p class="text-gray-500 mb-3">ยังไม่มีข้อมูลในช่วงวันที่นี้</p>
+        <button onclick="stRefreshToday()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold">
+          <i class="fa-solid fa-bolt mr-1"></i> อัปเดทข้อมูลตอนนี้
+        </button>
+      </div>
+
+      <div id="st-content" class="hidden space-y-4">
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+            <div class="text-xs text-gray-500 mb-1">💰 รายได้รวม</div>
+            <div class="text-2xl font-bold text-blue-700" id="st-revenue">฿0</div>
+            <div class="text-xs text-gray-500 mt-1" id="st-revenue-sub">0 คิว</div>
+          </div>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+            <div class="text-xs text-gray-500 mb-1">📊 AOV เฉลี่ย</div>
+            <div class="text-2xl font-bold text-blue-700" id="st-aov">฿0</div>
+            <div class="text-xs text-gray-500 mt-1">Target: ฿333</div>
+          </div>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+            <div class="text-xs text-gray-500 mb-1">🆕 ลูกค้าใหม่</div>
+            <div class="text-2xl font-bold text-blue-700" id="st-newcust">0</div>
+            <div class="text-xs text-gray-500 mt-1" id="st-newcust-sub">/ ทั้งหมด</div>
+          </div>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3" id="st-status-card">
+            <div class="text-xs text-gray-500 mb-1">🎯 สถานะเดือน</div>
+            <div class="text-lg font-bold" id="st-status">—</div>
+            <div class="text-xs text-gray-500 mt-1" id="st-projection">—</div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h3 class="text-sm font-bold text-gray-700 mb-3">🎯 Progress vs Targets</h3>
+          <div class="space-y-2">
+            <div class="grid grid-cols-[140px_1fr_50px] lg:grid-cols-[200px_1fr_60px] items-center gap-3">
+              <span class="text-xs lg:text-sm text-gray-700">🔴 Floor (200k)</span>
+              <div class="st-progress"><div id="st-progress-floor" class="st-progress-fill st-fill-floor" style="width:0%"></div></div>
+              <span id="st-progress-floor-text" class="text-xs lg:text-sm font-bold text-blue-700 text-right">0%</span>
+            </div>
+            <div class="grid grid-cols-[140px_1fr_50px] lg:grid-cols-[200px_1fr_60px] items-center gap-3">
+              <span class="text-xs lg:text-sm text-gray-700">🟡 Target 80% (240k)</span>
+              <div class="st-progress"><div id="st-progress-target" class="st-progress-fill st-fill-target" style="width:0%"></div></div>
+              <span id="st-progress-target-text" class="text-xs lg:text-sm font-bold text-blue-700 text-right">0%</span>
+            </div>
+            <div class="grid grid-cols-[140px_1fr_50px] lg:grid-cols-[200px_1fr_60px] items-center gap-3">
+              <span class="text-xs lg:text-sm text-gray-700">🟢 Stretch (300k)</span>
+              <div class="st-progress"><div id="st-progress-stretch" class="st-progress-fill st-fill-stretch" style="width:0%"></div></div>
+              <span id="st-progress-stretch-text" class="text-xs lg:text-sm font-bold text-blue-700 text-right">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h3 class="text-sm font-bold text-gray-700 mb-3">📈 รายได้รายวัน + ฝน</h3>
+          <div style="height: 250px;"><canvas id="st-chart"></canvas></div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h3 class="text-sm font-bold text-gray-700 mb-3">🌧️ Weather Impact Analysis</h3>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="bg-blue-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-gray-600 mb-1">☀️ วันแดด (เฉลี่ย)</div>
+              <div class="text-lg font-bold text-blue-700" id="st-sunny-revenue">฿0</div>
+            </div>
+            <div class="bg-blue-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-gray-600 mb-1">🌧️ วันฝน (เฉลี่ย)</div>
+              <div class="text-lg font-bold text-blue-700" id="st-rainy-revenue">฿0</div>
+            </div>
+            <div class="bg-blue-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-gray-600 mb-1">📉 Rain Impact</div>
+              <div class="text-lg font-bold text-blue-700" id="st-rain-impact">0%</div>
+            </div>
+            <div class="bg-blue-50 rounded-lg p-3 text-center">
+              <div class="text-xs text-gray-600 mb-1">🌦️ วันฝน/รวม</div>
+              <div class="text-lg font-bold text-blue-700" id="st-rainy-days">0/0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h3 class="text-sm font-bold text-gray-700 mb-3">📋 ข้อมูลรายวัน</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-900 text-white">
+                <tr>
+                  <th class="px-2 py-2 text-left">วันที่</th>
+                  <th class="px-2 py-2 text-left">วัน</th>
+                  <th class="px-2 py-2 text-left">อากาศ</th>
+                  <th class="px-2 py-2 text-right">คิว</th>
+                  <th class="px-2 py-2 text-right">รายได้</th>
+                  <th class="px-2 py-2 text-right">AOV</th>
+                  <th class="px-2 py-2 text-right">ใหม่</th>
+                  <th class="px-2 py-2 text-right">ซ้ำ</th>
+                  <th class="px-2 py-2 text-right">เงินสด</th>
+                  <th class="px-2 py-2 text-right">PromptPay</th>
+                </tr>
+              </thead>
+              <tbody id="st-table-body" class="divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
   <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-between px-2 pb-6 lg:pb-3 pt-2 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.1)]">
     <button onclick="showSection('board-section')" id="nav-board" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all nav-active"><i class="fa-solid fa-clipboard-list text-xl"></i><span class="text-[9px] font-bold">กระดานคิว</span></button>
     <button onclick="showSection('walkin-section')" id="nav-walkin" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-car-burst text-xl"></i><span class="text-[9px] font-bold">Walk-in</span></button>
     <button onclick="showSection('dashboard-section')" id="nav-dashboard" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-chart-line text-xl"></i><span class="text-[9px] font-bold">รายงาน</span></button>
     <button onclick="showSection('settings-section')" id="nav-settings" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-users text-xl"></i><span class="text-[9px] font-bold">ลูกค้า (CRM)</span></button>
     <button onclick="showSection('config-section')" id="nav-config" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-gears text-xl"></i><span class="text-[9px] font-bold">ตั้งค่าร้าน</span></button>
+    <button onclick="showSection('sales-tracker-section')" id="nav-sales-tracker" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-chart-mixed text-xl"></i><span class="text-[9px] font-bold">Sales Tracker</span></button>
   </nav>
 
   <script>
@@ -1758,6 +1909,7 @@
       if(id === 'dashboard-section') loadAdminData();
       if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); }
       if(id === 'config-section') loadStoreConfig();
+      if(id === 'sales-tracker-section') stInitTab();
     }
 
     // ==============================================
@@ -5106,6 +5258,227 @@
         loadAdminData();
       }, 30000);
     });
+    // ══════════════════════════════════════════════════════
+    // 📊 SALES TRACKER MODULE — Master Coordinator AI 2/6/2026
+    // ══════════════════════════════════════════════════════
+    let stChart = null;
+    let stCurrentRange = 'month';
+    let stInited = false;
+
+    function stInitTab() {
+      if (!stInited) {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        document.getElementById('st-start').value = stFmtDate(startOfMonth);
+        document.getElementById('st-end').value = stFmtDate(now);
+        stInited = true;
+      }
+      stLoadData();
+    }
+
+    function stFmtDate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + dd;
+    }
+
+    function stSetRange(range) {
+      stCurrentRange = range;
+      ['today','week','month','custom'].forEach(function(r) {
+        const btn = document.getElementById('st-range-' + r);
+        if (btn) btn.classList.toggle('range-active', r === range);
+      });
+      const showCustom = range === 'custom';
+      document.getElementById('st-start').classList.toggle('hidden', !showCustom);
+      document.getElementById('st-end').classList.toggle('hidden', !showCustom);
+      document.getElementById('st-apply').classList.toggle('hidden', !showCustom);
+      if (!showCustom) stLoadData();
+    }
+
+    function stGetRange() {
+      const now = new Date();
+      let start, end;
+      if (stCurrentRange === 'today') {
+        start = end = stFmtDate(now);
+      } else if (stCurrentRange === 'week') {
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 6);
+        start = stFmtDate(weekAgo);
+        end = stFmtDate(now);
+      } else if (stCurrentRange === 'month') {
+        start = stFmtDate(new Date(now.getFullYear(), now.getMonth(), 1));
+        end = stFmtDate(now);
+      } else {
+        start = document.getElementById('st-start').value;
+        end = document.getElementById('st-end').value;
+      }
+      return { start: start, end: end };
+    }
+
+    async function stLoadData() {
+      const range = stGetRange();
+      document.getElementById('st-loading').classList.remove('hidden');
+      document.getElementById('st-content').classList.add('hidden');
+      document.getElementById('st-empty').classList.add('hidden');
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({
+            action: 'getSalesTrackerData',
+            startDate: range.start,
+            endDate: range.end,
+            t: Date.now()
+          }))
+        });
+        const result = await res.json();
+        document.getElementById('st-loading').classList.add('hidden');
+        if (!result || !result.success) {
+          document.getElementById('st-empty').classList.remove('hidden');
+          return;
+        }
+        stRenderData(result);
+      } catch (e) {
+        console.error('Sales Tracker load error:', e);
+        document.getElementById('st-loading').classList.add('hidden');
+        document.getElementById('st-empty').classList.remove('hidden');
+      }
+    }
+
+    function stRenderData(result) {
+      const daily = result.daily;
+      const totals = result.totals;
+      const targets = result.targets;
+      const projection = result.projection;
+      const status = result.status;
+      if (!daily || daily.length === 0) {
+        document.getElementById('st-empty').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('st-content').classList.remove('hidden');
+
+      document.getElementById('st-revenue').textContent = '฿' + totals.totalRevenue.toLocaleString();
+      document.getElementById('st-revenue-sub').textContent = totals.totalQueue + ' คิว';
+      document.getElementById('st-aov').textContent = '฿' + totals.avgAOV.toLocaleString();
+      document.getElementById('st-newcust').textContent = totals.totalNewCust;
+      document.getElementById('st-newcust-sub').textContent = '/ ทั้งหมด ' + totals.totalQueue;
+
+      const statusEl = document.getElementById('st-status');
+      const statusCard = document.getElementById('st-status-card');
+      statusCard.classList.remove('st-status-stretch','st-status-target','st-status-floor','st-status-below');
+      if (status === 'STRETCH') { statusEl.textContent = '🏆 STRETCH'; statusCard.classList.add('st-status-stretch'); }
+      else if (status === 'ON_TARGET') { statusEl.textContent = '🟢 ON TARGET'; statusCard.classList.add('st-status-target'); }
+      else if (status === 'ABOVE_FLOOR') { statusEl.textContent = '🟡 ABOVE FLOOR'; statusCard.classList.add('st-status-floor'); }
+      else { statusEl.textContent = '🔴 BELOW FLOOR'; statusCard.classList.add('st-status-below'); }
+      document.getElementById('st-projection').textContent = 'Projection: ฿' + projection.toLocaleString();
+
+      const pctFloor = Math.min(100, Math.round(totals.totalRevenue / targets.floor * 100));
+      const pctTarget = Math.min(100, Math.round(totals.totalRevenue / targets.target80 * 100));
+      const pctStretch = Math.min(100, Math.round(totals.totalRevenue / targets.stretch * 100));
+      document.getElementById('st-progress-floor').style.width = pctFloor + '%';
+      document.getElementById('st-progress-target').style.width = pctTarget + '%';
+      document.getElementById('st-progress-stretch').style.width = pctStretch + '%';
+      document.getElementById('st-progress-floor-text').textContent = pctFloor + '%';
+      document.getElementById('st-progress-target-text').textContent = pctTarget + '%';
+      document.getElementById('st-progress-stretch-text').textContent = pctStretch + '%';
+
+      document.getElementById('st-sunny-revenue').textContent = '฿' + totals.avgRevenueSunnyDay.toLocaleString();
+      document.getElementById('st-rainy-revenue').textContent = '฿' + totals.avgRevenueRainyDay.toLocaleString();
+      document.getElementById('st-rain-impact').textContent = totals.rainImpactPct + '%';
+      document.getElementById('st-rainy-days').textContent = totals.daysWithRain + '/' + daily.length;
+
+      stRenderTable(daily);
+      stRenderChart(daily);
+    }
+
+    function stRenderTable(daily) {
+      const tbody = document.getElementById('st-table-body');
+      tbody.innerHTML = '';
+      daily.forEach(function(d) {
+        const w = d.weather;
+        const emoji = stWeatherEmoji(w);
+        const wStr = w ? (emoji + ' ' + w.rainMm + 'mm') : '—';
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        tr.innerHTML =
+          '<td class="px-2 py-2">' + d.date + '</td>' +
+          '<td class="px-2 py-2">' + (d.day || '—') + '</td>' +
+          '<td class="px-2 py-2 whitespace-nowrap">' + wStr + '</td>' +
+          '<td class="px-2 py-2 text-right tabular-nums">' + d.queue + '</td>' +
+          '<td class="px-2 py-2 text-right tabular-nums">฿' + d.revenue.toLocaleString() + '</td>' +
+          '<td class="px-2 py-2 text-right tabular-nums">฿' + d.aov.toLocaleString() + '</td>' +
+          '<td class="px-2 py-2 text-right tabular-nums">' + d.newCust + '</td>' +
+          '<td class="px-2 py-2 text-right tabular-nums">' + d.repeatCust + '</td>' +
+          '<td class="px-2 py-2 text-right tabular-nums">฿' + d.cash.toLocaleString() + '</td>' +
+          '<td class="px-2 py-2 text-right tabular-nums">฿' + d.promptpay.toLocaleString() + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    function stWeatherEmoji(w) {
+      if (!w) return '';
+      const c = (w.conditions || '').toLowerCase();
+      if (c.indexOf('thunderstorm') >= 0) return '⛈️';
+      if (c.indexOf('heavy') >= 0) return '🌧️';
+      if (c.indexOf('rain') >= 0 || c.indexOf('showers') >= 0) return '🌦️';
+      if (c.indexOf('drizzle') >= 0) return '🌦️';
+      if (c.indexOf('cloudy') >= 0) return '🌤️';
+      if (c.indexOf('fog') >= 0) return '🌫️';
+      if (c.indexOf('clear') >= 0) return '☀️';
+      return '🌤️';
+    }
+
+    function stRenderChart(daily) {
+      const ctx = document.getElementById('st-chart').getContext('2d');
+      if (stChart) stChart.destroy();
+      const labels = daily.map(function(d) { return d.date.substring(5); });
+      const revenue = daily.map(function(d) { return d.revenue; });
+      const rain = daily.map(function(d) { return d.weather ? d.weather.rainMm : 0; });
+      stChart = new Chart(ctx, {
+        data: {
+          labels: labels,
+          datasets: [
+            { type: 'line', label: 'รายได้ (฿)', data: revenue,
+              borderColor: '#1d4ed8', backgroundColor: 'rgba(29, 78, 216, 0.1)',
+              borderWidth: 2, yAxisID: 'y', tension: 0.3, fill: true, pointRadius: 3, order: 1 },
+            { type: 'bar', label: 'ฝน (mm)', data: rain,
+              backgroundColor: 'rgba(59, 130, 246, 0.4)', yAxisID: 'y1', order: 2 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+          scales: {
+            y: { type: 'linear', position: 'left', title: { display: true, text: 'รายได้' },
+                 ticks: { callback: function(v) { return '฿' + v.toLocaleString(); } } },
+            y1: { type: 'linear', position: 'right', title: { display: true, text: 'ฝน (mm)' },
+                  grid: { drawOnChartArea: false } }
+          }
+        }
+      });
+    }
+
+    async function stRefreshToday() {
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({
+            action: 'refreshSalesTrackerToday',
+            t: Date.now()
+          }))
+        });
+        const r = await res.json();
+        if (r && r.success) {
+          stLoadData();
+          if (window.Swal) Swal.fire({ icon: 'success', title: 'อัปเดทแล้ว', toast: true, position: 'top', timer: 2000, showConfirmButton: false });
+        } else {
+          alert('❌ ' + ((r && r.error) || 'Refresh failed'));
+        }
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    // ══ End Sales Tracker Module ══
+
   </script>
 </body>
 </html>
