@@ -185,8 +185,26 @@
       <h2 class="font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="fa-solid fa-file-signature text-blue-500"></i> เพิ่มรถคันใหม่</h2>
       <p class="text-xs text-gray-400 mb-5">ลงทะเบียนรถยนต์เพื่อความรวดเร็วในการจองคิว</p>
       <form id="addVehicleForm" class="space-y-5">
-        <div class="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
-          <h3 class="text-xs font-bold text-blue-600 uppercase border-b border-gray-200 pb-2"><i class="fa-solid fa-user"></i> ข้อมูลติดต่อ (จำเป็น)</h3>
+        <!-- 👤 PROFILE CARD — แสดงสำหรับ returning user (Smart Form v1.0 - 3/6/2026) -->
+        <div id="profileCardSection" class="hidden p-4 bg-blue-50 rounded-2xl border border-blue-200">
+          <h3 class="text-xs font-bold text-blue-700 uppercase mb-2"><i class="fa-solid fa-id-badge"></i> ลงทะเบียนในนาม</h3>
+          <div class="bg-white rounded-xl p-3 space-y-1">
+            <p class="text-sm font-bold text-gray-800"><i class="fa-solid fa-user text-blue-500 mr-1"></i> <span id="pcName">-</span></p>
+            <p class="text-xs text-gray-600"><i class="fa-solid fa-phone text-blue-400 mr-1"></i> <span id="pcPhone">-</span></p>
+          </div>
+          <button type="button" onclick="toggleProfileEdit(true)" class="w-full mt-3 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold py-2 rounded-xl text-xs border border-cyan-200">
+            <i class="fa-solid fa-user-pen"></i> แก้ไขข้อมูลส่วนตัว
+          </button>
+        </div>
+
+        <!-- 📝 USER INFO SECTION — wrapped for smart toggle -->
+        <div id="userInfoSection" class="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
+          <div class="flex justify-between items-center border-b border-gray-200 pb-2">
+            <h3 class="text-xs font-bold text-blue-600 uppercase"><i class="fa-solid fa-user"></i> ข้อมูลติดต่อ (จำเป็น)</h3>
+            <button type="button" id="cancelEditProfileBtn" onclick="toggleProfileEdit(false)" class="hidden text-[10px] text-gray-500 hover:text-gray-700">
+              <i class="fa-solid fa-xmark"></i> ยกเลิก
+            </button>
+          </div>
           <div><label class="text-[10px] font-bold text-gray-500 uppercase">ชื่อ - นามสกุล</label><input type="text" id="uName" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" required></div>
           <div><label class="text-[10px] font-bold text-gray-500 uppercase">เบอร์โทรศัพท์ (10 หลัก)</label><input type="tel" id="uPhone" maxlength="10" class="w-full p-2.5 border border-gray-300 rounded-xl text-sm mt-1 focus:ring-1 focus:ring-blue-500" required></div>
           <div class="grid grid-cols-2 gap-3">
@@ -261,6 +279,8 @@
     </div>
     <!-- 🛡️ PDPA: Consent Manager button -->
     <button onclick="openConsentManager()" class="w-full bg-gray-50 text-gray-700 font-bold py-3 rounded-2xl text-sm border border-gray-200 mb-2"><i class="fa-solid fa-shield-halved"></i> จัดการความยินยอม (PDPA)</button>
+    <!-- 🚗 Smart Form: Edit profile shortcut (v1.0) -->
+    <button onclick="showSection('cars-section'); setTimeout(()=>toggleProfileEdit(true), 300);" class="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold py-3 rounded-2xl text-sm border border-gray-200 mb-2"><i class="fa-solid fa-user-pen"></i> แก้ไขข้อมูลส่วนตัว</button>
     <button onclick="liff.closeWindow()" class="w-full text-red-400 font-bold py-4 text-sm"><i class="fa-solid fa-door-open"></i> ปิดแอปพลิเคชัน</button>
   </section>
 
@@ -353,6 +373,9 @@
 
 
       await refreshData();
+      // 🚗 Smart Form: โหลด profile + toggle UI
+      await loadMyProfile();
+      _applySmartFormMode();
 
       // 🚫 F0.6: รวมวันปิดร้านจาก server → ใส่ใน flatpickr disable
       const closures = (masterData.closures || []);
@@ -422,6 +445,8 @@
           throw new Error(errMsg);
         }
         masterData = data.data || {};
+        // 🚗 Smart Form: preserve profile cache if exists
+        if (window._profileCache) masterData.profile = window._profileCache;
 
         document.getElementById('userPoints').innerText = masterData.points || 0;
         document.getElementById('profilePoints').innerText = masterData.points || 0;
@@ -591,16 +616,93 @@
     function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active')); document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active'); window.scrollTo(0,0); }
     function navToBooking() { if(!masterData.vehicles || masterData.vehicles.length === 0) { Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section')); } else { showSection('booking-section'); } }
 
-    document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
+    // ════════════════════════════════════════════════
+    // 🚗 SMART VEHICLE FORM v1.0 (3/6/2026) — Master Coordinator
+    // ════════════════════════════════════════════════
+    async function loadMyProfile() {
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: new URLSearchParams({ action: 'getMyProfile', lineUid: userUid })
+        });
+        const r = await res.json();
+        if (r && r.status === 'found' && r.data) {
+          masterData.profile = r.data; window._profileCache = r.data;
+        }
+      } catch (e) { console.warn('loadMyProfile failed:', e); }
+    }
+
+    function _hasProfile() {
+      const p = masterData.profile || {};
+      const name = String(p.name || '').trim();
+      const phone = String(p.phone || '').replace(/[^0-9]/g, '');
+      return name && name !== 'ลูกค้าใหม่' && phone.length === 10;
+    }
+
+    function _applySmartFormMode() {
+      const card = document.getElementById('profileCardSection');
+      const userSection = document.getElementById('userInfoSection');
+      if (!card || !userSection) return;
+      if (_hasProfile()) {
+        const p = masterData.profile;
+        document.getElementById('pcName').textContent = p.name;
+        document.getElementById('pcPhone').textContent = p.phone;
+        card.classList.remove('hidden');
+        userSection.classList.add('hidden');
+        ['uName', 'uPhone'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.removeAttribute('required');
+        });
+      } else {
+        card.classList.add('hidden');
+        userSection.classList.remove('hidden');
+        ['uName', 'uPhone'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.setAttribute('required', '');
+        });
+      }
+    }
+
+    function toggleProfileEdit(editMode) {
+      const card = document.getElementById('profileCardSection');
+      const userSection = document.getElementById('userInfoSection');
+      const cancelBtn = document.getElementById('cancelEditProfileBtn');
+      if (editMode) {
+        card.classList.add('hidden');
+        userSection.classList.remove('hidden');
+        cancelBtn.classList.remove('hidden');
+        const p = masterData.profile || {};
+        if (document.getElementById('uName'))  document.getElementById('uName').value = p.name || '';
+        if (document.getElementById('uPhone')) document.getElementById('uPhone').value = p.phone || '';
+        if (document.getElementById('uGender')) document.getElementById('uGender').value = p.gender || '';
+        if (document.getElementById('uAge'))    document.getElementById('uAge').value = p.age || '';
+        if (document.getElementById('uBirthDay'))   document.getElementById('uBirthDay').value = p.birth_day || '';
+        if (document.getElementById('uBirthMonth')) document.getElementById('uBirthMonth').value = p.birth_month || '';
+        ['uName', 'uPhone'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.setAttribute('required', '');
+        });
+      } else {
+        _applySmartFormMode();
+        cancelBtn.classList.add('hidden');
+      }
+    }
+
+        document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      // 🚗 Smart: returning user (no edit) → ใช้ค่าจาก profile cache
+      const _isReturning = _hasProfile();
+      const _isEditMode = !document.getElementById('userInfoSection').classList.contains('hidden') && _isReturning;
+      const _useCache = _isReturning && !_isEditMode;
+      const _p = masterData.profile || {};
       const payload = new URLSearchParams({
         action: 'addVehicle', lineUid: userUid,
-        uName: document.getElementById('uName').value,
-        uPhone: document.getElementById('uPhone').value,
-        uGender: document.getElementById('uGender').value,
-        uAge: document.getElementById('uAge').value,
-        uBirthDay: document.getElementById('uBirthDay').value,        // 🎂 F1.4
-        uBirthMonth: document.getElementById('uBirthMonth').value,    // 🎂 F1.4
+        uName:  _useCache ? (_p.name || '')  : document.getElementById('uName').value,
+        uPhone: _useCache ? (_p.phone || '') : document.getElementById('uPhone').value,
+        uGender: document.getElementById('uGender').value || (_p.gender || ''),
+        uAge:    document.getElementById('uAge').value    || (_p.age || ''),
+        uBirthDay:   document.getElementById('uBirthDay').value   || (_p.birth_day || ''),       // 🎂 F1.4
+        uBirthMonth: document.getElementById('uBirthMonth').value || (_p.birth_month || ''),    // 🎂 F1.4
         licensePlate: document.getElementById('vPlate').value,
         province: document.getElementById('vProvince').value,
         brand: document.getElementById('vBrand').value,
