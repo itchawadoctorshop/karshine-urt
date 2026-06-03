@@ -2151,7 +2151,8 @@
         const customerBlock = `
           <div class="flex items-center gap-1.5 mb-1 text-xs">
             <i class="fa-solid fa-user text-gray-400 text-[10px]"></i>
-            <span class="text-gray-700 font-semibold truncate max-w-[180px]" title="${esc(customerName)}">${esc(customerName)}</span>
+            <span class="text-gray-700 font-semibold truncate max-w-[160px]" title="${esc(customerName)}">${esc(customerName)}</span>
+            ${hasLineUid ? `<button onclick="event.stopPropagation(); openEditProfileModal('${esc(b.lineUid)}', '${esc(customerName).replace(/'/g,"&apos;")}')" class="text-cyan-500 hover:text-cyan-700 hover:bg-cyan-50 p-1 rounded transition" title="แก้ไขข้อมูลลูกค้า"><i class="fa-solid fa-user-pen text-[11px]"></i></button>` : ''}
           </div>
           ${customerPhone ? `
           <div class="flex items-center gap-1.5 mb-2 text-xs">
@@ -5687,10 +5688,11 @@
     });
 
     // ─── #67 Edit Profile helpers ───
-    async function openEditProfileModal() {
-      const uid = (typeof currentCrmUid !== 'undefined') ? currentCrmUid : '';
+    async function openEditProfileModal(uidOverride, nameHint) {
+      const uid = uidOverride || ((typeof currentCrmUid !== 'undefined') ? currentCrmUid : '');
       if (!uid) { Swal.fire('Error', 'ไม่พบ UID ลูกค้า', 'error'); return; }
       _crmEditUid = uid;
+      window._epNameHint = nameHint || '';
       _crm_fillDateDropdowns();
       // Fetch fresh data
       try {
@@ -5739,9 +5741,14 @@
             : 'ไม่มีการเปลี่ยนแปลง';
           Swal.fire({ icon:'success', title:'สำเร็จ', text: msg, timer:2500 });
           closeEditProfileModal();
-          // Refresh CRM modal
-          if (typeof openCrmModal === 'function') {
+          // Refresh source view — CRM modal (if open) or Kanban board
+          const crmModalEl = document.getElementById('crmModal');
+          const crmOpen = crmModalEl && !crmModalEl.classList.contains('hidden');
+          if (crmOpen && typeof openCrmModal === 'function') {
             openCrmModal(_crmEditUid, document.getElementById('epName').value);
+          } else if (typeof loadAdminData === 'function') {
+            // Kanban view → reload to show new name/phone
+            loadAdminData();
           }
         } else if (data.status === 'duplicate_phone') {
           Swal.fire('เบอร์ซ้ำ', data.message, 'warning');
