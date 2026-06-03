@@ -878,17 +878,17 @@
           <h3 class="text-sm font-bold text-gray-700 mb-3">🎯 Progress vs Targets</h3>
           <div class="space-y-2">
             <div class="grid grid-cols-[140px_1fr_50px] lg:grid-cols-[200px_1fr_60px] items-center gap-3">
-              <span class="text-xs lg:text-sm text-gray-700">🔴 Floor (200k)</span>
+              <span id="st-floor-label" class="text-xs lg:text-sm text-gray-700">🔴 Floor (200k)</span>
               <div class="st-progress"><div id="st-progress-floor" class="st-progress-fill st-fill-floor" style="width:0%"></div></div>
               <span id="st-progress-floor-text" class="text-xs lg:text-sm font-bold text-blue-700 text-right">0%</span>
             </div>
             <div class="grid grid-cols-[140px_1fr_50px] lg:grid-cols-[200px_1fr_60px] items-center gap-3">
-              <span class="text-xs lg:text-sm text-gray-700">🟡 Target 80% (240k)</span>
+              <span id="st-target-label" class="text-xs lg:text-sm text-gray-700">🟡 Target 80% (240k)</span>
               <div class="st-progress"><div id="st-progress-target" class="st-progress-fill st-fill-target" style="width:0%"></div></div>
               <span id="st-progress-target-text" class="text-xs lg:text-sm font-bold text-blue-700 text-right">0%</span>
             </div>
             <div class="grid grid-cols-[140px_1fr_50px] lg:grid-cols-[200px_1fr_60px] items-center gap-3">
-              <span class="text-xs lg:text-sm text-gray-700">🟢 Stretch (300k)</span>
+              <span id="st-stretch-label" class="text-xs lg:text-sm text-gray-700">🟢 Stretch (300k)</span>
               <div class="st-progress"><div id="st-progress-stretch" class="st-progress-fill st-fill-stretch" style="width:0%"></div></div>
               <span id="st-progress-stretch-text" class="text-xs lg:text-sm font-bold text-blue-700 text-right">0%</span>
             </div>
@@ -5375,6 +5375,14 @@
       const pctFloor = Math.min(100, Math.round(totals.totalRevenue / targets.floor * 100));
       const pctTarget = Math.min(100, Math.round(totals.totalRevenue / targets.target80 * 100));
       const pctStretch = Math.min(100, Math.round(totals.totalRevenue / targets.stretch * 100));
+      // Dynamic labels — show actual target values
+      const fmtK = v => (v >= 1000 ? (v/1000) + 'k' : v);
+      const lblFloor = document.getElementById('st-floor-label');
+      const lblTarget = document.getElementById('st-target-label');
+      const lblStretch = document.getElementById('st-stretch-label');
+      if (lblFloor)   lblFloor.textContent   = '🔴 Floor (' + fmtK(targets.floor) + ')';
+      if (lblTarget)  lblTarget.textContent  = '🟡 Target 80% (' + fmtK(targets.target80) + ')';
+      if (lblStretch) lblStretch.textContent = '🟢 Stretch (' + fmtK(targets.stretch) + ')';
       document.getElementById('st-progress-floor').style.width = pctFloor + '%';
       document.getElementById('st-progress-target').style.width = pctTarget + '%';
       document.getElementById('st-progress-stretch').style.width = pctStretch + '%';
