@@ -259,6 +259,8 @@
         </div>
       </div>
     </div>
+    <!-- 🛡️ PDPA: Consent Manager button -->
+    <button onclick="openConsentManager()" class="w-full bg-gray-50 text-gray-700 font-bold py-3 rounded-2xl text-sm border border-gray-200 mb-2"><i class="fa-solid fa-shield-halved"></i> จัดการความยินยอม (PDPA)</button>
     <button onclick="liff.closeWindow()" class="w-full text-red-400 font-bold py-4 text-sm"><i class="fa-solid fa-door-open"></i> ปิดแอปพลิเคชัน</button>
   </section>
 
@@ -336,6 +338,19 @@
           dayEl.appendChild(opt);
         }
       }
+
+      // 🛡️ PDPA Consent check ก่อน load main data (v1.0 — 3/6/2026)
+      try {
+        const _cRes = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'getConsentStatus', lineUid: userUid }) });
+        const _cData = await _cRes.json();
+        if (_cData && _cData.needConsent) {
+          document.getElementById('consentModal').classList.remove('hidden');
+          document.body.style.overflow = 'hidden';
+          return; // หยุดที่นี่ — รอผู้ใช้กดยินยอม (grantConsent() จะ resume)
+        }
+        window._consentCache = (_cData && _cData.consents) || {};
+      } catch(_ce) { console.warn('Consent check failed:', _ce); }
+
 
       await refreshData();
 
@@ -1079,5 +1094,142 @@
 
     document.addEventListener('DOMContentLoaded', init);
   </script>
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- 🛡️ PDPA Consent Modal v1.0 — Karshine 3/6/2026 -->
+  <!-- ════════════════════════════════════════════════ -->
+  <div id="consentModal" class="hidden fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+      <h2 class="text-xl font-bold mb-2 text-gray-800"><i class="fa-solid fa-shield-halved text-blue-500"></i> การให้ความยินยอม (PDPA)</h2>
+      <p class="text-sm text-gray-600 mb-4">Karshine URT เคารพข้อมูลส่วนตัวของท่าน กรุณาอ่านและให้ความยินยอมก่อนใช้งาน</p>
+
+      <div class="border-t pt-3 mb-3">
+        <p class="font-bold text-sm mb-2 text-red-600">📋 จำเป็น (ต้องเลือกทั้ง 3)</p>
+        <label class="flex items-start gap-2 mb-2 text-sm cursor-pointer">
+          <input type="checkbox" id="csService" checked disabled class="mt-1 w-4 h-4">
+          <span>การให้บริการล้างรถและบริการที่เกี่ยวข้อง</span>
+        </label>
+        <label class="flex items-start gap-2 mb-2 text-sm cursor-pointer">
+          <input type="checkbox" id="csNotification" checked disabled class="mt-1 w-4 h-4">
+          <span>การแจ้งเตือนสถานะคิวและงานผ่าน LINE OA</span>
+        </label>
+        <label class="flex items-start gap-2 mb-2 text-sm cursor-pointer">
+          <input type="checkbox" id="csLoyalty" checked disabled class="mt-1 w-4 h-4">
+          <span>การคำนวณคะแนนสะสมและสิทธิประโยชน์สมาชิก</span>
+        </label>
+      </div>
+
+      <div class="border-t pt-3 mb-3">
+        <p class="font-bold text-sm mb-2 text-blue-600">✨ เพิ่มเติม (เลือกหรือไม่ก็ได้)</p>
+        <label class="flex items-start gap-2 mb-2 text-sm cursor-pointer">
+          <input type="checkbox" id="csMarketing" class="mt-1 w-4 h-4">
+          <span>การส่งโปรโมชั่นและข่าวสารผ่าน LINE OA</span>
+        </label>
+        <label class="flex items-start gap-2 mb-2 text-sm cursor-pointer">
+          <input type="checkbox" id="csPhoto" class="mt-1 w-4 h-4">
+          <span>การถ่ายภาพรถก่อน-หลังการล้าง (ตรวจคุณภาพและส่งให้ลูกค้า)</span>
+        </label>
+        <label class="flex items-start gap-2 mb-2 text-sm cursor-pointer">
+          <input type="checkbox" id="csGps" class="mt-1 w-4 h-4">
+          <span>การใช้ตำแหน่ง GPS เพื่อบริการ Valet รับ-ส่งรถ (เฉพาะใช้บริการ Valet)</span>
+        </label>
+      </div>
+
+      <div class="border-t pt-3 mb-3 text-center">
+        <a href="https://karshineurt.com/privacy" target="_blank" class="text-blue-600 underline text-sm">📜 อ่าน Privacy Policy ฉบับเต็ม</a>
+      </div>
+
+      <button id="consentSaveBtn" onclick="grantConsent()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl mb-2 transition-colors">
+        <i class="fa-solid fa-check"></i> ยินยอมและเข้าใช้งาน
+      </button>
+      <button id="consentDeclineBtn" onclick="declineConsent()" class="w-full text-red-500 hover:text-red-700 font-bold py-2 text-sm transition-colors">
+        <i class="fa-solid fa-xmark"></i> ไม่ยินยอม (ออกจากแอป)
+      </button>
+
+      <p class="text-[10px] text-gray-400 text-center mt-3">Karshine URT • Consent v.1.1 • PDPA พ.ศ. 2562 • DPO: นายอภิชิต อินทจันทร์ • 062-242-0718</p>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- 🛡️ PDPA Consent Handlers — v1.0 -->
+  <!-- ════════════════════════════════════════════════ -->
+  <script>
+    let _consentMode = 'grant'; // 'grant' | 'manage'
+
+    async function grantConsent() {
+      const btn = document.getElementById('consentSaveBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
+
+      const consents = {
+        service:      true,
+        notification: true,
+        loyalty:      true,
+        marketing:    document.getElementById('csMarketing').checked,
+        photo:        document.getElementById('csPhoto').checked,
+        gps:          document.getElementById('csGps').checked
+      };
+
+      try {
+        const payload = new URLSearchParams({
+          action: 'grantConsent',
+          lineUid: userUid,
+          consents: JSON.stringify(consents)
+        });
+        const res = await fetch(API_URL, { method: 'POST', body: payload });
+        const data = await res.json();
+
+        if (data && data.success) {
+          document.getElementById('consentModal').classList.add('hidden');
+          document.body.style.overflow = '';
+          window._consentCache = consents;
+
+          if (_consentMode === 'manage') {
+            if (window.Swal) Swal.fire({ icon:'success', title:'บันทึกแล้ว', text:'อัพเดทความยินยอมเรียบร้อย', timer:1500, showConfirmButton:false });
+          } else {
+            // First grant → continue init flow
+            if (typeof refreshData === 'function') await refreshData();
+            location.reload(); // safe path — reload เพื่อให้ flatpickr + ส่วนอื่นรันต่อ
+          }
+        } else {
+          alert('ไม่สามารถบันทึกความยินยอมได้: ' + (data && data.error || 'unknown'));
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-check"></i> ยินยอมและเข้าใช้งาน';
+        }
+      } catch (e) {
+        alert('เกิดข้อผิดพลาด: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> ยินยอมและเข้าใช้งาน';
+      }
+    }
+
+    function declineConsent() {
+      const ok = confirm('หากไม่ยินยอม จะไม่สามารถใช้บริการผ่าน LINE OA ได้\nต้องการออกหรือไม่?');
+      if (ok) {
+        try { liff.closeWindow(); } catch(e) { window.close(); }
+      }
+    }
+
+    function openConsentManager() {
+      _consentMode = 'manage';
+      const c = window._consentCache || {};
+      document.getElementById('csMarketing').checked = !!c.marketing;
+      document.getElementById('csPhoto').checked = !!c.photo;
+      document.getElementById('csGps').checked = !!c.gps;
+      // Manage mode — เปลี่ยน label ปุ่ม
+      document.getElementById('consentSaveBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> บันทึกการเปลี่ยนแปลง';
+      document.getElementById('consentDeclineBtn').innerHTML = '<i class="fa-solid fa-arrow-left"></i> ยกเลิก';
+      document.getElementById('consentDeclineBtn').onclick = function() {
+        document.getElementById('consentModal').classList.add('hidden');
+        document.body.style.overflow = '';
+        _consentMode = 'grant';
+        document.getElementById('consentDeclineBtn').onclick = declineConsent;
+        document.getElementById('consentDeclineBtn').innerHTML = '<i class="fa-solid fa-xmark"></i> ไม่ยินยอม (ออกจากแอป)';
+      };
+      document.getElementById('consentModal').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+  </script>
+
+
 </body>
 </html>
