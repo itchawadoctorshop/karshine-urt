@@ -393,7 +393,8 @@
       <p class="text-xs text-gray-500 mb-6 border-b pb-4">ค้นหาข้อมูลลูกค้าเพื่อตรวจสอบประวัติ แก้ไขคะแนน และจัดการแพ็กเกจ</p>
       <form id="crmSearchForm" class="flex gap-2 mb-6">
         <input type="tel" id="crmKeyword" maxlength="10" pattern="[0-9]*" class="flex-1 p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500" placeholder="พิมพ์เบอร์โทรศัพท์ลูกค้า..." required>
-        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow transition"><i class="fa-solid fa-magnifying-glass"></i> ค้นหา</button>
+        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl font-bold shadow transition"><i class="fa-solid fa-magnifying-glass"></i> ค้นหา</button>
+        <button type="button" onclick="openManualAddModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-bold shadow transition"><i class="fa-solid fa-user-plus"></i> Walk-in</button>
       </form>
       <div id="crmResults" class="space-y-4">
         <div class="text-center text-gray-400 text-sm py-10 border-2 border-dashed border-gray-200 rounded-xl">พิมพ์เบอร์โทรศัพท์ด้านบนเพื่อเริ่มค้นหาลูกค้า</div>
@@ -644,6 +645,8 @@
           </div>
           <div>
             <h4 class="font-bold text-gray-700 mb-3 flex items-center gap-2"><i class="fa-solid fa-car text-red-500"></i> รถยนต์ที่ลงทะเบียนไว้</h4>
+            <!-- ✏️ Edit Profile button (Master CRM v1.0) -->
+            <button onclick="openEditProfileModal()" class="w-full bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold py-3 rounded-xl text-sm border border-cyan-200 transition mt-3 mb-2"><i class="fa-solid fa-user-pen mr-1"></i> แก้ไขข้อมูลลูกค้า</button>
             <div id="crmVehiclesList" class="space-y-2"></div>
           </div>
         </div>
@@ -5488,5 +5491,272 @@
     // ══ End Sales Tracker Module ══
 
   </script>
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- 👥 CRM Manual Add Modal v1.0 (#66) -->
+  <!-- ════════════════════════════════════════════════ -->
+  <div id="manualAddModal" class="hidden fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+      <div class="flex justify-between items-start mb-3">
+        <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-user-plus text-green-600"></i> เพิ่มลูกค้า Walk-in</h2>
+        <button onclick="closeManualAddModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <p class="text-xs text-gray-500 mb-4 border-b pb-3">สำหรับลูกค้าที่ไม่ได้จองผ่าน LINE — ต้องเซ็นใบ Consent กระดาษก่อน</p>
+      <form id="manualAddForm" class="space-y-3">
+        <div>
+          <label class="text-xs font-bold text-gray-700">ชื่อ-นามสกุล <span class="text-red-500">*</span></label>
+          <input type="text" id="maName" required minlength="2" class="w-full p-3 border border-gray-300 rounded-xl text-sm" placeholder="คุณสมชาย ใจดี">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-gray-700">เบอร์โทรศัพท์ <span class="text-red-500">*</span></label>
+          <input type="tel" id="maPhone" required maxlength="10" pattern="[0-9]{10}" class="w-full p-3 border border-gray-300 rounded-xl text-sm" placeholder="0812345678">
+        </div>
+        <details class="border rounded-xl p-3">
+          <summary class="text-xs font-bold text-gray-600 cursor-pointer">🚗 ข้อมูลรถ (Optional)</summary>
+          <div class="space-y-2 mt-3">
+            <input type="text" id="maPlate" placeholder="ทะเบียน เช่น 1กก 1234" class="w-full p-2 border rounded-lg text-sm">
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="maBrand" placeholder="ยี่ห้อ" class="p-2 border rounded-lg text-sm">
+              <input type="text" id="maModel" placeholder="รุ่น" class="p-2 border rounded-lg text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="maColor" placeholder="สี" class="p-2 border rounded-lg text-sm">
+              <select id="maSize" class="p-2 border rounded-lg text-sm">
+                <option value="S">เล็ก (S)</option>
+                <option value="M" selected>กลาง (M)</option>
+                <option value="L">ใหญ่ (L)</option>
+                <option value="XL">XL</option>
+              </select>
+            </div>
+          </div>
+        </details>
+        <details class="border rounded-xl p-3">
+          <summary class="text-xs font-bold text-gray-600 cursor-pointer">🎂 วันเกิด (Optional)</summary>
+          <div class="grid grid-cols-2 gap-2 mt-3">
+            <select id="maBirthDay" class="p-2 border rounded-lg text-sm"><option value="">วัน</option></select>
+            <select id="maBirthMonth" class="p-2 border rounded-lg text-sm"><option value="">เดือน</option></select>
+          </div>
+        </details>
+        <div class="border-t pt-3 bg-yellow-50 p-3 rounded-xl">
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" id="maPdpaSigned" required class="mt-1 w-4 h-4">
+            <span class="text-xs text-gray-700"><strong class="text-yellow-800">⚠️ ยืนยัน:</strong> ลูกค้าได้เซ็นใบ PDPA Consent (กระดาษ) แล้ว และเก็บไว้ที่ร้านตามนโยบาย</span>
+          </label>
+        </div>
+        <button type="submit" id="maSubmitBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl"><i class="fa-solid fa-check"></i> เพิ่มลูกค้า</button>
+      </form>
+      <div id="maSuggestSection" class="hidden mt-4 border-t pt-4">
+        <p class="text-sm font-bold text-orange-600 mb-2">⚠️ พบลูกค้าที่อาจซ้ำ:</p>
+        <div id="maSuggestList" class="space-y-2"></div>
+        <button onclick="forceAddManual()" class="w-full mt-3 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-xl text-sm font-bold">✅ ใช่ ไม่ซ้ำ — เพิ่มเป็นลูกค้าใหม่</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- ✏️ CRM Edit Profile Modal v1.0 (#67) -->
+  <!-- ════════════════════════════════════════════════ -->
+  <div id="editProfileModal" class="hidden fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+      <div class="flex justify-between items-start mb-3">
+        <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-user-pen text-cyan-600"></i> แก้ไขข้อมูลลูกค้า</h2>
+        <button onclick="closeEditProfileModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <p class="text-xs text-gray-500 mb-4 border-b pb-3">LINE UID + แต้ม + ประวัติ เปลี่ยนไม่ได้ — แก้ได้แค่ชื่อ เบอร์ วันเกิด</p>
+      <form id="editProfileForm" class="space-y-3">
+        <div>
+          <label class="text-xs font-bold text-gray-700">ชื่อ-นามสกุล</label>
+          <input type="text" id="epName" minlength="2" class="w-full p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-gray-700">เบอร์โทรศัพท์ (10 หลัก)</label>
+          <input type="tel" id="epPhone" maxlength="10" pattern="[0-9]{10}" class="w-full p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500">
+          <p class="text-[10px] text-amber-600 mt-1">⚠️ ถ้าเปลี่ยนเบอร์ — ระบบจะ flag ให้ยืนยัน PDPA อีกครั้ง</p>
+        </div>
+        <div class="border rounded-xl p-3">
+          <p class="text-xs font-bold text-gray-700 mb-2">🎂 วันเกิด (Birthday system)</p>
+          <div class="grid grid-cols-2 gap-2">
+            <select id="epBirthDay" class="p-2 border rounded-lg text-sm"><option value="">ไม่ระบุ</option></select>
+            <select id="epBirthMonth" class="p-2 border rounded-lg text-sm"><option value="">ไม่ระบุ</option></select>
+          </div>
+        </div>
+        <div class="border-t pt-3 flex gap-2">
+          <button type="button" onclick="closeEditProfileModal()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl">ยกเลิก</button>
+          <button type="submit" id="epSaveBtn" class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-xl"><i class="fa-solid fa-floppy-disk"></i> บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- 🛠️ CRM Handlers — v1.0 -->
+  <!-- ════════════════════════════════════════════════ -->
+  <script>
+    let _crmEditUid = '';
+
+    // ─── #66 Manual Add helpers ───
+    function _crm_fillDateDropdowns() {
+      const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      ['maBirthDay','epBirthDay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.options.length <= 1) {
+          for (let d = 1; d <= 31; d++) el.add(new Option(d, d));
+        }
+      });
+      ['maBirthMonth','epBirthMonth'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.options.length <= 1) {
+          months.forEach((m, i) => el.add(new Option(m, i+1)));
+        }
+      });
+    }
+
+    function openManualAddModal() {
+      document.getElementById('manualAddForm').reset();
+      document.getElementById('maSuggestSection').classList.add('hidden');
+      _crm_fillDateDropdowns();
+      document.getElementById('manualAddModal').classList.remove('hidden');
+    }
+
+    function closeManualAddModal() {
+      document.getElementById('manualAddModal').classList.add('hidden');
+    }
+
+    async function submitManualAdd(forceCreate) {
+      const btn = document.getElementById('maSubmitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังเพิ่ม...';
+      const payload = new URLSearchParams({
+        action: 'addManualCustomer',
+        name: document.getElementById('maName').value,
+        phone: document.getElementById('maPhone').value,
+        plate: document.getElementById('maPlate').value || '',
+        brand: document.getElementById('maBrand').value || '',
+        model: document.getElementById('maModel').value || '',
+        color: document.getElementById('maColor').value || '',
+        size: document.getElementById('maSize').value || 'M',
+        birthDay: document.getElementById('maBirthDay').value || '',
+        birthMonth: document.getElementById('maBirthMonth').value || '',
+        pdpaPaperSigned: document.getElementById('maPdpaSigned').checked ? '1' : '',
+        forceCreate: forceCreate ? '1' : '',
+        adminUid: window.adminUid || ''
+      });
+      try {
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const data = await res.json();
+        if (data.status === 'success') {
+          Swal.fire({ icon:'success', title:'เพิ่มสำเร็จ!', text:'ลูกค้า '+data.line_uid+' พร้อมใช้งาน', timer:2000 });
+          closeManualAddModal();
+          document.getElementById('crmKeyword').value = document.getElementById('maPhone').value;
+          document.getElementById('crmSearchForm').dispatchEvent(new Event('submit'));
+        } else if (data.status === 'duplicate_exact') {
+          Swal.fire({ icon:'warning', title:'พบเบอร์ซ้ำ',
+                      html: 'ลูกค้า <strong>'+esc(data.existing.name)+'</strong><br>เบอร์: '+esc(data.existing.phone)+'<br><br>ใช้ลูกค้าเดิมแทน?',
+                      showCancelButton:true, confirmButtonText:'ใช้ลูกค้าเดิม' })
+            .then(r => {
+              if (r.isConfirmed) {
+                closeManualAddModal();
+                document.getElementById('crmKeyword').value = data.existing.phone;
+                document.getElementById('crmSearchForm').dispatchEvent(new Event('submit'));
+              }
+            });
+        } else if (data.status === 'suggest_merge') {
+          const list = data.suggestions.map(s => `
+            <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm">
+              <p class="font-bold">${esc(s.name)}</p>
+              <p class="text-xs text-gray-600">📞 ${esc(s.phone)} • ID: ${esc(s.user_id)}</p>
+            </div>`).join('');
+          document.getElementById('maSuggestList').innerHTML = list;
+          document.getElementById('maSuggestSection').classList.remove('hidden');
+        } else {
+          Swal.fire('ไม่สำเร็จ', data.message || 'unknown', 'error');
+        }
+      } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> เพิ่มลูกค้า';
+      }
+    }
+    function forceAddManual() { submitManualAdd(true); }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const f = document.getElementById('manualAddForm');
+      if (f) f.addEventListener('submit', function(e) { e.preventDefault(); submitManualAdd(false); });
+      const ef = document.getElementById('editProfileForm');
+      if (ef) ef.addEventListener('submit', submitEditProfile);
+    });
+
+    // ─── #67 Edit Profile helpers ───
+    async function openEditProfileModal() {
+      const uid = (typeof currentCrmUid !== 'undefined') ? currentCrmUid : '';
+      if (!uid) { Swal.fire('Error', 'ไม่พบ UID ลูกค้า', 'error'); return; }
+      _crmEditUid = uid;
+      _crm_fillDateDropdowns();
+      // Fetch fresh data
+      try {
+        const payload = new URLSearchParams({ action: 'getUserProfileForEdit', lineUid: uid });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const r = await res.json();
+        if (r.status !== 'success') {
+          Swal.fire('Error', r.message || 'load failed', 'error');
+          return;
+        }
+        document.getElementById('epName').value = r.data.name || '';
+        document.getElementById('epPhone').value = r.data.phone || '';
+        document.getElementById('epBirthDay').value = r.data.birth_day || '';
+        document.getElementById('epBirthMonth').value = r.data.birth_month || '';
+        document.getElementById('editProfileModal').classList.remove('hidden');
+      } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+      }
+    }
+
+    function closeEditProfileModal() {
+      document.getElementById('editProfileModal').classList.add('hidden');
+    }
+
+    async function submitEditProfile(e) {
+      if (e) e.preventDefault();
+      const btn = document.getElementById('epSaveBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
+      const payload = new URLSearchParams({
+        action: 'editUserProfile',
+        lineUid: _crmEditUid,
+        name: document.getElementById('epName').value || '',
+        phone: document.getElementById('epPhone').value || '',
+        birthDay: document.getElementById('epBirthDay').value || '',
+        birthMonth: document.getElementById('epBirthMonth').value || '',
+        adminUid: window.adminUid || ''
+      });
+      try {
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const data = await res.json();
+        if (data.status === 'success') {
+          const changes = data.changes || {};
+          const msg = Object.keys(changes).length
+            ? 'อัพเดทเรียบร้อย' + (data.phoneVerifyRequired ? ' (เบอร์เปลี่ยน — ลูกค้าต้องยืนยัน PDPA ใหม่)' : '')
+            : 'ไม่มีการเปลี่ยนแปลง';
+          Swal.fire({ icon:'success', title:'สำเร็จ', text: msg, timer:2500 });
+          closeEditProfileModal();
+          // Refresh CRM modal
+          if (typeof openCrmModal === 'function') {
+            openCrmModal(_crmEditUid, document.getElementById('epName').value);
+          }
+        } else if (data.status === 'duplicate_phone') {
+          Swal.fire('เบอร์ซ้ำ', data.message, 'warning');
+        } else {
+          Swal.fire('ไม่สำเร็จ', data.message || 'unknown', 'error');
+        }
+      } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> บันทึก';
+      }
+    }
+  </script>
+
+
 </body>
 </html>
