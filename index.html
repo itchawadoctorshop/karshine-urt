@@ -373,8 +373,14 @@
 
 
       await refreshData();
-      // 🚗 Smart Form: โหลด profile + toggle UI
-      await loadMyProfile();
+      // ⚡ Performance v1.0: profile แนบมาใน refreshData response แล้ว
+      //    (ผ่าน getInitialBookingDataFast) — ไม่ต้อง call แยก
+      if (masterData.profile) {
+        window._profileCache = masterData.profile;
+      } else {
+        // Fallback: ถ้า fast endpoint ไม่ทำงาน → call เดิม
+        await loadMyProfile();
+      }
       _applySmartFormMode();
 
       // 🚫 F0.6: รวมวันปิดร้านจาก server → ใส่ใน flatpickr disable
@@ -437,7 +443,7 @@
 
     async function refreshData() {
       try {
-        const res = await fetch(`${API_URL}?action=getInitialBookingData&lineUid=${userUid}&t=${Date.now()}`);
+        const res = await fetch(`${API_URL}?action=getInitialBookingDataFast&lineUid=${userUid}&t=${Date.now()}`);
         const data = await res.json();
         // 🚨 FIX: เช็ค response shape — backend อาจ return {status:'error'} โดยไม่มี data
         if (!data || data.status === 'error' || !data.data) {
