@@ -443,7 +443,11 @@
 
     async function refreshData() {
       try {
-        const res = await fetch(`${API_URL}?action=getInitialBookingDataFast&lineUid=${userUid}&t=${Date.now()}`);
+        // ⚡ v4: ใช้ POST (route อยู่ใน doPost userActions) แทน GET
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: new URLSearchParams({ action: 'getInitialBookingDataFast', lineUid: userUid, t: String(Date.now()) })
+        });
         const data = await res.json();
         // 🚨 FIX: เช็ค response shape — backend อาจ return {status:'error'} โดยไม่มี data
         if (!data || data.status === 'error' || !data.data) {
