@@ -1346,7 +1346,7 @@
       try {
         const isToday = date === new Date().toISOString().slice(0,10);
         const [dashRes, salesRes, savedRes] = await Promise.all([
-          isToday ? fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getDashboardSummary', t: Date.now() })) }).then(r=>r.json()) : Promise.resolve(null),
+          isToday ? fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getDashboardSummaryFast', t: Date.now() })) }).then(r=>r.json()) : Promise.resolve(null),
           fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getDailySalesList', date: date, t: Date.now() })) }).then(r=>r.json()),
           fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getDailyReconciliation', date: date, t: Date.now() })) }).then(r=>r.json())
         ]);
@@ -1944,7 +1944,7 @@
     // 🏷️ F1.1 — Segment Summary + List Modal
     async function loadSegmentSummary() {
       try {
-        const payload = new URLSearchParams({ action: 'getSegmentSummary', t: Date.now() });
+        const payload = new URLSearchParams({ action: 'getSegmentSummaryFast', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if (result.status !== 'success' || !result.data) return;
@@ -2014,7 +2014,7 @@
         // 🆕 SPEC V.2: ส่ง startDate/endDate ตาม _currentRange (fallback = today ถ้ายังไม่ init)
         const sd = (_currentRange && _currentRange.startDate) ? _currentRange.startDate : '';
         const ed = (_currentRange && _currentRange.endDate)   ? _currentRange.endDate   : '';
-        const params = { action: 'getDashboardSummary', t: Date.now() };
+        const params = { action: 'getDashboardSummaryFast', t: Date.now() };
         if (sd) params.startDate = sd;
         if (ed) params.endDate   = ed;
         const payload = new URLSearchParams(params);
@@ -4666,7 +4666,7 @@
       payContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>';
 
       try {
-        const payload = new URLSearchParams({ action: 'getAdminSettings' });
+        const payload = new URLSearchParams({ action: 'getAdminSettingsFast' });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         
