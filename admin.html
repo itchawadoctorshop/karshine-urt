@@ -393,8 +393,7 @@
       <p class="text-xs text-gray-500 mb-6 border-b pb-4">ค้นหาข้อมูลลูกค้าเพื่อตรวจสอบประวัติ แก้ไขคะแนน และจัดการแพ็กเกจ</p>
       <form id="crmSearchForm" class="flex gap-2 mb-6">
         <input type="tel" id="crmKeyword" maxlength="10" pattern="[0-9]*" class="flex-1 p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500" placeholder="พิมพ์เบอร์โทรศัพท์ลูกค้า..." required>
-        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl font-bold shadow transition"><i class="fa-solid fa-magnifying-glass"></i> ค้นหา</button>
-        <button type="button" onclick="openManualAddModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-bold shadow transition"><i class="fa-solid fa-user-plus"></i> Walk-in</button>
+        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow transition"><i class="fa-solid fa-magnifying-glass"></i> ค้นหา</button>
       </form>
       <div id="crmResults" class="space-y-4">
         <div class="text-center text-gray-400 text-sm py-10 border-2 border-dashed border-gray-200 rounded-xl">พิมพ์เบอร์โทรศัพท์ด้านบนเพื่อเริ่มค้นหาลูกค้า</div>
@@ -645,8 +644,6 @@
           </div>
           <div>
             <h4 class="font-bold text-gray-700 mb-3 flex items-center gap-2"><i class="fa-solid fa-car text-red-500"></i> รถยนต์ที่ลงทะเบียนไว้</h4>
-            <!-- ✏️ Edit Profile button (Master CRM v1.0) -->
-            <button onclick="openEditProfileModal()" class="w-full bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold py-3 rounded-xl text-sm border border-cyan-200 transition mt-3 mb-2"><i class="fa-solid fa-user-pen mr-1"></i> แก้ไขข้อมูลลูกค้า</button>
             <div id="crmVehiclesList" class="space-y-2"></div>
           </div>
         </div>
@@ -1346,7 +1343,7 @@
       try {
         const isToday = date === new Date().toISOString().slice(0,10);
         const [dashRes, salesRes, savedRes] = await Promise.all([
-          isToday ? fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getDashboardSummaryFast', t: Date.now() })) }).then(r=>r.json()) : Promise.resolve(null),
+          isToday ? fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getDashboardSummary', t: Date.now() })) }).then(r=>r.json()) : Promise.resolve(null),
           fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getDailySalesList', date: date, t: Date.now() })) }).then(r=>r.json()),
           fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getDailyReconciliation', date: date, t: Date.now() })) }).then(r=>r.json())
         ]);
@@ -1944,7 +1941,7 @@
     // 🏷️ F1.1 — Segment Summary + List Modal
     async function loadSegmentSummary() {
       try {
-        const payload = new URLSearchParams({ action: 'getSegmentSummaryFast', t: Date.now() });
+        const payload = new URLSearchParams({ action: 'getSegmentSummary', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if (result.status !== 'success' || !result.data) return;
@@ -2014,7 +2011,7 @@
         // 🆕 SPEC V.2: ส่ง startDate/endDate ตาม _currentRange (fallback = today ถ้ายังไม่ init)
         const sd = (_currentRange && _currentRange.startDate) ? _currentRange.startDate : '';
         const ed = (_currentRange && _currentRange.endDate)   ? _currentRange.endDate   : '';
-        const params = { action: 'getDashboardSummaryFast', t: Date.now() };
+        const params = { action: 'getDashboardSummary', t: Date.now() };
         if (sd) params.startDate = sd;
         if (ed) params.endDate   = ed;
         const payload = new URLSearchParams(params);
@@ -2126,7 +2123,7 @@
 
         const paymentBadge = isPaid ? `
           <div class="mb-2 px-2 py-1.5 bg-green-50 border border-green-200 rounded-lg text-[10px] text-green-700 flex items-center justify-between">
-            <span>${isPackagePaid ? '📦 หักแพ็กเกจแล้ว' : '💰 จ่ายแล้ว · ' + _methodLabel(b.paymentMethod)} ${b.paymentAmount > 0 ? '· ' + (b.paymentAmount).toLocaleString() + '.-' : ''}</span>
+            <span>${isPackagePaid ? '📦 หักแพ็กเกจแล้ว' : '💰 จ่ายแล้ว · ' + (b.paymentMethod || '-')} ${b.paymentAmount > 0 ? '· ' + (b.paymentAmount).toLocaleString() + '.-' : ''}</span>
             ${isActive ? `<button onclick="openPaymentBeforeService_('${esc(b.bookingId)}', true)" class="text-blue-500 hover:text-blue-700" title="แก้ใบเสร็จ"><i class="fa-solid fa-pen-to-square"></i></button>` : ''}
           </div>` : '';
 
@@ -2151,8 +2148,7 @@
         const customerBlock = `
           <div class="flex items-center gap-1.5 mb-1 text-xs">
             <i class="fa-solid fa-user text-gray-400 text-[10px]"></i>
-            <span class="text-gray-700 font-semibold truncate max-w-[160px]" title="${esc(customerName)}">${esc(customerName)}</span>
-            ${hasLineUid ? `<button onclick="event.stopPropagation(); openEditProfileModal('${esc(b.lineUid)}', '${esc(customerName).replace(/'/g,"&apos;")}')" class="text-cyan-500 hover:text-cyan-700 hover:bg-cyan-50 p-1 rounded transition" title="แก้ไขข้อมูลลูกค้า"><i class="fa-solid fa-user-pen text-[11px]"></i></button>` : ''}
+            <span class="text-gray-700 font-semibold truncate max-w-[180px]" title="${esc(customerName)}">${esc(customerName)}</span>
           </div>
           ${customerPhone ? `
           <div class="flex items-center gap-1.5 mb-2 text-xs">
@@ -2289,7 +2285,7 @@
             title: '✅ จ่ายเงินแล้ว — ปิดงานเลย?',
             html: `<div class="text-left text-sm">
               <p class="text-gray-600">คิวนี้รับเงินไว้ก่อนหน้าแล้ว:</p>
-              <p class="font-bold text-emerald-700 mt-2">${b.paymentMethod === 'package' ? '📦 หักจากแพ็กเกจ' : '💰 ' + _methodLabel(b.paymentMethod) + (b.paymentAmount ? ' · ' + b.paymentAmount.toLocaleString() + '.-' : '')}</p>
+              <p class="font-bold text-emerald-700 mt-2">${b.paymentMethod === 'package' ? '📦 หักจากแพ็กเกจ' : '💰 ' + (b.paymentMethod || '-') + (b.paymentAmount ? ' · ' + b.paymentAmount.toLocaleString() + '.-' : '')}</p>
             </div>`,
             icon: 'success', showCancelButton: true,
             confirmButtonText: '✅ ปิดงาน + บวกแต้ม',
@@ -2450,8 +2446,9 @@
       const discount = (discountCB && discountCB.checked && discountEl) ? (parseFloat(discountEl.value) || 0) : 0;
 
       // 🆕 F2.5f: ตรวจ mode
+      // 🔧 V2 Combo Lock (5/6/2026, patch F1): accept both 'package:' (single) and 'package_group:' (combo)
       const methodVal = methodSel ? (methodSel.value || '') : '';
-      const isPackage = methodVal.startsWith('package:');
+      const isPackage = methodVal.startsWith('package:') || methodVal.startsWith('package_group:');
       const isHybrid  = isPackage && hybridBox && !hybridBox.classList.contains('hidden');
       const packageCredit = parseFloat(amtEl.dataset.packageCredit) || 0;
 
@@ -2532,12 +2529,13 @@
       const borrowSec = document.getElementById('payBorrowSection');
       if (borrowSec) borrowSec.classList.add('hidden');
 
-      // ถ้าไม่ใช่ package → ซ่อน hybrid box + clear dataset
-      if (!val.startsWith('package:')) {
+      // 🔧 V2 Combo Lock (patch F2.a): clear-dataset check — รับทั้ง package: และ package_group:
+      if (!val.startsWith('package:') && !val.startsWith('package_group:')) {
         if (hybridBox) hybridBox.classList.add('hidden');
         if (amtEl) {
           amtEl.dataset.packageCredit = 0;
           amtEl.dataset.pkgRowId = '';
+          amtEl.dataset.pkgGroupId = '';        // 🆕 V2
           amtEl.dataset.borrowedFromUid = '';
           amtEl.dataset.ownerName = '';
         }
@@ -2545,16 +2543,29 @@
         return;
       }
 
-      // 📦 เลือก package — คำนวน coverage
-      const pkgRowId = val.substring(8);
-      const eligibles = window._currentEligiblePkgs || [];
-      const pkg = eligibles.find(p => String(p.pkg_row_id) === String(pkgRowId));
+      // 📦 V2 Combo Lock (patch F2.b): handle BOTH single (package:) + combo (package_group:)
+      //   single: substring(8)  → pkg_row_id  → find by pkg_row_id
+      //   combo : substring(14) → group_id    → find by group_id, use services[] array
+      let pkg;
+      let isGroup = false;
+      if (val.startsWith('package_group:')) {
+        const groupId = val.substring(14);  // 'package_group:'.length = 14
+        pkg = (window._currentEligiblePkgs || []).find(p => String(p.group_id) === String(groupId));
+        isGroup = true;
+      } else {
+        const pkgRowId = val.substring(8);
+        pkg = (window._currentEligiblePkgs || []).find(p => String(p.pkg_row_id) === String(pkgRowId));
+      }
       if (!pkg) { _recalcNetAmount(); return; }
 
       const bInfo = window._currentBookingInfo || {};
       const bookingSvcIds = String(bInfo.serviceIds || '').split(',').map(s => s.trim()).filter(Boolean);
 
-      // หา service ใน booking ที่ตรงกับ pkg.service_id
+      // 🆕 V2 Combo: package services array (group มี services[], single มีแค่ service_id)
+      const pkgServices = isGroup
+        ? (Array.isArray(pkg.services) ? pkg.services.map(String) : [])
+        : [String(pkg.service_id)];
+
       const covered = [];
       const notCovered = [];
       let packageCoveredAmt = 0;
@@ -2564,7 +2575,7 @@
         if (!svc) return;
         const price = parseFloat(svc.price_m || svc.pricem || 0) || 0;
         const sName = svc.service_name || svc.name || sid;
-        if (String(sid) === String(pkg.service_id)) {
+        if (pkgServices.includes(String(sid))) {   // 🆕 V2: check against array (combo covers multiple)
           covered.push({ name: sName, price: price });
           packageCoveredAmt += price;
         } else {
@@ -2576,7 +2587,8 @@
       // เก็บ coverage info ใน data attribute + global (ใช้ใน _refreshHybridBreakdown)
       if (amtEl) {
         amtEl.dataset.packageCredit = packageCoveredAmt;
-        amtEl.dataset.pkgRowId = pkgRowId;
+        amtEl.dataset.pkgGroupId = isGroup ? String(pkg.group_id || '') : '';   // 🆕 V2
+        amtEl.dataset.pkgRowId   = isGroup ? '' : String(pkg.pkg_row_id || '');
       }
       window._currentCoverage = { covered, notCovered, packageCoveredAmt, cashRequiredAmt };
 
@@ -2805,8 +2817,9 @@
       const methodVal = methodSel.value;
       const methodText = methodSel.options[methodSel.selectedIndex]?.textContent || '';
 
-      // 📦 F2.5c / F2.5f: ถ้าเลือก "หักจากแพ็กเกจ" — ดูว่า hybrid หรือ full coverage
-      const isPackage = typeof methodVal === 'string' && methodVal.startsWith('package:');
+      // 📦 F2.5c / F2.5f / V2 F3 (5/6/2026): ถ้าเลือก "หักจากแพ็กเกจ" — ดูว่า hybrid หรือ full coverage
+      //   V2: accept package_group: (combo) ด้วย เพื่อ auto-set status=paid + แสดง banner
+      const isPackage = typeof methodVal === 'string' && (methodVal.startsWith('package:') || methodVal.startsWith('package_group:'));
       if (isPackage) {
         const statusSel = document.getElementById('payStatus');
         if (statusSel) statusSel.value = 'paid';
@@ -2944,8 +2957,9 @@
         }
       });
 
-      // 📦 v5 Combo Lock: ใช้ getEligiblePackagesGrouped (D96-D101)
-      //    Returns grouped packages — combo 2+ rows = 1 group แสดงรวม
+      // 🆕 F2.5f Issue 2: เริ่ม fetch eligible packages แบบ async (ไม่ block modal opening)
+      // 🔧 V2 Combo Lock (patch F4 — 5/6/2026): switch from getEligiblePackages → getEligiblePackagesGrouped
+      //   ใหม่: คืน group_id (combo) + pkg_row_id (single backward-compat) + is_combo flag + services[]
       const eligiblePkgsPromise = (b.lineUid && b.lineUid !== 'WALKIN_NEW' && b.serviceIds)
         ? fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getEligiblePackagesGrouped', uid: b.lineUid, serviceIds: b.serviceIds })) })
             .then(r => r.json())
@@ -3098,9 +3112,7 @@
         didOpen: () => {
           _recalcNetAmount();
           _updatePaymentQR();
-          // 📦 v5 Combo Lock: async inject eligible package GROUPS เข้า dropdown
-          //    Each group = 1 option (combo รวมหลาย service ใน 1 option)
-          //    value format: "package_group:<group_id>" → submit ใช้ packageGroupId
+          // 🆕 F2.5f Issue 2: async inject eligible packages เข้า dropdown
           eligiblePkgsPromise.then(eligiblePkgs => {
             window._currentEligiblePkgs = eligiblePkgs || [];
             const optgrp = document.getElementById('payPkgOptgroup');
@@ -3109,15 +3121,16 @@
               optgrp.remove();  // ไม่มี package → ลบ optgroup placeholder
               return;
             }
+            // เปลี่ยน label + เติม options
+            // 🔧 V2 Combo Lock (patch F5 — 5/6/2026): support BOTH single (package:) + combo (package_group:)
+            //   Combo: value="package_group:GID" + label "📦 combo · ครอบคลุม N บริการ" (D101)
+            //   Single: value="package:PKG_ROW_ID" (backward compat)
             optgrp.label = '📦 หักจากแพ็กเกจที่มี';
-            optgrp.innerHTML = eligiblePkgs.map(g => {
-              // Combo (2+ services) → แสดงพร้อม label "ครอบคลุม X บริการ"
-              if (g.is_combo) {
-                const svcCount = g.service_count || (g.services ? g.services.length : 0);
-                return `<option value="package_group:${esc(g.group_id)}">📦 ${esc(g.name)} (combo ${svcCount} บริการ — เหลือ ${g.remaining}/${g.total})</option>`;
+            optgrp.innerHTML = eligiblePkgs.map(p => {
+              if (p.is_combo) {
+                return `<option value="package_group:${esc(p.group_id)}">📦 COMBO: ${esc(p.name)} · ครอบคลุม ${p.service_count} บริการ (เหลือ ${p.remaining}/${p.total})</option>`;
               }
-              // Single (1 row) → label ปกติ
-              return `<option value="package_group:${esc(g.group_id)}">📦 หักจาก: ${esc(g.name)} (เหลือ ${g.remaining}/${g.total})</option>`;
+              return `<option value="package:${esc(p.pkg_row_id)}">📦 หักจาก: ${esc(p.name)} (เหลือ ${p.remaining}/${p.total})</option>`;
             }).join('');
           });
           // 🆕 F2.5f: ถ้า isEdit → pre-fill ค่าเดิมจาก cache
@@ -3149,37 +3162,37 @@
         const discountAmt = (discountCB && discountCB.checked) ? (parseFloat(document.getElementById('discountAmount').value) || 0) : 0;
         const discountReason = (discountCB && discountCB.checked) ? document.getElementById('discountReason').value : '';
 
-        // 📦 v5 Combo Lock: detect package_group: prefix (ใหม่)
-        // 🆕 F2.5f Hybrid: detect package + cash combo (เดิม — backward compat)
+        // 🆕 F2.5f Hybrid: detect package + cash combo
         // 🔗 F2.5g: + detect borrowed package
-        let packageRowId = '';     // legacy single-row (backward compat)
-        let packageGroupId = '';   // 📦 v5: combo group ID (ใหม่)
+        // 🔧 V2 Combo Lock (patch F6 — 5/6/2026): detect BOTH single + combo
+        let packageRowId = '';      // single
+        let packageGroupId = '';    // 🆕 V2 combo
         let packageCredit = 0;
         let borrowedFromUid = '';
         let ownerName = '';
         let borrowerName = '';
-
-        if (typeof method === 'string' && (method.startsWith('package:') || method.startsWith('package_group:'))) {
-          // 📦 v5: parse ทั้ง 2 prefix
-          if (method.startsWith('package_group:')) {
-            packageGroupId = method.substring(14);  // "package_group:" = 14 chars
+        const isMethodPkgGroup = (typeof method === 'string' && method.startsWith('package_group:'));
+        const isMethodPkgSingle = (typeof method === 'string' && method.startsWith('package:'));
+        if (isMethodPkgSingle || isMethodPkgGroup) {
+          if (isMethodPkgGroup) {
+            packageGroupId = method.substring(14);   // 'package_group:'.length = 14
           } else {
-            packageRowId = method.substring(8);     // "package:" = 8 chars (legacy)
+            packageRowId = method.substring(8);
           }
-
           const amtEl = document.getElementById('payAmount');
           packageCredit = parseFloat(amtEl && amtEl.dataset.packageCredit) || 0;
           borrowedFromUid = (amtEl && amtEl.dataset.borrowedFromUid) || '';
           ownerName = (amtEl && amtEl.dataset.ownerName) || '';
+          // borrower name = ลูกค้าใน booking (จาก plate หรือ lineUid)
           borrowerName = (b && b.plate) ? b.plate : (b && b.lineUid ? b.lineUid : '');
-
           // ถ้า hybrid (มี cashRequired) → ใช้ secondary method แทน
           const hybridBox = document.getElementById('payHybridBox');
           if (hybridBox && !hybridBox.classList.contains('hidden')) {
             const cashMethodSel = document.getElementById('payHybridCashMethod');
             if (cashMethodSel) method = cashMethodSel.value || 'cash';
+            // amount ใน payAmount = cashRequired อยู่แล้ว (ตั้งใน _onPayMethodChange)
           } else {
-            // Full coverage → ส่ง method='package'
+            // Full coverage → ส่ง method='package' (backend จะรับ packageRowId/groupId แทน)
             method = 'package';
             amount = 0;
           }
@@ -3188,18 +3201,19 @@
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
         try {
           // 1. บันทึก payment (+ discount + package + borrowed)
-          // 📦 v5: ใช้ recordPaymentForCombo เสมอ (fallback ไป recordPayment เดิมถ้าไม่ใช่ combo)
+          // 🔧 V2 Combo Lock (patch F7 — 5/6/2026): route to recordPaymentForCombo ถ้าเป็น combo group,
+          //   ถ้าเป็น single (รวม hybrid) → ใช้ recordPayment เดิม
+          const useComboEndpoint = !!packageGroupId;
           const payPayloadObj = {
-            action: 'recordPaymentForCombo', bookingId: bookingId,
+            action: useComboEndpoint ? 'recordPaymentForCombo' : 'recordPayment',
+            bookingId: bookingId,
             method: method, amount: amount, status: payStatus,
             discountAmount: discountAmt, discountReason: discountReason
           };
-          // 📦 v5: ส่ง packageGroupId (combo) — atomic deduct ทุก row ใน group
-          if (packageGroupId) {
-            payPayloadObj.packageGroupId = packageGroupId;
+          if (useComboEndpoint) {
+            payPayloadObj.groupId = packageGroupId;
             payPayloadObj.packageCredit = packageCredit;
           } else if (packageRowId) {
-            // legacy single-row (backward compat)
             payPayloadObj.packageRowId = packageRowId;
             payPayloadObj.packageCredit = packageCredit;
           }
@@ -3232,6 +3246,9 @@
           if (payResult.deductedPackage) {
             const dp = payResult.deductedPackage;
             successMsg = `📦 หัก ${dp.name} 1 ครั้ง<br><b>เหลือ ${dp.remaining}/${dp.total} ครั้ง</b>${tail}`;
+          } else if (payResult.deductedCombo) {  // 🆕 V2 F9 (5/6/2026) — combo success message
+            const dc = payResult.deductedCombo;
+            successMsg = `📦 หัก COMBO: ${dc.name} (${dc.row_count} บริการ) 1 ครั้ง<br><b>เหลือ ${dc.remaining}/${dc.total} ครั้ง</b>${tail}`;
           } else if (discountAmt > 0) {
             successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (ลด ${discountAmt}.-)${tail}`;
           } else {
@@ -4688,7 +4705,7 @@
       payContainer.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>';
 
       try {
-        const payload = new URLSearchParams({ action: 'getAdminSettingsFast' });
+        const payload = new URLSearchParams({ action: 'getAdminSettings' });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         
@@ -5514,278 +5531,5 @@
     // ══ End Sales Tracker Module ══
 
   </script>
-  <!-- ════════════════════════════════════════════════ -->
-  <!-- 👥 CRM Manual Add Modal v1.0 (#66) -->
-  <!-- ════════════════════════════════════════════════ -->
-  <div id="manualAddModal" class="hidden fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
-      <div class="flex justify-between items-start mb-3">
-        <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-user-plus text-green-600"></i> เพิ่มลูกค้า Walk-in</h2>
-        <button onclick="closeManualAddModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
-      </div>
-      <p class="text-xs text-gray-500 mb-4 border-b pb-3">สำหรับลูกค้าที่ไม่ได้จองผ่าน LINE — ต้องเซ็นใบ Consent กระดาษก่อน</p>
-      <form id="manualAddForm" class="space-y-3">
-        <div>
-          <label class="text-xs font-bold text-gray-700">ชื่อ-นามสกุล <span class="text-red-500">*</span></label>
-          <input type="text" id="maName" required minlength="2" class="w-full p-3 border border-gray-300 rounded-xl text-sm" placeholder="คุณสมชาย ใจดี">
-        </div>
-        <div>
-          <label class="text-xs font-bold text-gray-700">เบอร์โทรศัพท์ <span class="text-red-500">*</span></label>
-          <input type="tel" id="maPhone" required maxlength="10" pattern="[0-9]{10}" class="w-full p-3 border border-gray-300 rounded-xl text-sm" placeholder="0812345678">
-        </div>
-        <details class="border rounded-xl p-3">
-          <summary class="text-xs font-bold text-gray-600 cursor-pointer">🚗 ข้อมูลรถ (Optional)</summary>
-          <div class="space-y-2 mt-3">
-            <input type="text" id="maPlate" placeholder="ทะเบียน เช่น 1กก 1234" class="w-full p-2 border rounded-lg text-sm">
-            <div class="grid grid-cols-2 gap-2">
-              <input type="text" id="maBrand" placeholder="ยี่ห้อ" class="p-2 border rounded-lg text-sm">
-              <input type="text" id="maModel" placeholder="รุ่น" class="p-2 border rounded-lg text-sm">
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <input type="text" id="maColor" placeholder="สี" class="p-2 border rounded-lg text-sm">
-              <select id="maSize" class="p-2 border rounded-lg text-sm">
-                <option value="S">เล็ก (S)</option>
-                <option value="M" selected>กลาง (M)</option>
-                <option value="L">ใหญ่ (L)</option>
-                <option value="XL">XL</option>
-              </select>
-            </div>
-          </div>
-        </details>
-        <details class="border rounded-xl p-3">
-          <summary class="text-xs font-bold text-gray-600 cursor-pointer">🎂 วันเกิด (Optional)</summary>
-          <div class="grid grid-cols-2 gap-2 mt-3">
-            <select id="maBirthDay" class="p-2 border rounded-lg text-sm"><option value="">วัน</option></select>
-            <select id="maBirthMonth" class="p-2 border rounded-lg text-sm"><option value="">เดือน</option></select>
-          </div>
-        </details>
-        <div class="border-t pt-3 bg-yellow-50 p-3 rounded-xl">
-          <label class="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" id="maPdpaSigned" required class="mt-1 w-4 h-4">
-            <span class="text-xs text-gray-700"><strong class="text-yellow-800">⚠️ ยืนยัน:</strong> ลูกค้าได้เซ็นใบ PDPA Consent (กระดาษ) แล้ว และเก็บไว้ที่ร้านตามนโยบาย</span>
-          </label>
-        </div>
-        <button type="submit" id="maSubmitBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl"><i class="fa-solid fa-check"></i> เพิ่มลูกค้า</button>
-      </form>
-      <div id="maSuggestSection" class="hidden mt-4 border-t pt-4">
-        <p class="text-sm font-bold text-orange-600 mb-2">⚠️ พบลูกค้าที่อาจซ้ำ:</p>
-        <div id="maSuggestList" class="space-y-2"></div>
-        <button onclick="forceAddManual()" class="w-full mt-3 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-xl text-sm font-bold">✅ ใช่ ไม่ซ้ำ — เพิ่มเป็นลูกค้าใหม่</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ════════════════════════════════════════════════ -->
-  <!-- ✏️ CRM Edit Profile Modal v1.0 (#67) -->
-  <!-- ════════════════════════════════════════════════ -->
-  <div id="editProfileModal" class="hidden fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
-      <div class="flex justify-between items-start mb-3">
-        <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-user-pen text-cyan-600"></i> แก้ไขข้อมูลลูกค้า</h2>
-        <button onclick="closeEditProfileModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
-      </div>
-      <p class="text-xs text-gray-500 mb-4 border-b pb-3">LINE UID + แต้ม + ประวัติ เปลี่ยนไม่ได้ — แก้ได้แค่ชื่อ เบอร์ วันเกิด</p>
-      <form id="editProfileForm" class="space-y-3">
-        <div>
-          <label class="text-xs font-bold text-gray-700">ชื่อ-นามสกุล</label>
-          <input type="text" id="epName" minlength="2" class="w-full p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500">
-        </div>
-        <div>
-          <label class="text-xs font-bold text-gray-700">เบอร์โทรศัพท์ (10 หลัก)</label>
-          <input type="tel" id="epPhone" maxlength="10" pattern="[0-9]{10}" class="w-full p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500">
-          <p class="text-[10px] text-amber-600 mt-1">⚠️ ถ้าเปลี่ยนเบอร์ — ระบบจะ flag ให้ยืนยัน PDPA อีกครั้ง</p>
-        </div>
-        <div class="border rounded-xl p-3">
-          <p class="text-xs font-bold text-gray-700 mb-2">🎂 วันเกิด (Birthday system)</p>
-          <div class="grid grid-cols-2 gap-2">
-            <select id="epBirthDay" class="p-2 border rounded-lg text-sm"><option value="">ไม่ระบุ</option></select>
-            <select id="epBirthMonth" class="p-2 border rounded-lg text-sm"><option value="">ไม่ระบุ</option></select>
-          </div>
-        </div>
-        <div class="border-t pt-3 flex gap-2">
-          <button type="button" onclick="closeEditProfileModal()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl">ยกเลิก</button>
-          <button type="submit" id="epSaveBtn" class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-xl"><i class="fa-solid fa-floppy-disk"></i> บันทึก</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ════════════════════════════════════════════════ -->
-  <!-- 🛠️ CRM Handlers — v1.0 -->
-  <!-- ════════════════════════════════════════════════ -->
-  <script>
-    let _crmEditUid = '';
-
-    // ─── #66 Manual Add helpers ───
-    function _crm_fillDateDropdowns() {
-      const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-      ['maBirthDay','epBirthDay'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && el.options.length <= 1) {
-          for (let d = 1; d <= 31; d++) el.add(new Option(d, d));
-        }
-      });
-      ['maBirthMonth','epBirthMonth'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && el.options.length <= 1) {
-          months.forEach((m, i) => el.add(new Option(m, i+1)));
-        }
-      });
-    }
-
-    function openManualAddModal() {
-      document.getElementById('manualAddForm').reset();
-      document.getElementById('maSuggestSection').classList.add('hidden');
-      _crm_fillDateDropdowns();
-      document.getElementById('manualAddModal').classList.remove('hidden');
-    }
-
-    function closeManualAddModal() {
-      document.getElementById('manualAddModal').classList.add('hidden');
-    }
-
-    async function submitManualAdd(forceCreate) {
-      const btn = document.getElementById('maSubmitBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังเพิ่ม...';
-      const payload = new URLSearchParams({
-        action: 'addManualCustomer',
-        name: document.getElementById('maName').value,
-        phone: document.getElementById('maPhone').value,
-        plate: document.getElementById('maPlate').value || '',
-        brand: document.getElementById('maBrand').value || '',
-        model: document.getElementById('maModel').value || '',
-        color: document.getElementById('maColor').value || '',
-        size: document.getElementById('maSize').value || 'M',
-        birthDay: document.getElementById('maBirthDay').value || '',
-        birthMonth: document.getElementById('maBirthMonth').value || '',
-        pdpaPaperSigned: document.getElementById('maPdpaSigned').checked ? '1' : '',
-        forceCreate: forceCreate ? '1' : '',
-        adminUid: window.adminUid || ''
-      });
-      try {
-        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
-        const data = await res.json();
-        if (data.status === 'success') {
-          Swal.fire({ icon:'success', title:'เพิ่มสำเร็จ!', text:'ลูกค้า '+data.line_uid+' พร้อมใช้งาน', timer:2000 });
-          closeManualAddModal();
-          document.getElementById('crmKeyword').value = document.getElementById('maPhone').value;
-          document.getElementById('crmSearchForm').dispatchEvent(new Event('submit'));
-        } else if (data.status === 'duplicate_exact') {
-          Swal.fire({ icon:'warning', title:'พบเบอร์ซ้ำ',
-                      html: 'ลูกค้า <strong>'+esc(data.existing.name)+'</strong><br>เบอร์: '+esc(data.existing.phone)+'<br><br>ใช้ลูกค้าเดิมแทน?',
-                      showCancelButton:true, confirmButtonText:'ใช้ลูกค้าเดิม' })
-            .then(r => {
-              if (r.isConfirmed) {
-                closeManualAddModal();
-                document.getElementById('crmKeyword').value = data.existing.phone;
-                document.getElementById('crmSearchForm').dispatchEvent(new Event('submit'));
-              }
-            });
-        } else if (data.status === 'suggest_merge') {
-          const list = data.suggestions.map(s => `
-            <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm">
-              <p class="font-bold">${esc(s.name)}</p>
-              <p class="text-xs text-gray-600">📞 ${esc(s.phone)} • ID: ${esc(s.user_id)}</p>
-            </div>`).join('');
-          document.getElementById('maSuggestList').innerHTML = list;
-          document.getElementById('maSuggestSection').classList.remove('hidden');
-        } else {
-          Swal.fire('ไม่สำเร็จ', data.message || 'unknown', 'error');
-        }
-      } catch (e) {
-        Swal.fire('Error', e.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> เพิ่มลูกค้า';
-      }
-    }
-    function forceAddManual() { submitManualAdd(true); }
-
-    document.addEventListener('DOMContentLoaded', function() {
-      const f = document.getElementById('manualAddForm');
-      if (f) f.addEventListener('submit', function(e) { e.preventDefault(); submitManualAdd(false); });
-      const ef = document.getElementById('editProfileForm');
-      if (ef) ef.addEventListener('submit', submitEditProfile);
-    });
-
-    // ─── #67 Edit Profile helpers ───
-    async function openEditProfileModal(uidOverride, nameHint) {
-      const uid = uidOverride || ((typeof currentCrmUid !== 'undefined') ? currentCrmUid : '');
-      if (!uid) { Swal.fire('Error', 'ไม่พบ UID ลูกค้า', 'error'); return; }
-      _crmEditUid = uid;
-      window._epNameHint = nameHint || '';
-      _crm_fillDateDropdowns();
-      // Fetch fresh data
-      try {
-        const payload = new URLSearchParams({ action: 'getUserProfileForEdit', lineUid: uid });
-        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
-        const r = await res.json();
-        if (r.status !== 'success') {
-          Swal.fire('Error', r.message || 'load failed', 'error');
-          return;
-        }
-        document.getElementById('epName').value = r.data.name || '';
-        document.getElementById('epPhone').value = r.data.phone || '';
-        document.getElementById('epBirthDay').value = r.data.birth_day || '';
-        document.getElementById('epBirthMonth').value = r.data.birth_month || '';
-        document.getElementById('editProfileModal').classList.remove('hidden');
-      } catch (e) {
-        Swal.fire('Error', e.message, 'error');
-      }
-    }
-
-    function closeEditProfileModal() {
-      document.getElementById('editProfileModal').classList.add('hidden');
-    }
-
-    async function submitEditProfile(e) {
-      if (e) e.preventDefault();
-      const btn = document.getElementById('epSaveBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
-      const payload = new URLSearchParams({
-        action: 'editUserProfile',
-        lineUid: _crmEditUid,
-        name: document.getElementById('epName').value || '',
-        phone: document.getElementById('epPhone').value || '',
-        birthDay: document.getElementById('epBirthDay').value || '',
-        birthMonth: document.getElementById('epBirthMonth').value || '',
-        adminUid: window.adminUid || ''
-      });
-      try {
-        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
-        const data = await res.json();
-        if (data.status === 'success') {
-          const changes = data.changes || {};
-          const msg = Object.keys(changes).length
-            ? 'อัพเดทเรียบร้อย' + (data.phoneVerifyRequired ? ' (เบอร์เปลี่ยน — ลูกค้าต้องยืนยัน PDPA ใหม่)' : '')
-            : 'ไม่มีการเปลี่ยนแปลง';
-          Swal.fire({ icon:'success', title:'สำเร็จ', text: msg, timer:2500 });
-          closeEditProfileModal();
-          // Refresh source view — CRM modal (if open) or Kanban board
-          const crmModalEl = document.getElementById('crmModal');
-          const crmOpen = crmModalEl && !crmModalEl.classList.contains('hidden');
-          if (crmOpen && typeof openCrmModal === 'function') {
-            openCrmModal(_crmEditUid, document.getElementById('epName').value);
-          } else if (typeof loadAdminData === 'function') {
-            // Kanban view → reload to show new name/phone
-            loadAdminData();
-          }
-        } else if (data.status === 'duplicate_phone') {
-          Swal.fire('เบอร์ซ้ำ', data.message, 'warning');
-        } else {
-          Swal.fire('ไม่สำเร็จ', data.message || 'unknown', 'error');
-        }
-      } catch (e) {
-        Swal.fire('Error', e.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> บันทึก';
-      }
-    }
-  </script>
-
-
 </body>
 </html>
