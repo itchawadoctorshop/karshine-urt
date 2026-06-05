@@ -2131,7 +2131,7 @@
 
         const paymentBadge = isPaid ? `
           <div class="mb-2 px-2 py-1.5 bg-green-50 border border-green-200 rounded-lg text-[10px] text-green-700 flex items-center justify-between">
-            <span>${isPackagePaid ? '📦 หักแพ็กเกจแล้ว' : '💰 จ่ายแล้ว · ' + (b.paymentMethod || '-')} ${b.paymentAmount > 0 ? '· ' + (b.paymentAmount).toLocaleString() + '.-' : ''}</span>
+            <span>${isPackagePaid ? '📦 หักแพ็กเกจแล้ว' : '💰 จ่ายแล้ว · ' + _methodLabel(b.paymentMethod || '-')} ${b.paymentAmount > 0 ? '· ' + (b.paymentAmount).toLocaleString() + '.-' : ''}</span>
             ${isActive ? `<button onclick="openPaymentBeforeService_('${esc(b.bookingId)}', true)" class="text-blue-500 hover:text-blue-700" title="แก้ใบเสร็จ"><i class="fa-solid fa-pen-to-square"></i></button>` : ''}
           </div>` : '';
 
@@ -2293,7 +2293,7 @@
             title: '✅ จ่ายเงินแล้ว — ปิดงานเลย?',
             html: `<div class="text-left text-sm">
               <p class="text-gray-600">คิวนี้รับเงินไว้ก่อนหน้าแล้ว:</p>
-              <p class="font-bold text-emerald-700 mt-2">${b.paymentMethod === 'package' ? '📦 หักจากแพ็กเกจ' : '💰 ' + (b.paymentMethod || '-') + (b.paymentAmount ? ' · ' + b.paymentAmount.toLocaleString() + '.-' : '')}</p>
+              <p class="font-bold text-emerald-700 mt-2">${b.paymentMethod === 'package' ? '📦 หักจากแพ็กเกจ' : '💰 ' + _methodLabel(b.paymentMethod || '-') + (b.paymentAmount ? ' · ' + b.paymentAmount.toLocaleString() + '.-' : '')}</p>
             </div>`,
             icon: 'success', showCancelButton: true,
             confirmButtonText: '✅ ปิดงาน + บวกแต้ม',
@@ -5873,3 +5873,4 @@
   </script>
 </body>
 </html>
+  
