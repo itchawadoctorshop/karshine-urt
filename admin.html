@@ -2944,12 +2944,13 @@
         }
       });
 
-      // 🆕 F2.5f Issue 2: เริ่ม fetch eligible packages แบบ async (ไม่ block modal opening)
+      // 📦 v5 Combo Lock: ใช้ getEligiblePackagesGrouped (D96-D101)
+      //    Returns grouped packages — combo 2+ rows = 1 group แสดงรวม
       const eligiblePkgsPromise = (b.lineUid && b.lineUid !== 'WALKIN_NEW' && b.serviceIds)
-        ? fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getEligiblePackages', uid: b.lineUid, serviceIds: b.serviceIds })) })
+        ? fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getEligiblePackagesGrouped', uid: b.lineUid, serviceIds: b.serviceIds })) })
             .then(r => r.json())
             .then(result => (result.status === 'success' && Array.isArray(result.data)) ? result.data : [])
-            .catch(e => { console.warn('getEligiblePackages err', e); return []; })
+            .catch(e => { console.warn('getEligiblePackagesGrouped err', e); return []; })
         : Promise.resolve([]);
 
       // 🆕 store globally — ใช้ตอน admin เลือก package method เพื่อคำนวน coverage
@@ -3097,7 +3098,9 @@
         didOpen: () => {
           _recalcNetAmount();
           _updatePaymentQR();
-          // 🆕 F2.5f Issue 2: async inject eligible packages เข้า dropdown
+          // 📦 v5 Combo Lock: async inject eligible package GROUPS เข้า dropdown
+          //    Each group = 1 option (combo รวมหลาย service ใน 1 option)
+          //    value format: "package_group:<group_id>" → submit ใช้ packageGroupId
           eligiblePkgsPromise.then(eligiblePkgs => {
             window._currentEligiblePkgs = eligiblePkgs || [];
             const optgrp = document.getElementById('payPkgOptgroup');
@@ -3106,11 +3109,16 @@
               optgrp.remove();  // ไม่มี package → ลบ optgroup placeholder
               return;
             }
-            // เปลี่ยน label + เติม options
             optgrp.label = '📦 หักจากแพ็กเกจที่มี';
-            optgrp.innerHTML = eligiblePkgs.map(p =>
-              `<option value="package:${esc(p.pkg_row_id)}">📦 หักจาก: ${esc(p.name)} (เหลือ ${p.remaining}/${p.total})</option>`
-            ).join('');
+            optgrp.innerHTML = eligiblePkgs.map(g => {
+              // Combo (2+ services) → แสดงพร้อม label "ครอบคลุม X บริการ"
+              if (g.is_combo) {
+                const svcCount = g.service_count || (g.services ? g.services.length : 0);
+                return `<option value="package_group:${esc(g.group_id)}">📦 ${esc(g.name)} (combo ${svcCount} บริการ — เหลือ ${g.remaining}/${g.total})</option>`;
+              }
+              // Single (1 row) → label ปกติ
+              return `<option value="package_group:${esc(g.group_id)}">📦 หักจาก: ${esc(g.name)} (เหลือ ${g.remaining}/${g.total})</option>`;
+            }).join('');
           });
           // 🆕 F2.5f: ถ้า isEdit → pre-fill ค่าเดิมจาก cache
           if (isEdit) {
@@ -3141,29 +3149,37 @@
         const discountAmt = (discountCB && discountCB.checked) ? (parseFloat(document.getElementById('discountAmount').value) || 0) : 0;
         const discountReason = (discountCB && discountCB.checked) ? document.getElementById('discountReason').value : '';
 
-        // 🆕 F2.5f Hybrid: detect package + cash combo
+        // 📦 v5 Combo Lock: detect package_group: prefix (ใหม่)
+        // 🆕 F2.5f Hybrid: detect package + cash combo (เดิม — backward compat)
         // 🔗 F2.5g: + detect borrowed package
-        let packageRowId = '';
+        let packageRowId = '';     // legacy single-row (backward compat)
+        let packageGroupId = '';   // 📦 v5: combo group ID (ใหม่)
         let packageCredit = 0;
         let borrowedFromUid = '';
         let ownerName = '';
         let borrowerName = '';
-        if (typeof method === 'string' && method.startsWith('package:')) {
-          packageRowId = method.substring(8);
+
+        if (typeof method === 'string' && (method.startsWith('package:') || method.startsWith('package_group:'))) {
+          // 📦 v5: parse ทั้ง 2 prefix
+          if (method.startsWith('package_group:')) {
+            packageGroupId = method.substring(14);  // "package_group:" = 14 chars
+          } else {
+            packageRowId = method.substring(8);     // "package:" = 8 chars (legacy)
+          }
+
           const amtEl = document.getElementById('payAmount');
           packageCredit = parseFloat(amtEl && amtEl.dataset.packageCredit) || 0;
           borrowedFromUid = (amtEl && amtEl.dataset.borrowedFromUid) || '';
           ownerName = (amtEl && amtEl.dataset.ownerName) || '';
-          // borrower name = ลูกค้าใน booking (จาก plate หรือ lineUid)
           borrowerName = (b && b.plate) ? b.plate : (b && b.lineUid ? b.lineUid : '');
+
           // ถ้า hybrid (มี cashRequired) → ใช้ secondary method แทน
           const hybridBox = document.getElementById('payHybridBox');
           if (hybridBox && !hybridBox.classList.contains('hidden')) {
             const cashMethodSel = document.getElementById('payHybridCashMethod');
             if (cashMethodSel) method = cashMethodSel.value || 'cash';
-            // amount ใน payAmount = cashRequired อยู่แล้ว (ตั้งใน _onPayMethodChange)
           } else {
-            // Full coverage → ส่ง method='package' (backend จะรับ packageRowId แทน)
+            // Full coverage → ส่ง method='package'
             method = 'package';
             amount = 0;
           }
@@ -3172,12 +3188,18 @@
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
         try {
           // 1. บันทึก payment (+ discount + package + borrowed)
+          // 📦 v5: ใช้ recordPaymentForCombo เสมอ (fallback ไป recordPayment เดิมถ้าไม่ใช่ combo)
           const payPayloadObj = {
-            action: 'recordPayment', bookingId: bookingId,
+            action: 'recordPaymentForCombo', bookingId: bookingId,
             method: method, amount: amount, status: payStatus,
             discountAmount: discountAmt, discountReason: discountReason
           };
-          if (packageRowId) {
+          // 📦 v5: ส่ง packageGroupId (combo) — atomic deduct ทุก row ใน group
+          if (packageGroupId) {
+            payPayloadObj.packageGroupId = packageGroupId;
+            payPayloadObj.packageCredit = packageCredit;
+          } else if (packageRowId) {
+            // legacy single-row (backward compat)
             payPayloadObj.packageRowId = packageRowId;
             payPayloadObj.packageCredit = packageCredit;
           }
