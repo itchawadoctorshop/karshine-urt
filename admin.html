@@ -1329,6 +1329,18 @@
       return pay ? (pay.pay_name || pay.name || mid) : mid;
     }
 
+    // 🆕 BUG #5 FIX (5/6/2026 — D115): size-aware price helper
+    //   ใช้ใน Payment Modal เพื่อคำนวน estimated + coverage ตาม vehicleSize ของ booking
+    //   accepts: svc object (มี price_m / price_l / price_xl หรือ pricem / pricel / pricexl)
+    //            size string ('M' | 'L' | 'XL', case-insensitive; default M)
+    function _priceBySize_(svc, size) {
+      if (!svc) return 0;
+      const sz = String(size || 'M').toUpperCase();
+      if (sz === 'L')  return parseFloat(svc.price_l  || svc.pricel  || 0) || 0;
+      if (sz === 'XL') return parseFloat(svc.price_xl || svc.pricexl || 0) || 0;
+      return parseFloat(svc.price_m || svc.pricem || 0) || 0;   // default M
+    }
+
     function toggleReconBody() {
       const body = document.getElementById('reconBody');
       const icon = document.getElementById('reconToggleIcon');
@@ -2591,7 +2603,7 @@
       bookingSvcIds.forEach(sid => {
         const svc = adminServices.find(s => String(s.service_id) === String(sid));
         if (!svc) return;
-        const price = parseFloat(svc.price_m || svc.pricem || 0) || 0;
+        const price = _priceBySize_(svc, (bInfo.carSize || 'M').toUpperCase());   // 🆕 BUG #5 FIX (D115): size-aware coverage calc
         const sName = svc.service_name || svc.name || sid;
         if (pkgServices.includes(String(sid))) {   // 🆕 V2: check against array (combo covers multiple)
           covered.push({ name: sName, price: price });
@@ -2964,15 +2976,13 @@
       const b = (window.adminBookingsCache || []).find(x => x.bookingId === bookingId);
       if (!b) return Swal.fire('Error', 'ไม่พบ booking ใน cache — ลองกด อัปเดต ก่อน', 'error');
 
-      // คำนวนยอดประเมินจาก serviceIds + carSize (ดึงจาก booking) + extraFee
-      // หา size: ดึงจาก vehicleId ใน original bookings (ไม่ใช่ใน cache) → ใช้ default 'M' ถ้าหาไม่เจอ
+      // 🆕 BUG #5 FIX (5/6/2026 — D115): size-aware estimatedPrice (เลิก hardcode M)
+      //   ดึง carSize จาก booking cache (backend getAdminData ส่งมาแล้ว) → fallback 'M'
+      const _bookingSize = (b.carSize || 'M').toUpperCase();
       let estimatedPrice = 0;
       String(b.serviceIds || '').split(',').forEach(id => {
         const s = adminServices.find(svc => String(svc.service_id) === String(id).trim());
-        if (s) {
-          // ใช้ราคา M เป็น default (admin ปรับเองได้ในช่อง input)
-          estimatedPrice += parseFloat(s.price_m || s.pricem || 0) || 0;
-        }
+        if (s) estimatedPrice += _priceBySize_(s, _bookingSize);
       });
 
       // 🆕 F2.5f Issue 2: เริ่ม fetch eligible packages แบบ async (ไม่ block modal opening)
@@ -2987,7 +2997,7 @@
 
       // 🆕 store globally — ใช้ตอน admin เลือก package method เพื่อคำนวน coverage
       window._currentEligiblePkgs = [];
-      window._currentBookingInfo = { serviceIds: b.serviceIds, sizeMap: {}, totalGross: estimatedPrice };
+      window._currentBookingInfo = { serviceIds: b.serviceIds, sizeMap: {}, totalGross: estimatedPrice, carSize: _bookingSize };  // 🆕 BUG #5 FIX: pass carSize for coverage calc
 
       // ดึงรายการ payment methods จาก configData (cash only ก่อน — package inject ทีหลัง)
       const methods = (configData && configData.payments) || [];
@@ -4013,6 +4023,7 @@
         serviceText: b.serviceText,                // human-readable
         lineTypeRaw: b.lineTypeRaw || 'LINE2',    // 'LINE1' หรือ 'LINE2' ตรงๆ
         branchId:    b.branchId || '',
+        carSize:     b.carSize || 'M',            // 🆕 BUG #5 FIX (D115): size-aware Payment Modal
         // 🆕 F2.5f: payment fields
         paymentMethod: b.paymentMethod || '',
         paymentAmount: b.paymentAmount || 0,
