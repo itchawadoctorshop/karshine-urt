@@ -379,6 +379,16 @@
           </div>
         </div>
 
+        <!-- 🏢 B2B Phase 2 (5/6/2026 — patch F1): Contract dropdown (optional) -->
+        <div id="b2bContractWrap" class="bg-blue-50 border border-blue-200 rounded-xl p-3">
+          <label class="text-[10px] font-bold text-blue-700 uppercase block mb-1">🏢 B2B Contract <span class="text-gray-400 font-normal normal-case">(optional)</span></label>
+          <select id="b2bContractSel" class="w-full p-2 border border-blue-300 rounded-lg text-sm bg-white">
+            <option value="">— Walk-in ปกติ (ไม่ใช่ B2B) —</option>
+            <!-- options injected by _fetchB2BContracts_() on walk-in section open -->
+          </select>
+          <p class="text-[10px] text-blue-600 mt-1">เลือกถ้าเป็นรถจากโชว์รูม/บริษัทคู่สัญญา — ระบบจะ auto-log + คำนวน unit_price</p>
+        </div>
+
         <!-- 🆕 Smart status badge — แสดงตามเวลาที่เลือก -->
         <div id="wiStatusBadge" class="hidden p-3 rounded-xl text-xs border"></div>
 
@@ -1915,7 +1925,7 @@
       
       if(id === 'board-section') loadAdminData();
       if(id === 'dashboard-section') loadAdminData();
-      if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); }
+      if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); _fetchB2BContracts_(); }
       if(id === 'config-section') loadStoreConfig();
       if(id === 'sales-tracker-section') stInitTab();
     }
@@ -4069,6 +4079,26 @@
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if (result.status === 'success') {
+          // 🏢 B2B Phase 2 (patch F2 — 5/6/2026): auto-log ลง B2B ถ้าเลือก contract
+          //   ทำก่อน reset form (ใช้ค่าจาก field ปัจจุบัน) — fire async ไม่ block UX flow
+          try {
+            const _b2bSel = document.getElementById('b2bContractSel');
+            const _b2bId  = _b2bSel ? _b2bSel.value : '';
+            if (_b2bId) {
+              // ดึง car model จาก plate cache (ถ้ามี) — fallback ว่าง
+              const _carModel = (window._wiPlateCache && window._wiPlateCache.brandModel) || '';
+              await _logB2BBookingAfterSuccess_({
+                contractId: _b2bId,
+                bookingId: result.bookingId || '',
+                serviceDate: bookingDateTime,
+                serviceType: serviceId,
+                plate: document.getElementById('wiPlate').value,
+                carModel: _carModel,
+                billable: true
+              });
+            }
+          } catch (e) { console.warn('[B2B] post-submit hook err:', e); }
+
           Swal.fire('สำเร็จ!', `สร้างคิว Walk-in เรียบร้อย — สถานะ: ${result.finalStatus}`, 'success').then(() => {
             document.getElementById('walkInForm').reset();
             document.getElementById('walkInForm').dataset.vid = '';
@@ -4076,6 +4106,9 @@
             document.getElementById('wiTime').value = '';
             document.getElementById('wiTimeDisplay').innerText = '- - : - -';
             document.getElementById('wiStatusBadge').classList.add('hidden');
+            // reset B2B dropdown → "— Walk-in ปกติ —"
+            const _b2bSelReset = document.getElementById('b2bContractSel');
+            if (_b2bSelReset) _b2bSelReset.selectedIndex = 0;
             showSection('board-section');
           });
         } else {
@@ -4088,6 +4121,100 @@
     function initWalkInForm() {
       const dEl = document.getElementById('wiDate');
       if (dEl && !dEl.value) dEl.value = new Date().toISOString().split('T')[0];
+    }
+
+    // 🏢 B2B Phase 2 (5/6/2026 — patch F1): cache + fetch B2B contracts → inject options
+    //   เรียกจาก showSection('walkin-section')
+    //   cache 5 นาที (ลด API call) — ถ้าต้อง refresh manually → reload page
+    window._b2bContractsCache = window._b2bContractsCache || { ts: 0, data: [] };
+    async function _fetchB2BContracts_() {
+      const sel = document.getElementById('b2bContractSel');
+      if (!sel) return;
+      // ถ้า cache ยังสด (< 5 min) → ใช้เลย
+      const CACHE_MS = 5 * 60 * 1000;
+      if (window._b2bContractsCache.ts && (Date.now() - window._b2bContractsCache.ts) < CACHE_MS) {
+        _renderB2BContractOptions_(sel, window._b2bContractsCache.data);
+        return;
+      }
+      try {
+        const r = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({ action: 'getB2BContracts', t: Date.now() }))
+        });
+        const result = await r.json();
+        const list = (result.status === 'success' && Array.isArray(result.data)) ? result.data : [];
+        window._b2bContractsCache = { ts: Date.now(), data: list };
+        _renderB2BContractOptions_(sel, list);
+      } catch (e) {
+        console.warn('[B2B] getB2BContracts err:', e);
+      }
+    }
+    function _renderB2BContractOptions_(sel, list) {
+      // เก็บค่าที่เลือกอยู่ (กัน reset เมื่อ refresh)
+      const prevValue = sel.value || '';
+      // ลบ options เก่า (เว้น option แรก = '— Walk-in ปกติ —')
+      while (sel.options.length > 1) sel.remove(1);
+      (list || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.contract_id;
+        const modelLabel = c.pricing_model ? ' · ' + c.pricing_model : '';
+        opt.textContent = c.company_name + ' (' + c.contract_id + ')' + modelLabel;
+        sel.appendChild(opt);
+      });
+      // restore selection
+      if (prevValue) {
+        for (let i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === prevValue) { sel.selectedIndex = i; break; }
+        }
+      }
+    }
+
+    // 🏢 B2B Phase 2 (patch F2): log booking ลง B2B หลัง createBooking success
+    //   ถูกเรียก async หลัง submitWalkIn / submitBackfillBooking สำเร็จ
+    //   ไม่ block UI — fire-and-log (admin จะเห็น warning toast ถ้า fail)
+    async function _logB2BBookingAfterSuccess_(opts) {
+      const contractId = (opts && opts.contractId) || '';
+      const bookingId  = (opts && opts.bookingId)  || '';
+      if (!contractId || !bookingId) return null;
+      try {
+        const payload = new URLSearchParams({
+          action: 'addB2BBookingLog',
+          contract_id: contractId,
+          booking_id: bookingId,
+          service_date: (opts.serviceDate || '').substring(0, 10),
+          service_type: opts.serviceType || '',
+          vehicle_plate: opts.plate || '',
+          car_model: opts.carModel || '',
+          billable: opts.billable === false ? 'false' : 'true'
+        });
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await r.json();
+        if (result.status === 'success') {
+          console.log('[B2B] ✅ logged:', result.log_id, '@ unit_price', result.unit_price);
+          // toast แสดงสั้นๆ
+          try {
+            Swal.fire({
+              toast: true, position: 'top-end', icon: 'success',
+              title: '🏢 B2B logged: ' + result.unit_price + '.-',
+              showConfirmButton: false, timer: 2500
+            });
+          } catch (e) {}
+        } else {
+          console.warn('[B2B] log fail:', result.message);
+          try {
+            Swal.fire({
+              icon: 'warning',
+              title: '⚠️ Booking สร้างแล้ว แต่ B2B log ไม่สำเร็จ',
+              html: 'รหัส booking: <b>' + bookingId + '</b><br>contract: <b>' + contractId + '</b><br>error: ' + (result.message || '-'),
+              confirmButtonText: 'รับทราบ'
+            });
+          } catch (e) {}
+        }
+        return result;
+      } catch (e) {
+        console.error('[B2B] log err:', e);
+        return null;
+      }
     }
 
     // 🆕 BUG #3 FIX (5/6/2026): Backfill modal — สร้างคิวย้อนหลัง พร้อม payment ครบ
@@ -5873,4 +6000,3 @@
   </script>
 </body>
 </html>
-  
