@@ -283,13 +283,16 @@
                 <th class="px-2 py-2 text-center font-bold">คิว</th>
                 <th class="px-2 py-2 text-right font-bold">ยอดเต็ม</th>
                 <th class="px-2 py-2 text-right font-bold text-amber-600">ส่วนลด</th>
-                <th class="px-2 py-2 text-right font-bold text-green-700">ยอดสุทธิ (ระบบ)</th>
+                <th class="px-2 py-2 text-right font-bold text-green-700">ยอดสุทธิ</th>
+                <!-- 🆕 D120-D121 (5/6/2026 Late Evening — Master Spec): Pre-order + รวม(ระบบ) -->
+                <th class="px-2 py-2 text-right font-bold text-purple-700 bg-purple-50" title="Pre-order จ่ายวันนี้ booking วันอื่น (จาก paid_at)">📅 Pre-order</th>
+                <th class="px-2 py-2 text-right font-bold text-emerald-700 bg-emerald-50" title="ยอดสุทธิ + Pre-order = เงินรับจริงวันนี้">💰 รวม(ระบบ)</th>
                 <th class="px-2 py-2 text-right font-bold text-blue-700">ยอดจริง (พนง.นับ)</th>
                 <th class="px-2 py-2 text-right font-bold">ผลต่าง</th>
               </tr>
             </thead>
             <tbody id="reconTableBody" class="divide-y divide-gray-100">
-              <tr><td colspan="7" class="text-center py-6 text-gray-400">กำลังโหลด...</td></tr>
+              <tr><td colspan="9" class="text-center py-6 text-gray-400">กำลังโหลด...</td></tr>
             </tbody>
             <tfoot class="bg-gray-50 font-bold">
               <tr>
@@ -298,6 +301,9 @@
                 <td class="px-2 py-2 text-right" id="reconSumGross">0</td>
                 <td class="px-2 py-2 text-right text-amber-600" id="reconSumDiscount">0</td>
                 <td class="px-2 py-2 text-right text-green-700" id="reconSumNet">0</td>
+                <!-- 🆕 D120-D121 footer cells -->
+                <td class="px-2 py-2 text-right text-purple-700 bg-purple-50" id="reconSumPreorder">0</td>
+                <td class="px-2 py-2 text-right text-emerald-700 bg-emerald-50" id="reconSumSystem">0</td>
                 <td class="px-2 py-2 text-right text-blue-700" id="reconSumActual">0</td>
                 <td class="px-2 py-2 text-right" id="reconSumDiff">0</td>
               </tr>
@@ -1386,29 +1392,42 @@
           methodStats = dashRes.data.revenueByMethod;
         } else if (salesRes && salesRes.status === 'success') {
           // 📋 สำหรับวันที่ผ่านมา — สร้าง methodStats เอง โดยแยก paid/package/unpaid 3 buckets
+          // 🆕 D120 (5/6/2026 Late Evening — Master): pre-order bucket via r.is_preorder
+          //   ถ้า is_preorder → bucket preorderAmount/preorderCount (กัน double-count กับ net)
           const map = {};
+          const _ensureBucket = (key) => {
+            if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0, serviceValue: 0, preorderAmount: 0, preorderCount: 0 };
+            return map[key];
+          };
           (salesRes.data.rows || []).forEach(r => {
+            // 🆕 D120: pre-order rows (paid_at วันแสดง + booking_date วันอื่น) — bucket แยก
+            if (r.is_preorder && r.payment_status === 'paid' && r.payment_method && r.payment_method !== 'package') {
+              const bucket = _ensureBucket(r.payment_method);
+              bucket.preorderAmount += (Number(r.net) || 0);
+              bucket.preorderCount  += 1;
+              return;
+            }
             if (r.status !== 'completed') return;
             let key;
             if (r.payment_method === 'package' && r.payment_status === 'paid') {
               key = 'package';
-              if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0, serviceValue: 0 };
-              map[key].count += 1;
-              map[key].serviceValue += (r.gross || 0);  // service value (จาก getDailySalesList ที่คำนวนแล้ว)
+              const b = _ensureBucket(key);
+              b.count += 1;
+              b.serviceValue += (r.gross || 0);  // service value (จาก getDailySalesList ที่คำนวนแล้ว)
             } else if (r.payment_status === 'paid') {
               key = r.payment_method || 'unknown';
-              if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0 };
-              map[key].count    += 1;
-              map[key].gross    += r.gross;
-              map[key].discount += r.discount;
-              map[key].net      += r.net;
+              const b = _ensureBucket(key);
+              b.count    += 1;
+              b.gross    += r.gross;
+              b.discount += r.discount;
+              b.net      += r.net;
             } else {
               key = '_unpaid';
-              if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0 };
-              map[key].count    += 1;
-              map[key].gross    += r.gross;
-              map[key].discount += r.discount;
-              map[key].net      += r.net;
+              const b = _ensureBucket(key);
+              b.count    += 1;
+              b.gross    += r.gross;
+              b.discount += r.discount;
+              b.net      += r.net;
             }
           });
           methodStats = Object.keys(map).map(k => map[k]).sort((a,b) => {
@@ -1453,22 +1472,32 @@
 
       // === Section A: Paid methods (รวมในยอดรวม) ===
       // 🔒 F2.5d: ถ้า locked → render เป็น read-only span แทน input
+      // 🆕 D120-D121 (5/6/2026 Late Evening): Pre-order paid วันนี้ (booking วันอื่น) → รวม(ระบบ) + ผลต่าง formula
       const isLocked = !!(saved && saved.is_locked);
-      let totalCount = 0, totalGross = 0, totalDiscount = 0, totalNet = 0, totalActual = 0, totalDiff = 0;
+      let totalCount = 0, totalGross = 0, totalDiscount = 0, totalNet = 0, totalPreorder = 0, totalSumSystem = 0, totalActual = 0, totalDiff = 0;
       const orderedPaid = Array.from(allPaidIds).sort((a,b) => _methodLabel(a).localeCompare(_methodLabel(b)));
 
       const rows = orderedPaid.map(mid => {
-        const stat = methods.find(m => m.method === mid) || { count: 0, gross: 0, discount: 0, net: 0 };
+        const stat = methods.find(m => m.method === mid) || { count: 0, gross: 0, discount: 0, net: 0, preorderAmount: 0, preorderCount: 0 };
+        const preorderAmt = Number(stat.preorderAmount || 0);
+        const sumSystem   = Number(stat.net || 0) + preorderAmt;     // 🆕 D121: ยอดสุทธิ + Pre-order
         const savedItem = savedMap[mid] || null;
         const actual = savedItem ? savedItem.actual_amount : '';
-        const diff = (actual === '' || actual === null) ? 0 : (actual - stat.net);
+        // 🆕 D121: ผลต่าง = ยอดจริง − รวม(ระบบ)  (ไม่ใช่ ยอดจริง − ยอดสุทธิ เดิม)
+        const diff = (actual === '' || actual === null) ? 0 : (actual - sumSystem);
         totalCount += stat.count; totalGross += stat.gross; totalDiscount += stat.discount; totalNet += stat.net;
+        totalPreorder  += preorderAmt;
+        totalSumSystem += sumSystem;
         if (actual !== '' && actual !== null) totalActual += actual;
         totalDiff += diff;
         const diffColor = diff === 0 ? 'text-gray-400' : (diff > 0 ? 'text-blue-600' : 'text-red-600');
         const actualCell = isLocked
           ? `<span class="font-bold text-gray-700">${actual !== '' && actual !== null ? actual.toLocaleString() : '-'}</span>`
           : `<input type="number" data-method="${mid}" class="recon-actual w-24 text-right border border-gray-300 rounded-md px-2 py-1 text-xs" placeholder="0" value="${actual !== '' && actual !== null ? actual : ''}" oninput="recalcReconRow(this)">`;
+        // 🆕 D120 cells
+        const preorderCell = preorderAmt > 0
+          ? '<span class="font-bold text-purple-700">' + preorderAmt.toLocaleString() + '</span>'
+          : '<span class="text-gray-300">—</span>';
         return `
           <tr class="${isLocked ? 'bg-gray-50' : ''}">
             <td class="px-2 py-2 text-left">${_methodLabel(mid)}</td>
@@ -1476,6 +1505,8 @@
             <td class="px-2 py-2 text-right">${stat.gross.toLocaleString()}</td>
             <td class="px-2 py-2 text-right text-amber-600">${stat.discount.toLocaleString()}</td>
             <td class="px-2 py-2 text-right font-bold text-green-700">${stat.net.toLocaleString()}</td>
+            <td class="px-2 py-2 text-right bg-purple-50">${preorderCell}</td>
+            <td class="px-2 py-2 text-right font-bold text-emerald-700 bg-emerald-50">${sumSystem.toLocaleString()}</td>
             <td class="px-2 py-2 text-right">${actualCell}</td>
             <td class="px-2 py-2 text-right font-bold ${diffColor}" data-diff="${mid}">
               ${diff === 0 ? '0' : (diff > 0 ? '+' : '') + diff.toLocaleString()}
@@ -1490,7 +1521,7 @@
           <tr class="bg-orange-50 border-t-2 border-orange-200">
             <td class="px-2 py-2 text-left text-orange-800">📦 หักจากแพ็กเกจ <span class="text-[9px] text-gray-500 font-normal">(ไม่รวมในยอดรวม)</span></td>
             <td class="px-2 py-2 text-center text-orange-700">${packageMethod.count}</td>
-            <td class="px-2 py-2 text-right text-gray-400" colspan="3">มูลค่าบริการ <span class="font-bold text-orange-700">${svcVal.toLocaleString()}.-</span></td>
+            <td class="px-2 py-2 text-right text-gray-400" colspan="5">มูลค่าบริการ <span class="font-bold text-orange-700">${svcVal.toLocaleString()}.-</span></td>
             <td class="px-2 py-2 text-center text-gray-400">-</td>
             <td class="px-2 py-2 text-center text-gray-400">-</td>
           </tr>`);
@@ -1507,16 +1538,23 @@
             <td class="px-2 py-2 text-right font-bold text-red-700">${unpaidMethod.net.toLocaleString()}</td>
             <td class="px-2 py-2 text-center text-gray-400">-</td>
             <td class="px-2 py-2 text-center text-gray-400">-</td>
+            <td class="px-2 py-2 text-center text-gray-400">-</td>
+            <td class="px-2 py-2 text-center text-gray-400">-</td>
           </tr>`);
       }
 
-      tbody.innerHTML = rows.length > 0 ? rows.join('') : `<tr><td colspan="7" class="text-center py-6 text-gray-400">ยังไม่มีรายการสำหรับวันนี้</td></tr>`;
+      tbody.innerHTML = rows.length > 0 ? rows.join('') : `<tr><td colspan="9" class="text-center py-6 text-gray-400">ยังไม่มีรายการสำหรับวันนี้</td></tr>`;
 
       // Footer ใช้ตัวเลขจาก paid only
       document.getElementById('reconSumCount').textContent = totalCount;
       document.getElementById('reconSumGross').textContent = totalGross.toLocaleString();
       document.getElementById('reconSumDiscount').textContent = totalDiscount.toLocaleString();
       document.getElementById('reconSumNet').textContent = totalNet.toLocaleString();
+      // 🆕 D120-D121 footer
+      const preEl = document.getElementById('reconSumPreorder');
+      if (preEl) preEl.textContent = totalPreorder > 0 ? totalPreorder.toLocaleString() : '0';
+      const sumSysEl = document.getElementById('reconSumSystem');
+      if (sumSysEl) sumSysEl.textContent = totalSumSystem.toLocaleString();
       document.getElementById('reconSumActual').textContent = totalActual.toLocaleString();
       const diffEl = document.getElementById('reconSumDiff');
       diffEl.textContent = (totalDiff === 0 ? '0' : (totalDiff > 0 ? '+' : '') + totalDiff.toLocaleString());
@@ -1587,10 +1625,12 @@
     }
 
     function recalcReconRow(inputEl) {
+      // 🆕 D121 (5/6/2026 Late Evening): ผลต่าง = ยอดจริง − (net + preorder) = ยอดจริง − sumSystem
       const mid = inputEl.dataset.method;
       const actual = parseFloat(inputEl.value) || 0;
-      const stat = (_reconCache.dashboardMethods || []).find(m => m.method === mid) || { net: 0 };
-      const diff = actual - stat.net;
+      const stat = (_reconCache.dashboardMethods || []).find(m => m.method === mid) || { net: 0, preorderAmount: 0 };
+      const _sumSystem = (Number(stat.net) || 0) + (Number(stat.preorderAmount) || 0);
+      const diff = actual - _sumSystem;
       const cell = document.querySelector(`td[data-diff="${mid}"]`);
       if (cell) {
         cell.textContent = diff === 0 ? '0' : (diff > 0 ? '+' : '') + diff.toLocaleString();
@@ -1600,9 +1640,10 @@
       document.querySelectorAll('input.recon-actual').forEach(inp => {
         const val = parseFloat(inp.value) || 0;
         const m = inp.dataset.method;
-        const s = (_reconCache.dashboardMethods || []).find(x => x.method === m) || { net: 0 };
+        const s = (_reconCache.dashboardMethods || []).find(x => x.method === m) || { net: 0, preorderAmount: 0 };
+        const _ss = (Number(s.net) || 0) + (Number(s.preorderAmount) || 0);
         totalActual += val;
-        totalDiff += (val - s.net);
+        totalDiff += (val - _ss);
       });
       document.getElementById('reconSumActual').textContent = totalActual.toLocaleString();
       const diffEl = document.getElementById('reconSumDiff');
