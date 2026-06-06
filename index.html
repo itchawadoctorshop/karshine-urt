@@ -648,7 +648,10 @@
       const p = masterData.profile || {};
       const name = String(p.name || '').trim();
       const phone = String(p.phone || '').replace(/[^0-9]/g, '');
-      return name && name !== 'ลูกค้าใหม่' && phone.length === 10;
+      // 🆕 Issue #1A FIX (5/6/2026 Late Evening — Master): accept 9 OR 10 digits
+      //   เคสจริง: Users sheet col D format = Number → leading 0 หาย → 9 digits
+      //   Backend hardening (_normalizePhone) จะแก้ที่ต้นทางใน follow-up; FE fix นี้ unblock immediately
+      return name && name !== 'ลูกค้าใหม่' && phone.length >= 9;
     }
 
     function _applySmartFormMode() {
