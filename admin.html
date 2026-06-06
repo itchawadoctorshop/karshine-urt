@@ -950,7 +950,10 @@
                   <th class="px-2 py-2 text-left">วัน</th>
                   <th class="px-2 py-2 text-left">อากาศ</th>
                   <th class="px-2 py-2 text-right">คิว</th>
-                  <th class="px-2 py-2 text-right">รายได้</th>
+                  <th class="px-2 py-2 text-right" title="รายได้ตามวันที่ให้บริการ (Service Revenue — booking_date based)">รายได้</th>
+                  <!-- 🆕 Fix B (5/6/2026 Late Evening — Master Spec 🅾): Cash_Daily integration -->
+                  <th class="px-2 py-2 text-right bg-emerald-800" title="เงินรับจริงวันนั้น (Cash Received — paid_at based)">💰 รับเงิน</th>
+                  <th class="px-2 py-2 text-right bg-purple-800" title="ส่วนของ pre-order paid วันนั้น (booking_date ≠ paid_at)">📅 Pre-order</th>
                   <th class="px-2 py-2 text-right">AOV</th>
                   <th class="px-2 py-2 text-right">ใหม่</th>
                   <th class="px-2 py-2 text-right">ซ้ำ</th>
@@ -2103,6 +2106,31 @@
       } catch (e) { console.error('Dashboard load error:', e); }
     }
 
+    // 🆕 BUG Cash+Preorder FIX (5/6/2026 — D118-D119): Pre-order helpers
+    //   D119: Pre-order = booking_date > today (strict greater) — same-day ใช้ flow ปกติ
+    function _todayStr_() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function _isPreorder(b) {
+      if (!b || !b.bookingDate) return false;
+      const bookingDateStr = String(b.bookingDate).substring(0, 10);  // "2026-06-07"
+      return bookingDateStr > _todayStr_();   // strict greater (D119)
+    }
+    function _fmtPreorderLabel(b) {
+      const bookingDateStr = String(b.bookingDate || '').substring(0, 10);
+      if (!bookingDateStr) return '';
+      const today = new Date(); today.setHours(0,0,0,0);
+      const bd = new Date(bookingDateStr + 'T00:00:00');
+      if (isNaN(bd.getTime())) return bookingDateStr;
+      const diffDays = Math.round((bd - today) / 86400000);
+      if (diffDays === 1) return 'พรุ่งนี้';
+      if (diffDays === 2) return 'มะรืน';
+      // Thai locale DD MMM (e.g., "7 มิ.ย.")
+      try { return bd.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }); }
+      catch (e) { return bd.getDate() + '/' + (bd.getMonth() + 1); }
+    }
+
     function renderBoard(bookings) {
       const colValetPickup  = document.getElementById('colValetPickup');
       const colPending      = document.getElementById('colPending');
@@ -2118,7 +2146,19 @@
       colValetDropoff.innerHTML = '';
       let cValetPick = 0, cPend = 0, cCheck = 0, cProg = 0, cValetDrop = 0;
 
+      // 🆕 BUG Cash+Preorder FIX (D118): collect pre-order cards separately → append tail (ไปก้นของ column)
+      //   buffers[colKey] = { normal: [], preorder: [] }
+      const _buf = {
+        valetPickup:  { normal: [], preorder: [] },
+        pending:      { normal: [], preorder: [] },
+        checkedIn:    { normal: [], preorder: [] },
+        inProgress:   { normal: [], preorder: [] },
+        valetDropoff: { normal: [], preorder: [] }
+      };
+
       bookings.forEach(b => {
+        // 🆕 D119: ตรวจว่าเป็น Pre-order มั้ย (booking_date > today)
+        const isPreorder = _isPreorder(b);
         // แสดงเวลา
         let timeStr = b.bookingDate;
         if (b.bookingDate && b.bookingDate.includes('T')) {
@@ -2187,8 +2227,21 @@
           </div>` : ''}
         `;
 
+        // 🆕 D118: Pre-order header badge — "📅 PRE-ORDER · {label}"
+        const preorderBadge = isPreorder ? `
+          <div class="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-1 rounded-md mb-2 flex items-center gap-1 w-fit">
+            <i class="fa-solid fa-calendar-day"></i>
+            <span>📅 PRE-ORDER · ${esc(_fmtPreorderLabel(b))}</span>
+          </div>` : '';
+
+        // 🆕 D118: Wrapper styling — purple if pre-order, else original (paid → green, else neutral)
+        const cardWrapperCls = isPreorder
+          ? 'bg-purple-50 border-purple-300 ring-1 ring-purple-200'
+          : 'bg-white ' + (isPaid ? 'border-green-300' : 'border-gray-100');
+
         const cardHtml = `
-          <div class="bg-white p-4 rounded-2xl shadow-sm border ${isPaid ? 'border-green-300' : 'border-gray-100'} card-hover relative overflow-hidden">
+          <div class="${cardWrapperCls} p-4 rounded-2xl shadow-sm border card-hover relative overflow-hidden">
+            ${preorderBadge}
             <div class="flex justify-between items-start mb-2">
               <span class="text-xl font-black text-gray-800">${esc(b.plate)}</span>
               <span class="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">${esc(timeStr)} น.</span>
@@ -2201,24 +2254,33 @@
             </p>
             <div class="mb-1">${valetBadge}</div>
             ${paymentBadge}
-            ${getActionButton(b)}
+            ${getActionButton(b, isPreorder)}
             ${upsellBtns}
             ${adminActionBtns}
           </div>`;
 
         // 🚗 Routing: valet statuses → lanes ใหม่, statuses เดิม → lanes เดิม
+        // 🆕 D118: route to _buf — เก็บแยก normal vs preorder เพื่อ append ต่อท้าย (pre-order ลงล่าง)
+        const _bucket = isPreorder ? 'preorder' : 'normal';
         if (b.status === 'valet_pickup_pending' || b.status === 'valet_going_pickup') {
-          colValetPickup.innerHTML += cardHtml; cValetPick++;
+          _buf.valetPickup[_bucket].push(cardHtml); cValetPick++;
         } else if (b.status === 'pending' || b.status === 'confirmed') {
-          colPending.innerHTML += cardHtml; cPend++;
+          _buf.pending[_bucket].push(cardHtml); cPend++;
         } else if (b.status === 'checked_in') {
-          colCheckedIn.innerHTML += cardHtml; cCheck++;
+          _buf.checkedIn[_bucket].push(cardHtml); cCheck++;
         } else if (b.status === 'in_progress') {
-          colInProgress.innerHTML += cardHtml; cProg++;
+          _buf.inProgress[_bucket].push(cardHtml); cProg++;
         } else if (b.status === 'valet_dropoff_pending' || b.status === 'valet_going_dropoff') {
-          colValetDropoff.innerHTML += cardHtml; cValetDrop++;
+          _buf.valetDropoff[_bucket].push(cardHtml); cValetDrop++;
         }
       });
+
+      // 🆕 D118: flush buffers — normal cards ขึ้นบน, pre-order ลงล่าง
+      colValetPickup.innerHTML  = _buf.valetPickup.normal.join('')  + _buf.valetPickup.preorder.join('');
+      colPending.innerHTML      = _buf.pending.normal.join('')      + _buf.pending.preorder.join('');
+      colCheckedIn.innerHTML    = _buf.checkedIn.normal.join('')    + _buf.checkedIn.preorder.join('');
+      colInProgress.innerHTML   = _buf.inProgress.normal.join('')   + _buf.inProgress.preorder.join('');
+      colValetDropoff.innerHTML = _buf.valetDropoff.normal.join('') + _buf.valetDropoff.preorder.join('');
 
       if (cValetPick === 0)  colValetPickup.innerHTML  = '<div class="text-center text-orange-300 text-sm py-8 border-2 border-dashed border-orange-200 rounded-xl">ว่าง</div>';
       if (cPend === 0)       colPending.innerHTML      = '<div class="text-center text-gray-400 text-sm py-8 border-2 border-dashed border-gray-300 rounded-xl">ว่าง</div>';
@@ -2233,8 +2295,24 @@
       document.getElementById('countValetDropoff').innerText = cValetDrop;
     }
 
-    function getActionButton(b) {
+    function getActionButton(b, isPreorder) {
       const bid = esc(b.bookingId); // 🔒 escape เพื่อกัน XSS ใน onclick
+
+      // 🆕 BUG Cash+Preorder FIX (5/6/2026 — D118): block premature action for pre-order
+      //   Pre-order cards: status-changing buttons → disabled
+      //   ปุ่มที่ block: ช่วยเหลือเช็คอินแทน / เลื่อนรถเข้าช่อง / ออกไปรับแล้ว / ออกไปส่งแล้ว
+      //   ปุ่มที่ allow (ใน upsellBtns + adminActionBtns ของ wrapper): แก้คิว / เลื่อนเวลา / รับเงิน / ขายแพ็กเกจ / ลบคิว
+      if (isPreorder) {
+        const blockingStatuses = ['pending', 'confirmed', 'checked_in', 'valet_pickup_pending', 'valet_dropoff_pending'];
+        if (blockingStatuses.includes(b.status)) {
+          const dateLabel = _fmtPreorderLabel(b);
+          return `<button disabled class="w-full bg-gray-200 text-gray-500 py-3 rounded-xl text-xs font-bold cursor-not-allowed"
+            title="ยังไม่ถึงวันให้บริการ — ของวันที่ ${esc(dateLabel)}">
+            🔒 ยังไม่ถึงเวลาบริการ (ของ ${esc(dateLabel)})
+          </button>`;
+        }
+        // for valet_going_pickup / valet_going_dropoff / in_progress → fall through to original logic
+      }
 
       // ==============================================
       // 🚗 F0.2 Valet: 4 ขั้นตอน (2 ขา × 2 ขั้น)
@@ -5927,6 +6005,11 @@
         const w = d.weather;
         const emoji = stWeatherEmoji(w);
         const wStr = w ? (emoji + ' ' + w.rainMm + 'mm') : '—';
+        // 🆕 Fix B (5/6/2026 Late Evening — Master Spec 🅾): Cash_Daily fields (default 0 = '-')
+        const totalCash    = Number(d.total_cash    || 0);
+        const preorderCash = Number(d.preorder_cash || 0);
+        const cashCell     = totalCash > 0    ? '฿' + totalCash.toLocaleString()    : '<span class="text-gray-300">—</span>';
+        const preorderCell = preorderCash > 0 ? '฿' + preorderCash.toLocaleString() : '<span class="text-gray-300">—</span>';
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50';
         tr.innerHTML =
@@ -5935,6 +6018,9 @@
           '<td class="px-2 py-2 whitespace-nowrap">' + wStr + '</td>' +
           '<td class="px-2 py-2 text-right tabular-nums">' + d.queue + '</td>' +
           '<td class="px-2 py-2 text-right tabular-nums">฿' + d.revenue.toLocaleString() + '</td>' +
+          // 🆕 Fix B: 💰 รับเงิน (emerald) + 📅 Pre-order (purple)
+          '<td class="px-2 py-2 text-right tabular-nums font-bold text-emerald-700 bg-emerald-50">' + cashCell + '</td>' +
+          '<td class="px-2 py-2 text-right tabular-nums text-purple-700 bg-purple-50">' + preorderCell + '</td>' +
           '<td class="px-2 py-2 text-right tabular-nums">฿' + d.aov.toLocaleString() + '</td>' +
           '<td class="px-2 py-2 text-right tabular-nums">' + d.newCust + '</td>' +
           '<td class="px-2 py-2 text-right tabular-nums">' + d.repeatCust + '</td>' +
