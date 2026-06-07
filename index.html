@@ -82,6 +82,22 @@
       </div>
       <i class="fa-solid fa-car-wash text-8xl absolute -right-4 -bottom-4 opacity-20 rotate-12"></i>
     </div>
+
+    <!-- 🚚 Pickup & Delivery CTA (5/6/2026 — D122-D129) -->
+    <div class="bg-gradient-to-r from-purple-600 to-pink-600 p-5 rounded-3xl text-white shadow-xl relative overflow-hidden">
+      <div class="relative z-10">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-2xl">🚚</span>
+          <h3 class="font-bold text-lg">บริการรับ-ส่งรถ</h3>
+        </div>
+        <p class="text-xs text-purple-100 mb-3">ยอด 779+ จองล่วงหน้า 1 วัน · ULTRA ฟรี 1 ครั้ง/เดือน</p>
+        <button onclick="openPickupBookingFlow_()" class="bg-white text-purple-700 font-bold py-2 px-5 rounded-full text-sm shadow active:scale-95">
+          ขอบริการรับ-ส่ง
+        </button>
+      </div>
+      <i class="fa-solid fa-truck text-7xl absolute -right-2 -bottom-2 opacity-20 rotate-12"></i>
+    </div>
+
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-box-open text-orange-500"></i> แพ็กเกจของฉัน</h3>
       <div id="homePackages" class="space-y-3"><p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p></div>
@@ -627,6 +643,93 @@
 
     function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active')); document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active'); window.scrollTo(0,0); }
     function navToBooking() { if(!masterData.vehicles || masterData.vehicles.length === 0) { Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section')); } else { showSection('booking-section'); } }
+
+    // 🚚 Pickup & Delivery — Phase 1 stub (5/6/2026 — D122-D129 Master Spec V1)
+    //   Phase 1: ดึง pre-check eligibility + แนะนำให้จองผ่าน booking-section + deliveryType
+    //   Phase 2 (later): full 5-step modal (address/distance/payment) — defer
+    async function openPickupBookingFlow_() {
+      // Vehicle check ก่อน (เหมือน navToBooking)
+      if (!masterData.vehicles || masterData.vehicles.length === 0) {
+        Swal.fire({
+          title: 'ยังไม่มีข้อมูลรถ',
+          text: 'คุณต้องลงทะเบียนข้อมูลก่อนเรียกบริการรับ-ส่งครับ',
+          icon: 'warning',
+          confirmButtonText: 'ไปลงทะเบียน'
+        }).then(() => showSection('cars-section'));
+        return;
+      }
+
+      // Pre-check eligibility (ULTRA quota + min amount info)
+      let info = null;
+      try {
+        const params = new URLSearchParams({
+          action: 'validatePickupRequest',
+          lineUid: userUid,
+          bookingTotal: '0',
+          bookingDate: '',
+          distanceKm: '0',
+          branchId: ((masterData.branches && masterData.branches[0]) ? (masterData.branches[0].branch_id || masterData.branches[0].id) : 'BR-01'),
+          deliveryType: 'roundtrip_same'
+        });
+        const r = await fetch(API_URL, { method: 'POST', body: params });
+        const result = await r.json();
+        if (result.status === 'success') info = result.data;
+      } catch (e) { /* silently fall through to generic info */ }
+
+      const isUltra = info && info.isUltraHolder;
+      const ultraLeft = info ? Math.max(0, (info.ultraQuota || 1) - (info.ultraUsed || 0)) : 1;
+      const minAmt = info ? (info.requiredAmount || 779) : 779;
+
+      const ultraLine = isUltra
+        ? `<p class="text-emerald-700 font-bold mb-2">✨ คุณถือบัตร ULTRA — เหลือ free pickup ${ultraLeft} ครั้งเดือนนี้</p>`
+        : '';
+      const cta = isUltra && ultraLeft > 0
+        ? `<p>กดต่อไปเพื่อจองคิวพร้อมเลือก <b>"บริการรับ-ส่ง (ฟรี)"</b></p>`
+        : `<p>กดต่อไปเพื่อจองคิวพร้อมยอด ≥ <b>${minAmt}.-</b> และเลือก <b>"บริการรับ-ส่ง"</b></p>`;
+
+      const res = await Swal.fire({
+        icon: 'info',
+        title: '🚚 บริการรับ-ส่งรถ',
+        html: `
+          <div class="text-left text-sm space-y-2">
+            ${ultraLine}
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs space-y-1">
+              <p>📅 <b>จองก่อน 18:00</b> ของวันก่อนหน้า (D124)</p>
+              <p>💰 ยอดบริการ <b>≥ ${minAmt} บาท</b> หรือใช้สิทธิ์ ULTRA</p>
+              <p>📏 ในเขต <b>≤ 10 km</b> (5 km แรกฟรี + 20.-/km)</p>
+              <p>👮 ที่เหลือชำระล่วงหน้า (pre-paid) — ไม่มีการคืนเงิน (D127)</p>
+            </div>
+            ${cta}
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'ต่อไป — เลือกบริการ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#7c3aed'
+      });
+      if (!res.isConfirmed) return;
+
+      // → ไปหน้า booking section + auto-select pickup delivery
+      showSection('booking-section');
+      // Hint to user via toast
+      try {
+        Swal.fire({
+          toast: true, position: 'top-end', icon: 'info',
+          title: '👉 เลือก "บริการรับ-ส่ง" ในขั้นตอนถัดไป',
+          showConfirmButton: false, timer: 3000
+        });
+      } catch (e) {}
+      // Try auto-select delivery option if exists
+      setTimeout(() => {
+        try {
+          const dEl = document.getElementById('deliveryType') || document.querySelector('[data-delivery-type="roundtrip_same"]');
+          if (dEl) {
+            if (dEl.tagName === 'SELECT') dEl.value = 'roundtrip_same';
+            if (dEl.click) dEl.click();
+          }
+        } catch (e) {}
+      }, 500);
+    }
 
     // ════════════════════════════════════════════════
     // 🚗 SMART VEHICLE FORM v1.0 (3/6/2026) — Master Coordinator
