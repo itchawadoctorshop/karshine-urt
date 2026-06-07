@@ -976,11 +976,54 @@
     </div>
   </section>
 
+  <!-- 🚚 Pickup & Delivery section (5/6/2026 — D122-D129) -->
+  <section id="pickup-section" class="section p-4 lg:p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-truck text-purple-600 mr-2"></i>คิวรับ-ส่งรถ</h1>
+      <button onclick="openAdminCreatePickupModal_()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow active:scale-95">
+        <i class="fa-solid fa-plus mr-1"></i> Manual Add
+      </button>
+    </div>
+
+    <!-- Date filter + summary stats -->
+    <div class="flex items-center gap-3 mb-3 flex-wrap">
+      <label class="text-xs text-gray-500">วันที่:</label>
+      <input type="date" id="pickupQueueDate" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5" onchange="loadPickupQueue()">
+      <button onclick="loadPickupQueue()" class="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg active:scale-95">
+        <i class="fa-solid fa-rotate"></i> รีเฟรช
+      </button>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2 mb-4">
+      <div class="bg-white border border-purple-200 rounded-xl p-3 text-center">
+        <p class="text-[10px] font-bold text-purple-700 uppercase">📅 คิววันนี้</p>
+        <p class="text-2xl font-bold text-purple-700 mt-1" id="pickupCount">-</p>
+      </div>
+      <div class="bg-white border border-emerald-200 rounded-xl p-3 text-center">
+        <p class="text-[10px] font-bold text-emerald-700 uppercase">💰 ค่าเดินทาง</p>
+        <p class="text-2xl font-bold text-emerald-700 mt-1">฿<span id="pickupRevenue">-</span></p>
+      </div>
+      <div class="bg-white border border-amber-200 rounded-xl p-3 text-center">
+        <p class="text-[10px] font-bold text-amber-700 uppercase">🚚 Override</p>
+        <p class="text-2xl font-bold text-amber-700 mt-1" id="pickupOverrideCount">-</p>
+      </div>
+    </div>
+
+    <div id="pickupQueueList" class="space-y-3">
+      <div class="text-center py-10 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">
+        <i class="fa-solid fa-truck text-3xl text-gray-300 mb-2"></i>
+        <p>กำลังโหลด...</p>
+      </div>
+    </div>
+  </section>
+
   <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-between px-2 pb-6 lg:pb-3 pt-2 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.1)]">
     <button onclick="showSection('board-section')" id="nav-board" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all nav-active"><i class="fa-solid fa-clipboard-list text-xl"></i><span class="text-[9px] font-bold">กระดานคิว</span></button>
     <button onclick="showSection('walkin-section')" id="nav-walkin" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-car-burst text-xl"></i><span class="text-[9px] font-bold">Walk-in</span></button>
     <button onclick="showSection('dashboard-section')" id="nav-dashboard" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-chart-line text-xl"></i><span class="text-[9px] font-bold">รายงาน</span></button>
     <button onclick="showSection('settings-section')" id="nav-settings" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-users text-xl"></i><span class="text-[9px] font-bold">ลูกค้า (CRM)</span></button>
+    <!-- 🚚 Pickup & Delivery (5/6/2026 — D122-D129) -->
+    <button onclick="showSection('pickup-section')" id="nav-pickup" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-truck text-xl"></i><span class="text-[9px] font-bold">รับ-ส่ง</span></button>
     <button onclick="showSection('config-section')" id="nav-config" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-gears text-xl"></i><span class="text-[9px] font-bold">ตั้งค่าร้าน</span></button>
     <button onclick="showSection('sales-tracker-section')" id="nav-sales-tracker" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-chart-column text-xl"></i><span class="text-[9px] font-bold">Sales Tracker</span></button>
   </nav>
@@ -1984,6 +2027,7 @@
       if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); _fetchB2BContracts_(); }
       if(id === 'config-section') loadStoreConfig();
       if(id === 'sales-tracker-section') stInitTab();
+      if(id === 'pickup-section') pickupInitTab();   // 🚚 5/6/2026 D122-D129
     }
 
     // ==============================================
@@ -5881,6 +5925,228 @@
         if (el && !el.classList.contains('hidden')) return true;
       }
       return false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 🚚 Pickup & Delivery v1 (5/6/2026 Late Evening — D122-D129)
+    //    Admin queue management — load by date, render cards, Manual Add (D129)
+    // ══════════════════════════════════════════════════════════════════════
+    function pickupInitTab() {
+      const dEl = document.getElementById('pickupQueueDate');
+      if (dEl && !dEl.value) {
+        const d = new Date();
+        dEl.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      }
+      loadPickupQueue();
+    }
+
+    async function loadPickupQueue() {
+      const listEl = document.getElementById('pickupQueueList');
+      const dateEl = document.getElementById('pickupQueueDate');
+      const date = dateEl ? dateEl.value : '';
+      if (listEl) listEl.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>';
+      try {
+        const payload = new URLSearchParams({ action: 'getPickupQueue', date: date, t: Date.now() });
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await r.json();
+        if (result.status !== 'success') {
+          if (listEl) listEl.innerHTML = '<p class="text-center py-6 text-red-500 text-sm">โหลดไม่สำเร็จ: ' + esc(result.message || '-') + '</p>';
+          return;
+        }
+        _renderPickupQueue(result.data);
+      } catch (e) {
+        if (listEl) listEl.innerHTML = '<p class="text-center py-6 text-red-500 text-sm">เกิดข้อผิดพลาด: ' + esc(e.message || e) + '</p>';
+      }
+    }
+
+    function _renderPickupQueue(data) {
+      const listEl = document.getElementById('pickupQueueList');
+      const queue = (data && data.queue) || [];
+      const totals = (data && data.totals) || { revenue: 0, overrideCount: 0 };
+      document.getElementById('pickupCount').textContent = queue.length;
+      document.getElementById('pickupRevenue').textContent = (totals.revenue || 0).toLocaleString();
+      document.getElementById('pickupOverrideCount').textContent = totals.overrideCount || 0;
+
+      if (queue.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-center py-10 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">
+            <i class="fa-solid fa-truck text-3xl text-gray-300 mb-2"></i>
+            <p>ไม่มีคิวรับ-ส่งวันนี้</p>
+          </div>`;
+        return;
+      }
+      const statusBadge = (s) => {
+        const map = {
+          'valet_pickup_pending': '<span class="badge bg-orange-100 text-orange-700">🚗 รอออกรับ</span>',
+          'valet_going_pickup':   '<span class="badge bg-yellow-100 text-yellow-700">🔄 กำลังรับรถ</span>',
+          'checked_in':           '<span class="badge bg-blue-100 text-blue-700">✅ เช็คอินแล้ว</span>',
+          'in_progress':          '<span class="badge bg-green-100 text-green-700">🧼 กำลังล้าง</span>',
+          'valet_dropoff_pending':'<span class="badge bg-purple-100 text-purple-700">📦 รอออกส่ง</span>',
+          'valet_going_dropoff':  '<span class="badge bg-indigo-100 text-indigo-700">🔄 กำลังส่ง</span>',
+          'completed':            '<span class="badge bg-gray-100 text-gray-600">✓ เสร็จสิ้น</span>'
+        };
+        return map[s] || ('<span class="badge bg-gray-100 text-gray-600">' + esc(s) + '</span>');
+      };
+      listEl.innerHTML = queue.map(p => {
+        const wrapperCls = p.created_by_admin
+          ? 'bg-amber-50 border-amber-300'   // override card → amber tint
+          : 'bg-white border-purple-200';
+        const dropoffLine = (p.dropoff_address && p.dropoff_address !== p.pickup_address)
+          ? `<p class="text-gray-600 text-xs"><i class="fa-solid fa-flag-checkered text-purple-400"></i> ส่ง: ${esc(p.dropoff_address)}</p>` : '';
+        const phoneLink = p.customer_phone
+          ? `· <a href="tel:${esc(p.customer_phone)}" class="text-blue-600 hover:underline" onclick="event.stopPropagation()">${esc(p.customer_phone)}</a>` : '';
+        const overrideNote = p.created_by_admin
+          ? `<p class="text-[11px] text-amber-700 mt-1"><i class="fa-solid fa-user-shield"></i> Override: ${esc(p.admin_reason || '-')}</p>` : '';
+        return `
+          <div class="border-2 ${wrapperCls} rounded-2xl p-4 shadow-sm">
+            <div class="flex justify-between items-start mb-2">
+              <div>
+                <span class="font-bold text-purple-700 text-lg">${esc(p.scheduled_time)}</span>
+                <span class="text-gray-500 text-xs ml-2">· ${esc(p.vehicle_plate || '-')}</span>
+              </div>
+              ${statusBadge(p.status)}
+            </div>
+            <div class="text-sm">
+              <p class="font-bold text-gray-800">${esc(p.customer_name || 'Walk-in')} ${phoneLink}</p>
+              <p class="text-gray-600 text-xs mt-1"><i class="fa-solid fa-location-dot text-red-500"></i> รับ: ${esc(p.pickup_address || '-')}</p>
+              ${dropoffLine}
+              <p class="text-[11px] text-gray-500 mt-1">📏 ${(p.distance_km || 0)} km · ค่าเดินทาง ฿${(p.pickup_fee || 0).toLocaleString()}</p>
+              ${overrideNote}
+            </div>
+            <div class="flex gap-2 mt-3 pt-2 border-t border-gray-100">
+              <span class="text-[10px] text-gray-400 italic">🆔 ${esc(p.pickup_log_id)} · 🚗 ${esc(p.driver_uid || 'CEO')}</span>
+              <span class="flex-1"></span>
+              <button onclick="openEditBookingModal('${esc(p.booking_id)}','${esc(p.vehicle_plate)}','')" class="text-[10px] py-1 px-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md font-bold">
+                <i class="fa-solid fa-pen"></i> แก้คิว
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // 🚚 Manual Add modal (D129 — admin override)
+    async function openAdminCreatePickupModal_() {
+      const brOpts = ((configData && configData.branches) || []).map(b =>
+        `<option value="${esc(b.branch_id || b.id)}">${esc(b.branch_name || b.name)}</option>`
+      ).join('');
+      const html = `
+        <div class="text-left text-xs space-y-2">
+          <div class="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800">
+            ⚠️ Admin Override (D129) — bypass eligibility + audit log
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">ชื่อลูกค้า *</label>
+              <input type="text" id="apCustomer" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="ชื่อ-นามสกุล">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">เบอร์โทร</label>
+              <input type="tel" id="apPhone" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="08x-xxx-xxxx">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">ทะเบียน *</label>
+              <input type="text" id="apPlate" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="กข-1234">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">สาขา</label>
+              <select id="apBranch" class="w-full p-2 border border-gray-300 rounded-md text-sm">${brOpts || '<option value="BR-01">BR-01</option>'}</select>
+            </div>
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-gray-500 uppercase">ที่อยู่รับ *</label>
+            <textarea id="apAddress" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="ที่อยู่ที่ต้องไปรับรถ"></textarea>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">ระยะ km *</label>
+              <input type="number" id="apDistance" min="0" step="0.1" class="w-full p-2 border border-gray-300 rounded-md text-sm">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">ประเภท</label>
+              <select id="apDeliveryType" class="w-full p-2 border border-gray-300 rounded-md text-sm">
+                <option value="roundtrip_same">รับ-ส่งที่เดียวกัน</option>
+                <option value="roundtrip_diff">รับ-ส่งคนละที่</option>
+                <option value="pickup">รับอย่างเดียว</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">วัน/เวลา *</label>
+              <input type="datetime-local" id="apDate" class="w-full p-2 border border-gray-300 rounded-md text-sm">
+            </div>
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-gray-500 uppercase">เหตุผล (ขั้นต่ำ 3 ตัวอักษร) *</label>
+            <textarea id="apReason" rows="2" class="w-full p-2 border border-amber-300 rounded-md text-sm bg-amber-50" placeholder="เช่น VIP customer / ยอดต่ำเกณฑ์ แต่อนุมัติพิเศษ"></textarea>
+          </div>
+        </div>`;
+
+      const res = await Swal.fire({
+        title: '🚚 Manual Add Pickup',
+        html: html,
+        width: 580,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-save"></i> สร้างคิว Override',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#7c3aed',
+        allowOutsideClick: false,
+        preConfirm: () => {
+          const customer = (document.getElementById('apCustomer').value || '').trim();
+          const phone    = (document.getElementById('apPhone').value || '').trim();
+          const plate    = (document.getElementById('apPlate').value || '').trim();
+          const branch   = document.getElementById('apBranch').value;
+          const address  = (document.getElementById('apAddress').value || '').trim();
+          const distance = parseFloat(document.getElementById('apDistance').value);
+          const dtype    = document.getElementById('apDeliveryType').value;
+          const dateRaw  = document.getElementById('apDate').value;
+          const reason   = (document.getElementById('apReason').value || '').trim();
+          if (!customer)      { Swal.showValidationMessage('กรุณาระบุชื่อลูกค้า'); return false; }
+          if (!plate)         { Swal.showValidationMessage('กรุณาระบุทะเบียน'); return false; }
+          if (!address)       { Swal.showValidationMessage('กรุณาระบุที่อยู่รับ'); return false; }
+          if (!(distance >= 0)) { Swal.showValidationMessage('กรุณาระบุระยะ km'); return false; }
+          if (!dateRaw)       { Swal.showValidationMessage('กรุณาเลือกวัน/เวลา'); return false; }
+          if (reason.length < 3) { Swal.showValidationMessage('กรุณาระบุเหตุผล (ขั้นต่ำ 3 ตัวอักษร)'); return false; }
+          return { customer, phone, plate, branch, address, distance, dtype, dateRaw, reason };
+        }
+      });
+      if (!res.isConfirmed || !res.value) return;
+      const v = res.value;
+
+      Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+      try {
+        // editorUid for audit
+        let editorUid = 'admin';
+        try { editorUid = localStorage.getItem('karshine_admin_uid') || 'admin'; } catch (e) {}
+        const payload = new URLSearchParams({
+          action: 'adminCreatePickup',
+          customerName: v.customer,
+          customerPhone: v.phone,
+          plate: v.plate,
+          branchId: v.branch,
+          pickupAddress: v.address,
+          distanceKm: String(v.distance),
+          deliveryType: v.dtype,
+          bookingDate: v.dateRaw,
+          reason: v.reason,
+          editorUid: editorUid,
+          adminUid: editorUid
+        });
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await r.json();
+        if (result.status === 'success') {
+          Swal.fire({
+            icon: 'success',
+            title: '✅ สร้างคิว Override สำเร็จ',
+            html: `รหัส: <b>${esc(result.bookingId)}</b><br>ค่าเดินทาง: ฿${(result.pickupFee || 0).toLocaleString()}`,
+            confirmButtonColor: '#7c3aed'
+          }).then(() => loadPickupQueue());
+        } else {
+          Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: result.message || '-' });
+        }
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+      }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
