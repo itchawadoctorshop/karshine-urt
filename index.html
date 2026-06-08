@@ -644,9 +644,29 @@
     function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active')); document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active'); window.scrollTo(0,0); }
     function navToBooking() { if(!masterData.vehicles || masterData.vehicles.length === 0) { Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section')); } else { showSection('booking-section'); } }
 
-    // 🚚 Pickup & Delivery — Phase 1 stub (5/6/2026 — D122-D129 Master Spec V1)
-    //   Phase 1: ดึง pre-check eligibility + แนะนำให้จองผ่าน booking-section + deliveryType
-    //   Phase 2 (later): full 5-step modal (address/distance/payment) — defer
+    // 🚚 Pickup & Delivery — Phase 1 + v1.1 patch (7/6/2026 — F1-F9 Master Spec V1.1)
+    //   - F1: ลบ D-tag leak
+    //   - F2: ดึง config จาก server (freeKm/feePerKm/maxDistanceKm จาก Branches)
+    //   - F9: แสดง bundle suggestion (Super Combo + Crystal Coat Wax = 779)
+    window._pickupConfig = window._pickupConfig || {
+      freeKm: 5, feePerKm: 20, maxDistanceKm: 10,
+      minPickupAmount: 779, ultraFreeQuotaMonth: 1
+    };
+
+    // 🆕 F2 helper: ดึง config + cache ใน window._pickupConfig
+    async function _fetchPickupConfig_(branchId) {
+      try {
+        const bId = branchId || ((masterData.branches && masterData.branches[0]) ? (masterData.branches[0].branch_id || masterData.branches[0].id) : 'BR-01');
+        const params = new URLSearchParams({ action: 'getPickupConfig', branchId: bId });
+        const r = await fetch(API_URL, { method: 'POST', body: params });
+        const j = await r.json();
+        if (j && j.status === 'success' && j.data) {
+          window._pickupConfig = Object.assign(window._pickupConfig, j.data);
+        }
+      } catch (e) { console.warn('getPickupConfig err:', e); }
+      return window._pickupConfig;
+    }
+
     async function openPickupBookingFlow_() {
       // Vehicle check ก่อน (เหมือน navToBooking)
       if (!masterData.vehicles || masterData.vehicles.length === 0) {
@@ -659,26 +679,34 @@
         return;
       }
 
-      // Pre-check eligibility (ULTRA quota + min amount info)
-      let info = null;
-      try {
-        const params = new URLSearchParams({
-          action: 'validatePickupRequest',
-          lineUid: userUid,
-          bookingTotal: '0',
-          bookingDate: '',
-          distanceKm: '0',
-          branchId: ((masterData.branches && masterData.branches[0]) ? (masterData.branches[0].branch_id || masterData.branches[0].id) : 'BR-01'),
-          deliveryType: 'roundtrip_same'
-        });
-        const r = await fetch(API_URL, { method: 'POST', body: params });
-        const result = await r.json();
-        if (result.status === 'success') info = result.data;
-      } catch (e) { /* silently fall through to generic info */ }
+      // 🆕 F2: pre-fetch config + eligibility ขนาน
+      const branchId = (masterData.branches && masterData.branches[0]) ? (masterData.branches[0].branch_id || masterData.branches[0].id) : 'BR-01';
+      const [cfg, info] = await Promise.all([
+        _fetchPickupConfig_(branchId),
+        (async () => {
+          try {
+            const params = new URLSearchParams({
+              action: 'validatePickupRequest',
+              lineUid: userUid,
+              bookingTotal: '0',
+              bookingDate: '',
+              distanceKm: '0',
+              branchId: branchId,
+              deliveryType: 'roundtrip_same'
+            });
+            const r = await fetch(API_URL, { method: 'POST', body: params });
+            const result = await r.json();
+            return (result.status === 'success') ? result.data : null;
+          } catch (e) { return null; }
+        })()
+      ]);
 
       const isUltra = info && info.isUltraHolder;
       const ultraLeft = info ? Math.max(0, (info.ultraQuota || 1) - (info.ultraUsed || 0)) : 1;
-      const minAmt = info ? (info.requiredAmount || 779) : 779;
+      const minAmt = (cfg && cfg.minPickupAmount) || (info ? info.requiredAmount : 779) || 779;
+      const freeKm = (cfg && cfg.freeKm) || 5;
+      const feePerKm = (cfg && cfg.feePerKm) || 20;
+      const maxKm = (cfg && cfg.maxDistanceKm) || 10;
 
       const ultraLine = isUltra
         ? `<p class="text-emerald-700 font-bold mb-2">✨ คุณถือบัตร ULTRA — เหลือ free pickup ${ultraLeft} ครั้งเดือนนี้</p>`
@@ -687,6 +715,12 @@
         ? `<p>กดต่อไปเพื่อจองคิวพร้อมเลือก <b>"บริการรับ-ส่ง (ฟรี)"</b></p>`
         : `<p>กดต่อไปเพื่อจองคิวพร้อมยอด ≥ <b>${minAmt}.-</b> และเลือก <b>"บริการรับ-ส่ง"</b></p>`;
 
+      // 🆕 F9: แนะนำ 779 bundle ถ้าลูกค้าไม่ใช่ ULTRA
+      const bundleHint = (!isUltra) ? `
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2 text-xs">
+          💡 <b>แนะนำ:</b> "SHINE Super Combo (479)" + "Crystal Coat Wax (300)" = <b>779 บาท</b> → ผ่านเงื่อนไข pickup
+        </div>` : '';
+
       const res = await Swal.fire({
         icon: 'info',
         title: '🚚 บริการรับ-ส่งรถ',
@@ -694,11 +728,12 @@
           <div class="text-left text-sm space-y-2">
             ${ultraLine}
             <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs space-y-1">
-              <p>📅 <b>จองก่อน 18:00</b> ของวันก่อนหน้า (D124)</p>
+              <p>📅 <b>จองก่อน 18:00</b> ของวันก่อนหน้า</p>
               <p>💰 ยอดบริการ <b>≥ ${minAmt} บาท</b> หรือใช้สิทธิ์ ULTRA</p>
-              <p>📏 ในเขต <b>≤ 10 km</b> (5 km แรกฟรี + 20.-/km)</p>
-              <p>👮 ที่เหลือชำระล่วงหน้า (pre-paid) — ไม่มีการคืนเงิน (D127)</p>
+              <p>📏 ในเขต <b>≤ ${maxKm} km</b> (${freeKm} km แรกฟรี + ${feePerKm}.-/km)</p>
+              <p>👮 ชำระล่วงหน้า (pre-paid) — ไม่มีการคืนเงิน</p>
             </div>
+            ${bundleHint}
             ${cta}
           </div>
         `,
@@ -729,6 +764,97 @@
           }
         } catch (e) {}
       }, 500);
+    }
+
+    // 🚚 F5 v1.1 helper: set min booking date = tomorrow for pickup mode
+    function _applyPickupDateConstraint_() {
+      try {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const yyyy = tomorrow.getFullYear();
+        const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+        const dd = String(tomorrow.getDate()).padStart(2, '0');
+        const minStr = `${yyyy}-${mm}-${dd}`;
+        const bookDateEl = document.getElementById('bookDate');
+        if (bookDateEl) {
+          if (bookDateEl.min !== undefined) bookDateEl.min = minStr;
+          // If current value is < minStr, clear it
+          if (bookDateEl.value && bookDateEl.value < minStr) {
+            bookDateEl.value = '';
+            // also clear visible time selector + inline calendar value
+            const selectedTimeEl = document.getElementById('selectedTime');
+            if (selectedTimeEl) selectedTimeEl.value = '';
+            const displayTimeEl = document.getElementById('displaySelectedTime');
+            if (displayTimeEl) displayTimeEl.innerText = '- - : - -';
+            Swal.fire({
+              toast: true, position: 'top-end', icon: 'info',
+              title: '📅 บริการรับ-ส่งต้องจองล่วงหน้า ≥ 1 วัน',
+              text: 'กรุณาเลือกวันใหม่ในปฏิทิน',
+              showConfirmButton: false, timer: 3500
+            });
+          }
+        }
+        // If flatpickr instance attached to inlineCalendar — apply minDate
+        try {
+          const calEl = document.getElementById('inlineCalendar');
+          if (calEl && calEl._flatpickr && typeof calEl._flatpickr.set === 'function') {
+            calEl._flatpickr.set('minDate', minStr);
+          }
+        } catch (e) {}
+      } catch (e) { console.warn('_applyPickupDateConstraint_ err:', e); }
+    }
+
+    // 🚚 F8 v1.1 helper: preview server-calculated pickup fee + eligibility
+    async function _previewPickupFee_() {
+      try {
+        const dt = document.getElementById('deliverySelect') && document.getElementById('deliverySelect').value;
+        if (!['pickup','roundtrip_same','roundtrip_diff'].includes(dt)) return;
+        const branchId = document.getElementById('branchSelect') ? document.getElementById('branchSelect').value : 'BR-01';
+        const bookDate = document.getElementById('bookDate') ? document.getElementById('bookDate').value : '';
+        const pkm = (typeof gmState !== 'undefined' && gmState && gmState.pickupRoadKm  != null) ? gmState.pickupRoadKm  : 0;
+        const dkm = (typeof gmState !== 'undefined' && gmState && gmState.dropoffRoadKm != null) ? gmState.dropoffRoadKm : 0;
+        const distanceKm = Math.max(pkm, dkm);
+        if (!distanceKm) return;
+        let bookingTotal = 0;
+        try {
+          document.querySelectorAll('.checkbox-custom:checked').forEach(cb => {
+            bookingTotal += parseFloat(cb.dataset.price) || 0;
+          });
+        } catch (e) {}
+        const params = new URLSearchParams({
+          action: 'validatePickupRequest',
+          lineUid: userUid,
+          bookingTotal: bookingTotal,
+          bookingDate: bookDate + 'T10:00',
+          distanceKm: distanceKm,
+          branchId: branchId,
+          deliveryType: dt
+        });
+        const r = await fetch(API_URL, { method: 'POST', body: params });
+        const j = await r.json();
+        if (j && j.status === 'success' && j.data) {
+          window._lastPickupPreview = j.data;
+          // Inject fee display into routeSummary (non-destructive append/replace)
+          const rs = document.getElementById('routeSummary');
+          if (rs) {
+            // Strip prior preview row (data-pickup-preview)
+            const prev = rs.querySelector('[data-pickup-preview]');
+            if (prev) prev.remove();
+            const row = document.createElement('div');
+            row.setAttribute('data-pickup-preview', '1');
+            row.className = j.data.eligible
+              ? 'mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px]'
+              : 'mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 font-bold';
+            const feeText = j.data.isUltraFree
+              ? '✨ ULTRA Free Pickup'
+              : (j.data.eligible
+                  ? `🚚 ค่าบริการรับ-ส่ง (server) ${j.data.pickupFee} บาท`
+                  : `❌ ${j.data.reason}`);
+            row.innerHTML = feeText;
+            rs.appendChild(row);
+          }
+        }
+      } catch (e) { console.warn('_previewPickupFee_ err:', e); }
     }
 
     // ════════════════════════════════════════════════
@@ -897,6 +1023,23 @@
     function toggleDelivery() {
       const v = document.getElementById('deliverySelect').value;
       const mapDiv = document.getElementById('mapContainer');
+      // 🚚 F4 + F5 v1.1 (7/6/2026): pickup mode → force LINE2 + min date = tomorrow
+      const isPickupMode = ['pickup','roundtrip_same','roundtrip_diff'].includes(v);
+      if (isPickupMode) {
+        try {
+          // F4: force LINE2
+          const lineEl = document.getElementById('selectedLineType');
+          if (lineEl && lineEl.value === 'LINE1') {
+            if (typeof selectLine === 'function') selectLine('LINE2');
+            else lineEl.value = 'LINE2';
+          }
+          // F5: block same-day — set min date = tomorrow
+          if (typeof _applyPickupDateConstraint_ === 'function') _applyPickupDateConstraint_();
+          // F2: pre-fetch config + F8: pre-fetch server fee
+          if (typeof _fetchPickupConfig_ === 'function') _fetchPickupConfig_();
+          if (typeof _previewPickupFee_ === 'function') _previewPickupFee_();
+        } catch (e) { console.warn('pickup mode setup err:', e); }
+      }
       if (v === 'none') {
         mapDiv.classList.add('hidden');
         updateSummary();
@@ -1155,7 +1298,16 @@
         }
       }
 
-      Promise.all(requests).then(() => { renderRouteSummary_(); updateSummary(); });
+      Promise.all(requests).then(() => {
+        renderRouteSummary_(); updateSummary();
+        // 🚚 F8 v1.1: trigger server fee preview when distance changes (pickup mode only)
+        try {
+          const _dt = document.getElementById('deliverySelect') && document.getElementById('deliverySelect').value;
+          if (['pickup','roundtrip_same','roundtrip_diff'].includes(_dt) && typeof _previewPickupFee_ === 'function') {
+            _previewPickupFee_();
+          }
+        } catch (e) {}
+      });
     }
 
     // 📏 แสดงสรุประยะทาง + เวลาเดินทาง + ค่าใช้จ่ายโดยประมาณ
@@ -1274,6 +1426,35 @@
       const deliveryType = document.getElementById('deliverySelect').value;
       const bookDate = document.getElementById('bookDate').value;
       const bookingDateTime = bookDate + 'T' + time;
+      const isPickupSubmit = ['pickup','roundtrip_same','roundtrip_diff'].includes(deliveryType);
+
+      // 🚚 F5 v1.1 runtime check: pickup mode ต้องจองล่วงหน้า ≥ 1 วัน
+      if (isPickupSubmit) {
+        try {
+          const selectedDate = new Date(bookDate + 'T00:00:00');
+          const today0 = new Date(); today0.setHours(0,0,0,0);
+          if (selectedDate <= today0) {
+            return Swal.fire({
+              icon: 'warning',
+              title: '📅 ต้องจองล่วงหน้า ≥ 1 วัน',
+              html: 'บริการรับ-ส่งต้องจองก่อน 18:00 ของวันก่อนหน้า — กรุณาเลือกวันอื่นครับ'
+            });
+          }
+        } catch (e) {}
+
+        // 🚚 F3 v1.1 distance guard
+        const cfg = window._pickupConfig || { maxDistanceKm: 10 };
+        const pkm = (typeof gmState !== 'undefined' && gmState && gmState.pickupRoadKm != null) ? gmState.pickupRoadKm : 0;
+        const dkm = (typeof gmState !== 'undefined' && gmState && gmState.dropoffRoadKm != null) ? gmState.dropoffRoadKm : 0;
+        const usedKm = Math.max(pkm, dkm);
+        if (usedKm > cfg.maxDistanceKm) {
+          return Swal.fire({
+            icon: 'error',
+            title: '❌ เกินเขตให้บริการ',
+            html: 'ระยะ <b>' + usedKm.toFixed(1) + ' km</b> เกิน <b>' + cfg.maxDistanceKm + ' km</b> — ไม่อยู่ในเขตให้บริการรับ-ส่ง'
+          });
+        }
+      }
 
       // 🛡️ T2: Valet ต้องจองล่วงหน้าอย่างน้อย 30 นาที — ให้พนักงานเตรียมตัว
       if (deliveryType !== 'none') {
@@ -1287,6 +1468,20 @@
       }
 
       const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(',');
+      // 🚚 F7 v1.1: send pickup address + distance + source
+      const _pickupAddr  = (document.getElementById('pickupSearch')  && document.getElementById('pickupSearch').value)  || '';
+      const _dropoffAddr = (document.getElementById('dropoffSearch') && document.getElementById('dropoffSearch').value) || _pickupAddr;
+      const _pkm = (typeof gmState !== 'undefined' && gmState && gmState.pickupRoadKm  != null) ? gmState.pickupRoadKm  : 0;
+      const _dkm = (typeof gmState !== 'undefined' && gmState && gmState.dropoffRoadKm != null) ? gmState.dropoffRoadKm : 0;
+      const _distanceKm = Math.max(_pkm, _dkm);
+      // 🚚 booking total (services only) — for backend F6 eligibility check
+      let _bookingTotal = 0;
+      try {
+        document.querySelectorAll('.checkbox-custom:checked').forEach(cb => {
+          _bookingTotal += parseFloat(cb.dataset.price) || 0;
+        });
+      } catch (e) {}
+
       const payload = new URLSearchParams({
         action: 'submitBooking', lineUid: userUid,
         vehicleId: document.getElementById('vehicleSelect').value,
@@ -1296,7 +1491,13 @@
         branchId: document.getElementById('branchSelect').value,
         lineType: document.getElementById('selectedLineType').value,
         pickupLat: document.getElementById('pickupLat').value, pickupLng: document.getElementById('pickupLng').value,
-        dropoffLat: document.getElementById('dropoffLat').value, dropoffLng: document.getElementById('dropoffLng').value
+        dropoffLat: document.getElementById('dropoffLat').value, dropoffLng: document.getElementById('dropoffLng').value,
+        // 🚚 v1.1 fields
+        source: 'customer-liff',
+        pickupAddress:  _pickupAddr,
+        dropoffAddress: _dropoffAddr,
+        distanceKm:     _distanceKm,
+        bookingTotal:   _bookingTotal
       });
       Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
