@@ -98,6 +98,19 @@
       <i class="fa-solid fa-truck text-7xl absolute -right-2 -bottom-2 opacity-20 rotate-12"></i>
     </div>
 
+    <!-- 🔥 A3 v1.2 D133 (7/6/2026): Walk-in LINE1 queue check (view-only) -->
+    <div onclick="showSection('queue-check-section'); if(typeof loadWalkinQueue_==='function') loadWalkinQueue_();"
+         class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-lg text-white cursor-pointer active:scale-95 transition relative overflow-hidden">
+      <div class="relative z-10">
+        <div class="flex items-center gap-3 mb-1">
+          <span class="text-2xl">🔥</span>
+          <h3 class="font-bold text-base">เช็คคิวล้างด่วนหน้าร้าน</h3>
+        </div>
+        <p class="text-xs opacity-90">ดูคิวรอ + ETA ก่อนเดินทาง (LINE1 walk-in)</p>
+      </div>
+      <i class="fa-solid fa-fire text-6xl absolute -right-2 -bottom-2 opacity-20 rotate-12"></i>
+    </div>
+
     <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-box-open text-orange-500"></i> แพ็กเกจของฉัน</h3>
       <div id="homePackages" class="space-y-3"><p class="text-center text-gray-400 text-sm py-4 italic">ยังไม่มีแพ็กเกจที่ใช้งานอยู่</p></div>
@@ -106,6 +119,32 @@
       <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> คิวการจองของคุณ</h3>
       <div id="homeNextBooking" class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</div>
     </div>
+  </section>
+
+  <!-- 🔥 A3 v1.2 D133 — Walk-in LINE1 queue check (view-only) -->
+  <section id="queue-check-section" class="section p-4">
+    <button onclick="showSection('home-section')" class="text-blue-600 mb-3 text-sm font-bold">
+      <i class="fa-solid fa-arrow-left"></i> กลับหน้าหลัก
+    </button>
+    <h2 class="text-xl font-bold mb-3">🔥 คิวล้างด่วน (LINE1) วันนี้</h2>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-amber-50 rounded-xl p-3 text-center">
+        <p class="text-xs text-amber-700 font-bold uppercase">คิวรอ</p>
+        <p id="queueWaitingCount" class="text-3xl font-bold text-amber-700 mt-1">—</p>
+      </div>
+      <div class="bg-green-50 rounded-xl p-3 text-center">
+        <p class="text-xs text-green-700 font-bold uppercase">ETA คิวถัดไป</p>
+        <p id="queueETA" class="text-3xl font-bold text-green-700 mt-1">—</p>
+      </div>
+    </div>
+    <p class="text-xs text-gray-500 mb-3 italic bg-gray-50 rounded-lg p-3">
+      💡 ล้างด่วน 7 นาที (SHINE Express 139.-) — ไม่ต้องจองล่วงหน้า เข้ามาที่ร้านได้เลย
+    </p>
+    <div id="queueList" class="space-y-2"></div>
+    <button onclick="loadWalkinQueue_()"
+            class="w-full bg-amber-100 text-amber-700 py-3 rounded-xl mt-4 font-bold active:scale-95">
+      <i class="fa-solid fa-arrows-rotate"></i> รีเฟรช
+    </button>
   </section>
 
   <section id="booking-section" class="section p-4 space-y-5">
@@ -122,12 +161,15 @@
       <hr class="my-6 border-dashed">
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">2. เลือกบริการ</label>
+        <!-- 🔥 A1 v1.2 D132 (7/6/2026): hide LINE1 button — LIFF customer ใช้ LINE2 (ล้างปกติ) เท่านั้น
+             ล้างด่วนต้อง walk-in หน้าร้าน → เปิดเมนู "🔥 เช็คคิวล้างด่วน" บน Home -->
         <div class="flex bg-gray-100 p-1 rounded-2xl relative mb-4">
-          <div id="lineBg" class="absolute w-1/2 h-[calc(100%-8px)] bg-white rounded-xl shadow-sm transition-all left-1 top-1"></div>
-          <button type="button" onclick="selectLine('LINE1')" class="relative w-1/2 py-2 text-sm font-bold z-10 text-gray-800" id="btnLine1">ล้างด่วน (เครื่อง)</button>
-          <button type="button" onclick="selectLine('LINE2')" class="relative w-1/2 py-2 text-sm font-bold z-10 text-gray-400" id="btnLine2">ล้างปกติ (คนล้าง)</button>
+          <div id="lineBg" class="absolute w-1/2 h-[calc(100%-8px)] bg-white rounded-xl shadow-sm transition-all left-1 top-1" style="display:none;"></div>
+          <button type="button" onclick="selectLine('LINE1')" class="relative w-1/2 py-2 text-sm font-bold z-10 text-gray-800" id="btnLine1" style="display:none;" disabled>ล้างด่วน (เครื่อง)</button>
+          <button type="button" onclick="selectLine('LINE2')" class="relative w-full py-2 text-sm font-bold z-10 text-gray-800 bg-white rounded-xl shadow-sm" id="btnLine2">ล้างปกติ (คนล้าง)</button>
         </div>
-        <input type="hidden" id="selectedLineType" value="LINE1">
+        <p class="text-[10px] text-amber-600 -mt-2 mb-2 italic">💡 ล้างด่วน → เข้ามาที่ร้านได้เลย ไม่ต้องจอง (ดูคิวบน Home)</p>
+        <input type="hidden" id="selectedLineType" value="LINE2">
         <div id="servicesContainer" class="space-y-2"></div>
       </div>
       <hr class="my-6 border-dashed">
@@ -834,10 +876,14 @@
         const j = await r.json();
         if (j && j.status === 'success' && j.data) {
           window._lastPickupPreview = j.data;
-          // Inject fee display into routeSummary (non-destructive append/replace)
+          // 🆕 B2 v1.2 D134: server = single source of truth — sync to all 3 displays
+          window._currentPickupFee    = j.data.pickupFee;
+          window._currentIsUltraFree  = !!j.data.isUltraFree;
+          window._currentPickupEligible = !!j.data.eligible;
+
+          // ▼ Display 1: routeSummary preview row (existing)
           const rs = document.getElementById('routeSummary');
           if (rs) {
-            // Strip prior preview row (data-pickup-preview)
             const prev = rs.querySelector('[data-pickup-preview]');
             if (prev) prev.remove();
             const row = document.createElement('div');
@@ -845,16 +891,72 @@
             row.className = j.data.eligible
               ? 'mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px]'
               : 'mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 font-bold';
-            const feeText = j.data.isUltraFree
-              ? '✨ ULTRA Free Pickup'
-              : (j.data.eligible
-                  ? `🚚 ค่าบริการรับ-ส่ง (server) ${j.data.pickupFee} บาท`
-                  : `❌ ${j.data.reason}`);
+            // D135 format: ULTRA Free → strikethrough full fee + ส่วนลด line
+            const cfgFreeKm = (window._pickupConfig && window._pickupConfig.freeKm) || 5;
+            const cfgFee    = (window._pickupConfig && window._pickupConfig.feePerKm) || 20;
+            const chargeable = Math.max(0, distanceKm - cfgFreeKm);
+            const fullFee    = Math.round(chargeable * cfgFee);
+            let feeText;
+            if (!j.data.eligible) {
+              feeText = '❌ ' + j.data.reason;
+            } else if (j.data.isUltraFree) {
+              feeText = '✨ ULTRA Free Pickup'
+                      + (fullFee > 0
+                          ? ' · <span class="line-through text-gray-400">' + fullFee + ' บาท</span> → <b class="text-emerald-700">0 บาท</b>'
+                          : ' · 0 บาท (ในเขต)');
+            } else {
+              feeText = '🚚 ค่าบริการรับ-ส่ง <b>' + j.data.pickupFee + ' บาท</b> (server)';
+            }
             row.innerHTML = feeText;
             rs.appendChild(row);
           }
+
+          // ▼ Display 2: summaryList bill — update extra fee row via updateSummary() rerun
+          if (typeof updateSummary === 'function') updateSummary();
         }
       } catch (e) { console.warn('_previewPickupFee_ err:', e); }
+    }
+
+    // 🔥 A3+A4 v1.2 D133 helper: load walk-in LINE1 queue
+    async function loadWalkinQueue_() {
+      const waitEl = document.getElementById('queueWaitingCount');
+      const etaEl  = document.getElementById('queueETA');
+      const listEl = document.getElementById('queueList');
+      if (waitEl) waitEl.textContent = '…';
+      if (etaEl)  etaEl.textContent  = '…';
+      if (listEl) listEl.innerHTML   = '<p class="text-center text-gray-400 text-sm py-4">กำลังโหลดคิว…</p>';
+      try {
+        const params = new URLSearchParams({ action: 'getWalkinQueueStatus' });
+        const r = await fetch(API_URL, { method: 'POST', body: params });
+        const j = await r.json();
+        if (j && j.status === 'success' && j.data) {
+          const d = j.data;
+          if (waitEl) waitEl.textContent = d.waiting;
+          if (etaEl)  etaEl.textContent  = d.eta;
+          if (listEl) {
+            if (!d.queue || d.queue.length === 0) {
+              listEl.innerHTML = '<p class="text-center text-gray-400 text-sm py-6 italic bg-green-50 rounded-xl">✨ ไม่มีคิวรอ — ว่างพร้อมรับลูกค้า</p>';
+            } else {
+              const statusLabel = function(s) {
+                if (s === 'in_progress') return '<span class="text-blue-600 font-bold">🔧 กำลังล้าง</span>';
+                if (s === 'checked_in')  return '<span class="text-emerald-600 font-bold">✅ เช็คอินแล้ว</span>';
+                if (s === 'confirmed')   return '<span class="text-purple-600 font-bold">📌 ยืนยันแล้ว</span>';
+                return '<span class="text-amber-600 font-bold">⏳ รอ</span>';
+              };
+              listEl.innerHTML = d.queue.map(function(it, idx) {
+                return '<div class="flex justify-between items-center bg-white border border-gray-200 rounded-xl p-3 text-sm">' +
+                       '<span class="font-bold text-gray-700">#' + (idx + 1) + ' · ' + (it.time || '—') + '</span>' +
+                       statusLabel(it.status) + '</div>';
+              }).join('');
+            }
+          }
+        } else {
+          if (listEl) listEl.innerHTML = '<p class="text-center text-red-400 text-sm py-4">โหลดข้อมูลไม่สำเร็จ</p>';
+        }
+      } catch (e) {
+        console.warn('loadWalkinQueue_ err:', e);
+        if (listEl) listEl.innerHTML = '<p class="text-center text-red-400 text-sm py-4">เครือข่ายขัดข้อง</p>';
+      }
     }
 
     // ════════════════════════════════════════════════
@@ -1002,10 +1104,33 @@
         totalT += parseInt(cb.dataset.time);
         html += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`;
       });
-      const fee = calculateDeliveryFee();
-      if (fee > 0) html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง</span><span>${fee}.-</span></div>`;
+      // 🆕 B2 v1.2 D134/D135: ใช้ server fee ถ้ามี (single source of truth)
+      //   ULTRA Free → แสดงเป็น discount line (-fullFee) ใน bill
+      const dt = (document.getElementById('deliverySelect') && document.getElementById('deliverySelect').value) || 'none';
+      const isPickupDt = ['pickup','roundtrip_same','roundtrip_diff'].includes(dt);
+      const localFee = calculateDeliveryFee();
+      const serverFee = (typeof window._currentPickupFee === 'number') ? window._currentPickupFee : null;
+      const isUltraFree = !!window._currentIsUltraFree;
+      let displayFee = 0;
+      if (isPickupDt && serverFee !== null) {
+        displayFee = serverFee;   // server authoritative
+      } else {
+        displayFee = localFee;
+      }
+      if (isPickupDt && isUltraFree) {
+        // D135: ULTRA Free → show full fee + discount line
+        if (localFee > 0) {
+          html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง (เต็ม)</span><span>${localFee}.-</span></div>`;
+          html += `<div class="flex justify-between text-emerald-600 font-bold"><span>- ส่วนลด (ULTRA Free Pickup)</span><span>-${localFee}.-</span></div>`;
+        } else {
+          html += `<div class="flex justify-between text-emerald-600 font-bold"><span>- ค่าบริการรับ-ส่ง</span><span>✨ ฟรี (ULTRA)</span></div>`;
+        }
+        displayFee = 0;
+      } else if (displayFee > 0) {
+        html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง</span><span>${displayFee}.-</span></div>`;
+      }
       document.getElementById('summaryList').innerHTML = html || 'ยังไม่ได้เลือกบริการ';
-      document.getElementById('sumTotal').innerText = (totalP + fee) + '.-';
+      document.getElementById('sumTotal').innerText = (totalP + displayFee) + '.-';
 
       // ⏰ ล้างเวลาเฉพาะเมื่อ duration เปลี่ยน (= เลือก/ยกเลิก service)
       // ถ้าแค่ขยับ pin / เปลี่ยน delivery type → เวลาเดิมยังใช้ได้ ไม่ต้องเลือกใหม่
@@ -1482,12 +1607,22 @@
         });
       } catch (e) {}
 
+      // 🆕 C3 v1.2 D136 (7/6/2026): pre-payment modal for non-ULTRA pickup
+      const _isUltraFreePickup = isPickupSubmit && !!window._currentIsUltraFree;
+      const _serverPickupFee   = (typeof window._currentPickupFee === 'number') ? window._currentPickupFee : calculateDeliveryFee();
+      const _grandTotal = _bookingTotal + (_isUltraFreePickup ? 0 : _serverPickupFee);
+
+      if (isPickupSubmit && !_isUltraFreePickup && _grandTotal > 0) {
+        const confirmed = await _showPaymentModal_(_grandTotal);
+        if (!confirmed) return;   // user cancelled
+      }
+
       const payload = new URLSearchParams({
         action: 'submitBooking', lineUid: userUid,
         vehicleId: document.getElementById('vehicleSelect').value,
         serviceType: svcs, bookingDate: bookingDateTime,
         deliveryType: deliveryType,
-        extraFee: calculateDeliveryFee(),
+        extraFee: _isUltraFreePickup ? 0 : _serverPickupFee,   // server-authoritative
         branchId: document.getElementById('branchSelect').value,
         lineType: document.getElementById('selectedLineType').value,
         pickupLat: document.getElementById('pickupLat').value, pickupLng: document.getElementById('pickupLng').value,
@@ -1497,20 +1632,81 @@
         pickupAddress:  _pickupAddr,
         dropoffAddress: _dropoffAddr,
         distanceKm:     _distanceKm,
-        bookingTotal:   _bookingTotal
+        bookingTotal:   _bookingTotal,
+        // 💰 C3 v1.2 fields
+        isUltraFreePickup: _isUltraFreePickup ? 'true' : 'false',
+        paymentAmount:     _isUltraFreePickup ? 0 : _grandTotal
       });
       Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
         const res = await fetch(API_URL, { method: 'POST', body: payload });
         const result = await res.json();
         if (result.status === 'success') {
-          Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success')
-              .then(() => window.location.reload());
+          // 🆕 C3 v1.2: differentiate pending_payment vs confirmed
+          const isPendingPayment = isPickupSubmit && !_isUltraFreePickup;
+          if (isPendingPayment) {
+            Swal.fire({
+              icon: 'info',
+              title: '⏳ รอแอดมินยืนยันการชำระเงิน',
+              html: 'Booking ID: <b>' + (result.bookingId || '-') + '</b><br>' +
+                    'แอดมินจะตรวจสอบสลิป + ยืนยันภายใน 15-30 นาที<br>' +
+                    '<span class="text-xs text-amber-700">⏱️ Auto-cancel ใน 2 ชั่วโมงถ้าไม่ verify</span>',
+              confirmButtonText: 'OK'
+            }).then(() => window.location.reload());
+          } else {
+            Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success')
+                .then(() => window.location.reload());
+          }
         } else {
           // แสดง error message จาก server (เช่น "เวลาเต็ม", "ต้องจองล่วงหน้า 30 นาที")
           Swal.fire('ไม่สามารถจองได้', result.message || 'เกิดข้อผิดพลาด', 'warning');
         }
       } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    }
+
+    // 🆕 C3 v1.2 D136 helper: pre-payment modal (PromptPay QR + amount)
+    //   Returns: Promise<boolean> — true if user confirmed transfer, false if cancelled
+    async function _showPaymentModal_(amount) {
+      // Try to get PromptPay ID from configData or fallback to a default
+      let ppId = '0622420718';
+      try {
+        if (masterData && masterData.settings) {
+          ppId = masterData.settings.promptpay_id || masterData.settings.promptPayId || ppId;
+        }
+        if (typeof window._getPromptPayId_ === 'function') {
+          const v = await window._getPromptPayId_();
+          if (v) ppId = v;
+        }
+      } catch (e) {}
+
+      // QR rendering: try existing renderPromptPayQR or fallback to QR API
+      let qrHtml = '';
+      try {
+        if (typeof renderPromptPayQR === 'function') {
+          qrHtml = renderPromptPayQR(ppId, amount) || '';
+        }
+      } catch (e) {}
+      if (!qrHtml) {
+        // fallback: chart.googleapis.com QR encoder (PromptPay-Bill-Payment string)
+        const ppPayload = encodeURIComponent('PromptPay ' + ppId + ' ฿' + amount);
+        qrHtml = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + ppPayload + '" alt="PromptPay QR" style="margin:0 auto;display:block;width:200px;height:200px;border-radius:8px;">';
+      }
+
+      const res = await Swal.fire({
+        title: '💰 ชำระเงินก่อนจอง',
+        html: '<div class="text-left">' +
+              '<p class="text-sm mb-3">สแกน QR + โอน <b>' + amount.toLocaleString() + '.-</b> บาท ไปยัง <b>' + ppId + '</b></p>' +
+              '<div class="bg-white p-3 rounded-lg flex justify-center mb-3">' + qrHtml + '</div>' +
+              '<p class="text-xs text-amber-700 mb-2">⏱️ Booking จะ auto-cancel ใน 2 ชั่วโมงถ้าไม่ verify</p>' +
+              '<p class="text-xs text-red-600">⚠️ ชำระล่วงหน้า — ไม่มีการคืนเงิน</p>' +
+              '</div>',
+        showCancelButton: true,
+        confirmButtonText: '✅ ฉันโอนแล้ว — Submit',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#10b981',
+        allowOutsideClick: false
+      });
+      return !!res.isConfirmed;
     }
 
     document.addEventListener('DOMContentLoaded', init);
