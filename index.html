@@ -6,6 +6,8 @@
   <title>Karshine URT - Super App</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- 🆕 v1.3.1 HOTFIX (9/6/2026): EMVCo PromptPay QR generator — ported from admin (1).html -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   
@@ -1698,6 +1700,80 @@
           .then(() => window.location.reload());
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // 🆕 v1.3.1 HOTFIX (9/6/2026): PromptPay EMVCo QR Generation
+    // Ported from admin (1).html L2716-2785 — battle-tested ~5 months
+    // Required: qrcode-generator@1.4.4 CDN (added in <head>)
+    //
+    // ROOT CAUSE v1.3: fallback used plain-text payload "PromptPay {id} ฿{amt}"
+    //   → banking apps ไม่ recognize (must be EMVCo format with tags 00/01/29/53/54/58/63)
+    // ═══════════════════════════════════════════════════════════
+    function _ppTlv(tag, value) {
+      const v = String(value);
+      const len = v.length.toString().padStart(2, '0');
+      return tag + len + v;
+    }
+
+    function _ppCrc16(data) {
+      // CRC-16-CCITT (poly 0x1021, init 0xFFFF) — ตามมาตรฐาน EMV
+      let crc = 0xFFFF;
+      for (let i = 0; i < data.length; i++) {
+        crc ^= data.charCodeAt(i) << 8;
+        for (let j = 0; j < 8; j++) {
+          if (crc & 0x8000) crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+          else crc = (crc << 1) & 0xFFFF;
+        }
+      }
+      return crc.toString(16).toUpperCase().padStart(4, '0');
+    }
+
+    function generatePromptPayPayload(target, amount) {
+      const clean = String(target || '').replace(/\D/g, '');
+      if (!clean) return null;
+      const isPhone = clean.length === 9 || clean.length === 10;
+      // Phone: 0812345678 → drop leading 0, prepend 0066 → pad to 13 chars
+      // Citizen ID: 13 digits stay as-is
+      let formatted;
+      if (isPhone) {
+        const noLead = clean.replace(/^0/, '');
+        formatted = ('0000000000000' + '0066' + noLead).slice(-13);
+      } else {
+        formatted = clean.padStart(13, '0');
+      }
+      // Build merchant account info (Tag 29)
+      const merchantInfo =
+        _ppTlv('00', 'A000000677010111') +              // AID
+        _ppTlv(isPhone ? '01' : '02', formatted);       // 01=phone, 02=citizenID
+      // Build full payload
+      let payload =
+        _ppTlv('00', '01') +                            // Format
+        _ppTlv('01', amount > 0 ? '12' : '11') +        // 12=dynamic, 11=static
+        _ppTlv('29', merchantInfo) +
+        _ppTlv('53', '764') +                           // THB
+        (amount > 0 ? _ppTlv('54', Number(amount).toFixed(2)) : '') +
+        _ppTlv('58', 'TH');                             // Country
+      payload += '6304';                                // CRC tag + length placeholder
+      const crc = _ppCrc16(payload);
+      return payload + crc;
+    }
+
+    // render QR เป็น img (base64) ขนาด ~256px
+    function renderPromptPayQR(target, amount) {
+      const payload = generatePromptPayPayload(target, amount);
+      if (!payload) return '<p class="text-red-500 text-xs">⚠️ PromptPay ID ไม่ถูกต้อง</p>';
+      if (typeof qrcode === 'undefined') {
+        return '<p class="text-red-500 text-xs">⚠️ ไม่สามารถโหลด QR library — เช็คอินเทอร์เน็ต</p>';
+      }
+      try {
+        const qr = qrcode(0, 'M');  // error correction level M
+        qr.addData(payload);
+        qr.make();
+        return qr.createImgTag(5, 0);  // cellSize=5px, margin=0
+      } catch (e) {
+        return '<p class="text-red-500 text-xs">QR error: ' + e.message + '</p>';
+      }
+    }
+
     // 🆕 C3 v1.2 D136 helper + v1.3 Fix #1 (9/6/2026): pre-payment modal
     //   - PromptPay source priority:
     //       1. promptpayIdArg (passed from requestPickup response)
@@ -1719,16 +1795,16 @@
       } catch (e) {}
       if (!ppId) ppId = '0000000000';
 
-      // QR rendering: existing renderPromptPayQR or fallback QR API
+      // 🆕 v1.3.1 HOTFIX Option B (Master recommended):
+      //   - renderPromptPayQR ported จาก admin → guaranteed exists
+      //   - ลบ qrserver.com fallback (encode plain text → banking app สแกนไม่ได้)
+      //   - error fallback = clear message ให้ลูกค้าโอนตามเลข
       let qrHtml = '';
       try {
-        if (typeof renderPromptPayQR === 'function') {
-          qrHtml = renderPromptPayQR(ppId, amount) || '';
-        }
-      } catch (e) {}
-      if (!qrHtml) {
-        const ppPayload = encodeURIComponent('PromptPay ' + ppId + ' ฿' + amount);
-        qrHtml = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + ppPayload + '" alt="PromptPay QR" style="margin:0 auto;display:block;width:200px;height:200px;border-radius:8px;">';
+        qrHtml = renderPromptPayQR(ppId, amount) ||
+                 '<p class="text-red-500 text-xs">⚠️ ไม่สามารถสร้าง QR — กรุณาโอนตามเลขข้างบน</p>';
+      } catch (e) {
+        qrHtml = '<p class="text-red-500 text-xs">⚠️ QR error — กรุณาโอนตามเลขข้างบน</p>';
       }
 
       const res = await Swal.fire({
