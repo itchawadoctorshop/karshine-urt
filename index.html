@@ -337,6 +337,16 @@
         </div>
       </div>
     </div>
+    <!-- 💰 Credit-Back v1.0 (9/6/2026): My Credits Section — hidden by default; populated by loadMyCredits() -->
+    <div id="myCreditsSection" class="hidden bg-gradient-to-br from-emerald-100 to-green-100 p-5 rounded-3xl shadow text-left">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-bold text-emerald-800 text-base"><i class="fa-solid fa-gift mr-1"></i> Credit ของฉัน</h3>
+        <button onclick="loadMyCredits()" class="text-emerald-600 hover:text-emerald-800 text-xs"><i class="fa-solid fa-arrows-rotate"></i></button>
+      </div>
+      <p class="text-3xl font-bold text-emerald-600 mb-3">฿<span id="myCreditTotal">0</span></p>
+      <div id="myCreditsList" class="space-y-1 text-xs text-gray-700"></div>
+      <p class="text-[10px] text-gray-600 mt-3 italic">💡 บอกแอดมินตอนชำระเงิน — ใช้กับบริการครั้งต่อไป</p>
+    </div>
     <!-- 🛡️ PDPA: Consent Manager button -->
     <button onclick="openConsentManager()" class="w-full bg-gray-50 text-gray-700 font-bold py-3 rounded-2xl text-sm border border-gray-200 mb-2"><i class="fa-solid fa-shield-halved"></i> จัดการความยินยอม (PDPA)</button>
     <!-- 🚗 Smart Form: Edit profile shortcut (v1.0) -->
@@ -685,7 +695,15 @@
       }, () => { Swal.fire('ข้อผิดพลาด', 'กรุณาเปิดอนุญาตให้เข้าถึง GPS', 'error'); }, { enableHighAccuracy: true, timeout: 10000 });
     }
 
-    function showSection(id) { document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active')); document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active'); window.scrollTo(0,0); }
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active'));
+      document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active');
+      window.scrollTo(0,0);
+      // 💰 Credit-Back v1.0 (9/6/2026): auto-load credit balance when entering Profile tab
+      if (id === 'profile-section' && typeof loadMyCredits === 'function') loadMyCredits();
+    }
     function navToBooking() { if(!masterData.vehicles || masterData.vehicles.length === 0) { Swal.fire({ title: 'ยังไม่มีข้อมูลรถ', text: 'คุณต้องลงทะเบียนข้อมูลก่อนทำรายการจองครับ', icon: 'warning', confirmButtonText: 'ไปลงทะเบียน' }).then(() => showSection('cars-section')); } else { showSection('booking-section'); } }
 
     // 🚚 Pickup & Delivery — Phase 1 + v1.1 patch (7/6/2026 — F1-F9 Master Spec V1.1)
@@ -959,6 +977,33 @@
         console.warn('loadWalkinQueue_ err:', e);
         if (listEl) listEl.innerHTML = '<p class="text-center text-red-400 text-sm py-4">เครือข่ายขัดข้อง</p>';
       }
+    }
+
+    // 💰 Credit-Back v1.0 (9/6/2026): load + render customer's active credits in Profile tab
+    async function loadMyCredits() {
+      try {
+        if (!userUid || String(userUid).charAt(0) !== 'U') return;
+        const params = new URLSearchParams({ action: 'getMyCredits', lineUid: userUid });
+        const r = await fetch(API_URL, { method: 'POST', body: params });
+        const j = await r.json();
+        const sec  = document.getElementById('myCreditsSection');
+        const tot  = document.getElementById('myCreditTotal');
+        const list = document.getElementById('myCreditsList');
+        if (!sec || !tot || !list) return;
+        if (!j || !j.ok || !Array.isArray(j.credits) || j.credits.length === 0) {
+          sec.classList.add('hidden');
+          return;
+        }
+        tot.textContent = Number(j.total_active_amount || 0).toLocaleString();
+        list.innerHTML = j.credits.map(function(c) {
+          const expireWarn = c.daysLeft <= 7 ? '⏰' : '🟢';
+          return '<div class="flex justify-between items-center bg-white/60 rounded-lg p-2">' +
+                   '<span class="font-bold">฿' + Number(c.amount).toLocaleString() + ' <span class="font-normal text-gray-600 text-[11px]">' + (c.label || c.source_type) + '</span></span>' +
+                   '<span class="text-[10px] ' + (c.daysLeft <= 7 ? 'text-red-600 font-bold' : 'text-gray-500') + '">' + expireWarn + ' หมดใน ' + c.daysLeft + ' วัน</span>' +
+                 '</div>';
+        }).join('');
+        sec.classList.remove('hidden');
+      } catch (e) { console.warn('loadMyCredits err:', e); }
     }
 
     // ════════════════════════════════════════════════
