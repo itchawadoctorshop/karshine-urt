@@ -891,21 +891,21 @@
             row.className = j.data.eligible
               ? 'mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px]'
               : 'mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 font-bold';
-            // D135 format: ULTRA Free → strikethrough full fee + ส่วนลด line
-            const cfgFreeKm = (window._pickupConfig && window._pickupConfig.freeKm) || 5;
-            const cfgFee    = (window._pickupConfig && window._pickupConfig.feePerKm) || 20;
-            const chargeable = Math.max(0, distanceKm - cfgFreeKm);
-            const fullFee    = Math.round(chargeable * cfgFee);
+            // 🆕 v1.3 Fix #2 (9/6/2026): Flat-tier display text (matches BE)
+            //   ≤5km → ฟรี / 5-10km → 100฿ flat / >10km → OUT_OF_ZONE
+            const _tierFullFee = (typeof _flatTierFee_ === 'function') ? _flatTierFee_(distanceKm) : 100;
             let feeText;
             if (!j.data.eligible) {
               feeText = '❌ ' + j.data.reason;
             } else if (j.data.isUltraFree) {
               feeText = '✨ ULTRA Free Pickup'
-                      + (fullFee > 0
-                          ? ' · <span class="line-through text-gray-400">' + fullFee + ' บาท</span> → <b class="text-emerald-700">0 บาท</b>'
-                          : ' · 0 บาท (ในเขต)');
+                      + (_tierFullFee > 0
+                          ? ' · <span class="line-through text-gray-400">' + _tierFullFee + ' บาท</span> → <b class="text-emerald-700">0 บาท</b>'
+                          : ' · 0 บาท (ในเขต 5 km)');
+            } else if (j.data.pickupFee === 0) {
+              feeText = '✅ ฟรี 5 กม. — ไม่มีค่ารับ-ส่ง';
             } else {
-              feeText = '🚚 ค่าบริการรับ-ส่ง <b>' + j.data.pickupFee + ' บาท</b> (server)';
+              feeText = '🚚 ฟรี 5 กม. + เกิน 5-10 กม. = <b>' + j.data.pickupFee + ' บาท</b> (flat)';
             }
             row.innerHTML = feeText;
             rs.appendChild(row);
@@ -1104,21 +1104,25 @@
         totalT += parseInt(cb.dataset.time);
         html += `<div class="flex justify-between"><span>- ${cb.dataset.name}</span><span>${cb.dataset.price}.-</span></div>`;
       });
-      // 🆕 B2 v1.2 D134/D135: ใช้ server fee ถ้ามี (single source of truth)
-      //   ULTRA Free → แสดงเป็น discount line (-fullFee) ใน bill
+      // 🆕 B2 v1.2 D134/D135 + v1.3 Fix #2 (9/6/2026): server = single source of truth (flat tier)
       const dt = (document.getElementById('deliverySelect') && document.getElementById('deliverySelect').value) || 'none';
       const isPickupDt = ['pickup','roundtrip_same','roundtrip_diff'].includes(dt);
-      const localFee = calculateDeliveryFee();
-      const serverFee = (typeof window._currentPickupFee === 'number') ? window._currentPickupFee : null;
-      const isUltraFree = !!window._currentIsUltraFree;
+      const _rawLocalFee = calculateDeliveryFee();   // can be -1 for OUT_OF_ZONE
+      const isOutOfZone  = (_rawLocalFee === -1);
+      const localFee     = isOutOfZone ? 0 : _rawLocalFee;
+      const serverFee    = (typeof window._currentPickupFee === 'number') ? window._currentPickupFee : null;
+      const isUltraFree  = !!window._currentIsUltraFree;
       let displayFee = 0;
-      if (isPickupDt && serverFee !== null) {
+      if (isPickupDt && serverFee !== null && !isOutOfZone) {
         displayFee = serverFee;   // server authoritative
       } else {
         displayFee = localFee;
       }
-      if (isPickupDt && isUltraFree) {
-        // D135: ULTRA Free → show full fee + discount line
+      if (isPickupDt && isOutOfZone) {
+        // OUT_OF_ZONE — single red banner; submit guard will reject anyway
+        html += `<div class="flex justify-between text-red-700 font-bold"><span>- ค่าบริการรับ-ส่ง</span><span>🚫 นอกพื้นที่</span></div>`;
+        displayFee = 0;
+      } else if (isPickupDt && isUltraFree) {
         if (localFee > 0) {
           html += `<div class="flex justify-between text-blue-500"><span>- ค่าบริการรับ-ส่ง (เต็ม)</span><span>${localFee}.-</span></div>`;
           html += `<div class="flex justify-between text-emerald-600 font-bold"><span>- ส่วนลด (ULTRA Free Pickup)</span><span>-${localFee}.-</span></div>`;
@@ -1442,39 +1446,38 @@
       const v = document.getElementById('deliverySelect').value;
       if (v === 'none') { el.innerHTML = ''; return; }
 
-      const branch = masterData.branches?.find(b => b.branch_id == document.getElementById('branchSelect').value);
-      const freeKm = branch ? (parseFloat(branch.free_km) || 0) : 0;
-      const feePerKm = branch ? (parseFloat(branch.fee_per_km) || 0) : 0;
-
+      // 🆕 v1.3 Fix #2 (9/6/2026): Flat tier — Branches free_km/fee_per_km no longer used for display
+      //   tier text: ≤5km → ฟรี / 5-10km → 100฿ flat / >10km → OUT_OF_ZONE
       const parts = [];
       const fmtKm = (km) => km != null ? km.toFixed(1) + ' กม.' : '-';
       const fmtMin = (m) => m != null ? '~' + Math.ceil(m) + ' นาที' : '-';
-      const chargedKm = (km) => km != null ? Math.ceil(Math.max(0, km - freeKm)) : 0;
+      const tierText = (km) => {
+        const f = (typeof _flatTierFee_ === 'function') ? _flatTierFee_(km) : (km <= 5 ? 0 : (km <= 10 ? 100 : -1));
+        if (f === -1) return '<span class="text-red-700 font-bold">🚫 อยู่นอกพื้นที่บริการ (เกิน 10 กม.)</span>';
+        if (f === 0)  return 'ฟรี 5 กม. — <b class="text-emerald-600">ไม่มีค่ารับ-ส่ง</b>';
+        return 'ฟรี 5 กม. + เกิน 5-10 กม. = <b class="text-blue-600">100 บ. (flat)</b>';
+      };
 
       if ((v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') && gmState.pickupRoadKm != null) {
-        const ck = chargedKm(gmState.pickupRoadKm);
-        const cost = ck * feePerKm;
         parts.push(`
           <div class="flex justify-between items-center">
             <span class="text-green-700"><span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>รับรถ → สาขา</span>
             <span class="font-bold text-gray-800">${fmtKm(gmState.pickupRoadKm)} <span class="text-gray-400 font-normal">${fmtMin(gmState.pickupRoadMin)}</span></span>
           </div>
-          <div class="text-[10px] text-gray-500 ml-4">ฟรี ${freeKm} กม. + เกิน ${ck} กม. × ${feePerKm} = <b class="text-blue-600">${cost} บ.</b></div>
+          <div class="text-[10px] text-gray-500 ml-4">${tierText(gmState.pickupRoadKm)}</div>
         `);
       }
       if ((v === 'dropoff' || v === 'roundtrip_diff') && gmState.dropoffRoadKm != null) {
-        const ck = chargedKm(gmState.dropoffRoadKm);
-        const cost = ck * feePerKm;
         parts.push(`
           <div class="flex justify-between items-center">
             <span class="text-red-700"><span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>สาขา → ส่งรถ</span>
             <span class="font-bold text-gray-800">${fmtKm(gmState.dropoffRoadKm)} <span class="text-gray-400 font-normal">${fmtMin(gmState.dropoffRoadMin)}</span></span>
           </div>
-          <div class="text-[10px] text-gray-500 ml-4">ฟรี ${freeKm} กม. + เกิน ${ck} กม. × ${feePerKm} = <b class="text-blue-600">${cost} บ.</b></div>
+          <div class="text-[10px] text-gray-500 ml-4">${tierText(gmState.dropoffRoadKm)}</div>
         `);
       }
       if (v === 'roundtrip_same' && gmState.pickupRoadKm != null) {
-        parts.push(`<div class="text-[10px] text-blue-600 italic mt-1 border-t border-gray-200 pt-1">* ค่าบริการคิด 2 เที่ยว (ไป-กลับ)</div>`);
+        parts.push(`<div class="text-[10px] text-blue-600 italic mt-1 border-t border-gray-200 pt-1">* ค่าบริการรับ-ส่ง flat — ไม่คูณ 2 เที่ยว</div>`);
       }
 
       el.innerHTML = parts.length ? parts.join('') : '<div class="text-[11px] text-gray-400 italic">ลากหมุดหรือค้นหาสถานที่เพื่อดูเส้นทาง</div>';
@@ -1513,36 +1516,44 @@
       const over = Math.max(0, distanceKm - (freeKm || 0));
       return Math.ceil(over);
     }
+    // 🆕 v1.3 Fix #2 (9/6/2026): Flat tier — must match BE _calculateDistanceFee exactly
+    //   0 - 5 km   → ฟรี
+    //   5 - 10 km  → 100 บาท flat
+    //   > 10 km    → -1 sentinel (OUT_OF_ZONE — disable submit)
+    function _flatTierFee_(distanceKm) {
+      const d = Number(distanceKm) || 0;
+      if (d <= 0)  return 0;
+      if (d <= 5)  return 0;
+      if (d <= 10) return 100;
+      return -1;
+    }
     function calculateDeliveryFee() {
       const v = document.getElementById('deliverySelect').value;
       if (v === 'none') return 0;
       const b = masterData.branches?.find(br => br.branch_id == document.getElementById('branchSelect').value);
       if (!b) return 0;
 
-      // ใช้ระยะถนน Google ถ้ามี (จาก state .pickupRoadKm/dropoffRoadKm) — fallback air distance
-      const pickupRoadKm  = (typeof gmState !== 'undefined' && gmState.pickupRoadKm  != null) ? gmState.pickupRoadKm  : null;
-      const dropoffRoadKm = (typeof gmState !== 'undefined' && gmState.dropoffRoadKm != null) ? gmState.dropoffRoadKm : null;
-
+      // Pick the relevant leg distance (Google road km if available, else air)
       const getAirKm = (lat1, lon1, lat2, lon2) => getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2);
-
       const bL = [parseFloat(b.lat), parseFloat(b.lng)];
       const pL = [parseFloat(document.getElementById('pickupLat').value), parseFloat(document.getElementById('pickupLng').value)];
       const dL = [parseFloat(document.getElementById('dropoffLat').value), parseFloat(document.getElementById('dropoffLng').value)];
+      const pickupRoadKm  = (typeof gmState !== 'undefined' && gmState.pickupRoadKm  != null) ? gmState.pickupRoadKm  : null;
+      const dropoffRoadKm = (typeof gmState !== 'undefined' && gmState.dropoffRoadKm != null) ? gmState.dropoffRoadKm : null;
 
-      const freeKm = parseFloat(b.free_km) || 0;
-      const feePerKm = parseFloat(b.fee_per_km) || 0;
-
-      let total = 0;
+      let usedKm = 0;
       if (v === 'pickup' || v === 'roundtrip_same' || v === 'roundtrip_diff') {
         const km = pickupRoadKm != null ? pickupRoadKm : getAirKm(bL[0], bL[1], pL[0], pL[1]);
-        total += _chargedKm(km, freeKm) * feePerKm;
+        if (km > usedKm) usedKm = km;
       }
       if (v === 'dropoff' || v === 'roundtrip_diff') {
         const km = dropoffRoadKm != null ? dropoffRoadKm : getAirKm(bL[0], bL[1], dL[0], dL[1]);
-        total += _chargedKm(km, freeKm) * feePerKm;
+        if (km > usedKm) usedKm = km;
       }
-      if (v === 'roundtrip_same') total *= 2;
-      return Math.round(total);
+      const tier = _flatTierFee_(usedKm);
+      // OUT_OF_ZONE → return -1 so submit guard can reject (caller treats <0 as invalid)
+      if (tier === -1) return -1;
+      return tier;   // 0 or 100
     }
     async function submitBooking() {
       const time = document.getElementById('selectedTime').value;
@@ -1607,15 +1618,16 @@
         });
       } catch (e) {}
 
-      // 🆕 C3 v1.2 D136 (7/6/2026): pre-payment modal for non-ULTRA pickup
+      // 🆕 v1.3 Fix #3 (9/6/2026): RESTRUCTURE — submit first, then QR modal, then submitSlip
+      //   v1.2 showed QR BEFORE submit (no bookingId yet) → admin saw orphan record
+      //   v1.3 flow:
+      //     1. submitBooking → status=pending_payment + bookingId returned
+      //     2. Show QR modal with bookingId visible
+      //     3. User clicks "ฉันโอนแล้ว" → submitSlip(bookingId) → status=slip_submitted
+      //     4. Admin Lane 0.5 sees it + LINE notify fires
       const _isUltraFreePickup = isPickupSubmit && !!window._currentIsUltraFree;
       const _serverPickupFee   = (typeof window._currentPickupFee === 'number') ? window._currentPickupFee : calculateDeliveryFee();
       const _grandTotal = _bookingTotal + (_isUltraFreePickup ? 0 : _serverPickupFee);
-
-      if (isPickupSubmit && !_isUltraFreePickup && _grandTotal > 0) {
-        const confirmed = await _showPaymentModal_(_grandTotal);
-        if (!confirmed) return;   // user cancelled
-      }
 
       const payload = new URLSearchParams({
         action: 'submitBooking', lineUid: userUid,
@@ -1635,51 +1647,79 @@
         bookingTotal:   _bookingTotal,
         // 💰 C3 v1.2 fields
         isUltraFreePickup: _isUltraFreePickup ? 'true' : 'false',
-        paymentAmount:     _isUltraFreePickup ? 0 : _grandTotal
+        paymentAmount:     _isUltraFreePickup ? 0 : _grandTotal,
+        // 👤 v1.3 Fix #4: needed for admin Flex notify
+        customerName: (masterData && masterData.profile) ? (masterData.profile.name || '') : '',
+        plate: (function(){ try { const vSel=document.getElementById('vehicleSelect'); const v=masterData.vehicles && masterData.vehicles.find(x=>String(x.vehicle_id)===String(vSel.value)); return v ? v.plate : ''; } catch(e){ return ''; } })()
       });
       Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      let result;
       try {
         const res = await fetch(API_URL, { method: 'POST', body: payload });
-        const result = await res.json();
-        if (result.status === 'success') {
-          // 🆕 C3 v1.2: differentiate pending_payment vs confirmed
-          const isPendingPayment = isPickupSubmit && !_isUltraFreePickup;
-          if (isPendingPayment) {
-            Swal.fire({
-              icon: 'info',
-              title: '⏳ รอแอดมินยืนยันการชำระเงิน',
-              html: 'Booking ID: <b>' + (result.bookingId || '-') + '</b><br>' +
-                    'แอดมินจะตรวจสอบสลิป + ยืนยันภายใน 15-30 นาที<br>' +
-                    '<span class="text-xs text-amber-700">⏱️ Auto-cancel ใน 2 ชั่วโมงถ้าไม่ verify</span>',
-              confirmButtonText: 'OK'
-            }).then(() => window.location.reload());
-          } else {
-            Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success')
-                .then(() => window.location.reload());
-          }
-        } else {
-          // แสดง error message จาก server (เช่น "เวลาเต็ม", "ต้องจองล่วงหน้า 30 นาที")
-          Swal.fire('ไม่สามารถจองได้', result.message || 'เกิดข้อผิดพลาด', 'warning');
+        result = await res.json();
+      } catch (e) { return Swal.fire('Error', e.message, 'error'); }
+
+      if (!result || result.status !== 'success') {
+        return Swal.fire('ไม่สามารถจองได้', (result && result.message) || 'เกิดข้อผิดพลาด', 'warning');
+      }
+
+      const isPendingPayment = isPickupSubmit && !_isUltraFreePickup;
+      const bookingId = result.bookingId || '-';
+
+      // 🆕 v1.3 Fix #3: non-ULTRA pickup → show QR + submitSlip flow
+      if (isPendingPayment && _grandTotal > 0) {
+        const confirmed = await _showPaymentModal_(_grandTotal, result.promptpay_id);
+        if (!confirmed) {
+          // User cancelled QR modal — booking stays pending_payment; auto-cancel will sweep after 2h
+          return Swal.fire({
+            icon: 'info',
+            title: 'Booking ค้างไว้',
+            html: 'Booking ID: <b>' + bookingId + '</b><br>คุณยังไม่ได้กด "ฉันโอนแล้ว" — ระบบจะ auto-cancel ใน 2 ชั่วโมง',
+            confirmButtonText: 'OK'
+          }).then(() => window.location.reload());
         }
-      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+        // User clicked "ฉันโอนแล้ว" → notify server
+        Swal.fire({ title: 'กำลังส่งสลิป…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const slipResult = await _submitSlip_(bookingId);
+        if (slipResult && slipResult.status === 'success') {
+          return Swal.fire({
+            icon: 'success',
+            title: '✅ ส่งสลิปแล้ว',
+            html: 'Booking ID: <b>' + bookingId + '</b><br>ทีมงานจะ verify ภายใน 30 นาที',
+            confirmButtonText: 'OK'
+          }).then(() => window.location.reload());
+        }
+        return Swal.fire('ส่งสลิปไม่สำเร็จ', (slipResult && slipResult.message) || 'กรุณาติดต่อแอดมิน', 'warning')
+                 .then(() => window.location.reload());
+      }
+
+      // ULTRA Free pickup OR non-pickup booking → success directly
+      Swal.fire('สำเร็จ!', 'จองคิวเรียบร้อยแล้ว แอดมินจะตรวจสอบและยืนยันในเร็วๆ นี้', 'success')
+          .then(() => window.location.reload());
     }
 
-    // 🆕 C3 v1.2 D136 helper: pre-payment modal (PromptPay QR + amount)
-    //   Returns: Promise<boolean> — true if user confirmed transfer, false if cancelled
-    async function _showPaymentModal_(amount) {
-      // Try to get PromptPay ID from configData or fallback to a default
-      let ppId = '0622420718';
+    // 🆕 C3 v1.2 D136 helper + v1.3 Fix #1 (9/6/2026): pre-payment modal
+    //   - PromptPay source priority:
+    //       1. promptpayIdArg (passed from requestPickup response)
+    //       2. window._pickupConfig.promptpay_id (from getPickupConfig — fresh)
+    //       3. window._pickupConfig.default_promptpay_id
+    //       4. masterData.settings.promptpay_id
+    //       5. final fallback '0000000000' (CEO must set Branches!L)
+    //   Returns: Promise<boolean>
+    async function _showPaymentModal_(amount, promptpayIdArg) {
+      let ppId = '';
       try {
-        if (masterData && masterData.settings) {
-          ppId = masterData.settings.promptpay_id || masterData.settings.promptPayId || ppId;
+        if (promptpayIdArg) ppId = String(promptpayIdArg).trim();
+        if (!ppId && window._pickupConfig) {
+          ppId = String(window._pickupConfig.promptpay_id || window._pickupConfig.default_promptpay_id || '').trim();
         }
-        if (typeof window._getPromptPayId_ === 'function') {
-          const v = await window._getPromptPayId_();
-          if (v) ppId = v;
+        if (!ppId && masterData && masterData.settings) {
+          ppId = String(masterData.settings.promptpay_id || masterData.settings.promptPayId || '').trim();
         }
       } catch (e) {}
+      if (!ppId) ppId = '0000000000';
 
-      // QR rendering: try existing renderPromptPayQR or fallback to QR API
+      // QR rendering: existing renderPromptPayQR or fallback QR API
       let qrHtml = '';
       try {
         if (typeof renderPromptPayQR === 'function') {
@@ -1687,7 +1727,6 @@
         }
       } catch (e) {}
       if (!qrHtml) {
-        // fallback: chart.googleapis.com QR encoder (PromptPay-Bill-Payment string)
         const ppPayload = encodeURIComponent('PromptPay ' + ppId + ' ฿' + amount);
         qrHtml = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + ppPayload + '" alt="PromptPay QR" style="margin:0 auto;display:block;width:200px;height:200px;border-radius:8px;">';
       }
@@ -1695,7 +1734,7 @@
       const res = await Swal.fire({
         title: '💰 ชำระเงินก่อนจอง',
         html: '<div class="text-left">' +
-              '<p class="text-sm mb-3">สแกน QR + โอน <b>' + amount.toLocaleString() + '.-</b> บาท ไปยัง <b>' + ppId + '</b></p>' +
+              '<p class="text-sm mb-3">สแกน QR + โอน <b>' + amount.toLocaleString() + '.-</b> บาท ไปยัง <b class="text-blue-600">' + ppId + '</b></p>' +
               '<div class="bg-white p-3 rounded-lg flex justify-center mb-3">' + qrHtml + '</div>' +
               '<p class="text-xs text-amber-700 mb-2">⏱️ Booking จะ auto-cancel ใน 2 ชั่วโมงถ้าไม่ verify</p>' +
               '<p class="text-xs text-red-600">⚠️ ชำระล่วงหน้า — ไม่มีการคืนเงิน</p>' +
@@ -1707,6 +1746,19 @@
         allowOutsideClick: false
       });
       return !!res.isConfirmed;
+    }
+
+    // 🆕 v1.3 Fix #3 helper: notify server "ฉันโอนแล้ว" → transition pending_payment → slip_submitted
+    async function _submitSlip_(bookingId) {
+      try {
+        const params = new URLSearchParams({ action: 'submitSlip', bookingId: bookingId });
+        const r = await fetch(API_URL, { method: 'POST', body: params });
+        const j = await r.json();
+        return j;
+      } catch (e) {
+        console.warn('_submitSlip_ err:', e);
+        return { status: 'error', message: e.message };
+      }
     }
 
     document.addEventListener('DOMContentLoaded', init);
