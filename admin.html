@@ -434,16 +434,117 @@
   <section id="settings-section" class="section p-4 lg:p-6 max-w-2xl mx-auto">
     <div class="bg-white rounded-3xl p-6 shadow-sm border-t-4 border-blue-500">
       <h2 class="font-bold text-xl text-gray-800 mb-1"><i class="fa-solid fa-users text-blue-500 mr-2"></i>จัดการลูกค้า (CRM)</h2>
-      <p class="text-xs text-gray-500 mb-6 border-b pb-4">ค้นหาข้อมูลลูกค้าเพื่อตรวจสอบประวัติ แก้ไขคะแนน และจัดการแพ็กเกจ</p>
-      <form id="crmSearchForm" class="flex gap-2 mb-6">
+      <p class="text-xs text-gray-500 mb-4 border-b pb-4">ค้นหาข้อมูลลูกค้าเพื่อตรวจสอบประวัติ แก้ไขคะแนน และจัดการแพ็กเกจ</p>
+      <form id="crmSearchForm" class="flex gap-2 mb-3">
         <input type="tel" id="crmKeyword" maxlength="10" pattern="[0-9]*" class="flex-1 p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500" placeholder="พิมพ์เบอร์โทรศัพท์ลูกค้า..." required>
         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow transition"><i class="fa-solid fa-magnifying-glass"></i> ค้นหา</button>
       </form>
+
+      <!-- 🔴 D62 RESTORE (9/6/2026 — Regression Pattern #3): Walk-in Customer Manual Add button -->
+      <button type="button" id="btnCrmWalkin" onclick="openManualAddModal()"
+              class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold shadow mb-3 transition">
+        <i class="fa-solid fa-user-plus mr-1"></i> ➕ เพิ่มลูกค้า Walk-in (ไม่มี LINE)
+      </button>
+
+      <!-- 🆕 CRM Segmentation v1 (9/6/2026): Call List + Refresh tiers buttons -->
+      <div class="flex gap-2 mb-6">
+        <button type="button" id="btnCallList" onclick="openCallList()"
+                class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold shadow transition">
+          <i class="fa-solid fa-phone-volume mr-1"></i> 📞 Call List <span id="callListBadge" class="bg-white text-orange-700 px-2 py-0.5 rounded-full text-xs ml-1">—</span>
+        </button>
+        <button type="button" id="btnRefreshTiers" onclick="refreshAllTiers()"
+                class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-bold shadow transition" title="โหลด tier ทั้งหมดใหม่">
+          <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+      </div>
+
       <div id="crmResults" class="space-y-4">
-        <div class="text-center text-gray-400 text-sm py-10 border-2 border-dashed border-gray-200 rounded-xl">พิมพ์เบอร์โทรศัพท์ด้านบนเพื่อเริ่มค้นหาลูกค้า</div>
+        <div class="text-center text-gray-400 text-sm py-10 border-2 border-dashed border-gray-200 rounded-xl">พิมพ์เบอร์โทรศัพท์ด้านบนเพื่อเริ่มค้นหาลูกค้า หรือกด "📞 Call List"</div>
       </div>
     </div>
   </section>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- 👥 D62 RESTORE — CRM Manual Add Modal (9/6/2026) -->
+  <!-- Ported verbatim from admin_CRM_v5.html L5520-5576 -->
+  <!-- ════════════════════════════════════════════════ -->
+  <div id="manualAddModal" class="hidden fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+      <div class="flex justify-between items-start mb-3">
+        <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-user-plus text-green-600"></i> เพิ่มลูกค้า Walk-in</h2>
+        <button onclick="closeManualAddModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <p class="text-xs text-gray-500 mb-4 border-b pb-3">สำหรับลูกค้าที่ไม่ได้จองผ่าน LINE — ต้องเซ็นใบ Consent กระดาษก่อน</p>
+      <form id="manualAddForm" class="space-y-3">
+        <div>
+          <label class="text-xs font-bold text-gray-700">ชื่อ-นามสกุล <span class="text-red-500">*</span></label>
+          <input type="text" id="maName" required minlength="2" class="w-full p-3 border border-gray-300 rounded-xl text-sm" placeholder="คุณสมชาย ใจดี">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-gray-700">เบอร์โทรศัพท์ <span class="text-red-500">*</span></label>
+          <input type="tel" id="maPhone" required maxlength="10" pattern="[0-9]{10}" class="w-full p-3 border border-gray-300 rounded-xl text-sm" placeholder="0812345678">
+        </div>
+        <details class="border rounded-xl p-3">
+          <summary class="text-xs font-bold text-gray-600 cursor-pointer">🚗 ข้อมูลรถ (Optional)</summary>
+          <div class="space-y-2 mt-3">
+            <input type="text" id="maPlate" placeholder="ทะเบียน เช่น 1กก 1234" class="w-full p-2 border rounded-lg text-sm">
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="maBrand" placeholder="ยี่ห้อ" class="p-2 border rounded-lg text-sm">
+              <input type="text" id="maModel" placeholder="รุ่น" class="p-2 border rounded-lg text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="maColor" placeholder="สี" class="p-2 border rounded-lg text-sm">
+              <select id="maSize" class="p-2 border rounded-lg text-sm">
+                <option value="S">เล็ก (S)</option>
+                <option value="M" selected>กลาง (M)</option>
+                <option value="L">ใหญ่ (L)</option>
+                <option value="XL">XL</option>
+              </select>
+            </div>
+          </div>
+        </details>
+        <details class="border rounded-xl p-3">
+          <summary class="text-xs font-bold text-gray-600 cursor-pointer">🎂 วันเกิด (Optional)</summary>
+          <div class="grid grid-cols-2 gap-2 mt-3">
+            <select id="maBirthDay" class="p-2 border rounded-lg text-sm"><option value="">วัน</option></select>
+            <select id="maBirthMonth" class="p-2 border rounded-lg text-sm"><option value="">เดือน</option></select>
+          </div>
+        </details>
+        <div class="border-t pt-3 bg-yellow-50 p-3 rounded-xl">
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" id="maPdpaSigned" required class="mt-1 w-4 h-4">
+            <span class="text-xs text-gray-700"><strong class="text-yellow-800">⚠️ ยืนยัน:</strong> ลูกค้าได้เซ็นใบ PDPA Consent (กระดาษ) แล้ว และเก็บไว้ที่ร้านตามนโยบาย</span>
+          </label>
+        </div>
+        <button type="submit" id="maSubmitBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl"><i class="fa-solid fa-check"></i> เพิ่มลูกค้า</button>
+      </form>
+      <div id="maSuggestSection" class="hidden mt-4 border-t pt-4">
+        <p class="text-sm font-bold text-orange-600 mb-2">⚠️ พบลูกค้าที่อาจซ้ำ:</p>
+        <div id="maSuggestList" class="space-y-2"></div>
+        <button onclick="forceAddManual()" class="w-full mt-3 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-xl text-sm font-bold">✅ ใช่ ไม่ซ้ำ — เพิ่มเป็นลูกค้าใหม่</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- 📢 Broadcast Modal (Part D — stub, real impl in next Spec) -->
+  <!-- ════════════════════════════════════════════════ -->
+  <div id="broadcastModal" class="hidden fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex justify-between items-start mb-3">
+        <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-bullhorn text-purple-600"></i> 📢 Broadcast LINE OA</h2>
+        <button onclick="closeBroadcastModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <p class="text-xs text-gray-500 mb-3">Tier ที่จะส่ง: <span id="bcTierLabel" class="font-bold text-gray-700">—</span></p>
+      <p class="text-xs text-gray-500 mb-3">จำนวนผู้รับ: <span id="bcRecipientCount" class="font-bold text-purple-700">0</span> คน</p>
+      <label class="text-xs font-bold text-gray-700 mb-1 block">ข้อความ:</label>
+      <textarea id="bcMessage" class="w-full p-3 border border-gray-300 rounded-xl text-sm mb-3" rows="5" placeholder="เช่น 🎁 โปรพิเศษ! ลด 30% ทุกแพ็กเกจ Premium..."></textarea>
+      <div class="flex gap-2">
+        <button onclick="closeBroadcastModal()" class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-bold">ยกเลิก</button>
+        <button onclick="submitBroadcast()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-bold"><i class="fa-solid fa-paper-plane"></i> ส่ง Broadcast</button>
+      </div>
+    </div>
+  </div>
 
   <section id="config-section" class="section p-4 lg:p-6 max-w-4xl mx-auto">
     <div class="bg-white rounded-3xl p-6 shadow-sm border-t-4 border-gray-800">
@@ -4745,6 +4846,303 @@
       }
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // 🔴 D62 RESTORE (9/6/2026 Regression Pattern #3) — Walk-in Manual Add
+    // 🆕 CRM Segmentation v1 (9/6/2026) — Tier badges + Call List + Broadcast
+    // ════════════════════════════════════════════════════════════════════
+
+    // ─── D62 #1 Helper: fill dropdowns 1-31 + 1-12 (months) ───
+    function _crm_fillDateDropdowns() {
+      const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      ['maBirthDay','epBirthDay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.options.length <= 1) {
+          for (let d = 1; d <= 31; d++) el.add(new Option(d, d));
+        }
+      });
+      ['maBirthMonth','epBirthMonth'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.options.length <= 1) {
+          months.forEach((m, i) => el.add(new Option(m, i+1)));
+        }
+      });
+    }
+
+    // ─── D62 #2 Manual Add helpers ───
+    function openManualAddModal() {
+      const f = document.getElementById('manualAddForm');
+      if (f) f.reset();
+      const s = document.getElementById('maSuggestSection');
+      if (s) s.classList.add('hidden');
+      _crm_fillDateDropdowns();
+      document.getElementById('manualAddModal').classList.remove('hidden');
+    }
+    function closeManualAddModal() {
+      document.getElementById('manualAddModal').classList.add('hidden');
+    }
+
+    async function submitManualAdd(forceCreate) {
+      const btn = document.getElementById('maSubmitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังเพิ่ม...';
+      const payload = new URLSearchParams({
+        action: 'addManualCustomer',
+        name: document.getElementById('maName').value,
+        phone: document.getElementById('maPhone').value,
+        plate: document.getElementById('maPlate').value || '',
+        brand: document.getElementById('maBrand').value || '',
+        model: document.getElementById('maModel').value || '',
+        color: document.getElementById('maColor').value || '',
+        size: document.getElementById('maSize').value || 'M',
+        birthDay: document.getElementById('maBirthDay').value || '',
+        birthMonth: document.getElementById('maBirthMonth').value || '',
+        pdpaPaperSigned: document.getElementById('maPdpaSigned').checked ? '1' : '',
+        forceCreate: forceCreate ? '1' : '',
+        adminUid: (localStorage.getItem('karshine_admin_uid') || window.adminUid || '')
+      });
+      try {
+        const res = await fetch(API_URL, { method: 'POST', body: (typeof withAuth === 'function') ? withAuth(payload) : payload });
+        const data = await res.json();
+        if (data.status === 'success') {
+          Swal.fire({ icon:'success', title:'เพิ่มสำเร็จ!', text:'ลูกค้า '+(data.line_uid || data.lineUid || '')+' พร้อมใช้งาน', timer:2000 });
+          closeManualAddModal();
+          document.getElementById('crmKeyword').value = document.getElementById('maPhone').value;
+          document.getElementById('crmSearchForm').dispatchEvent(new Event('submit'));
+        } else if (data.status === 'duplicate_exact') {
+          Swal.fire({ icon:'warning', title:'พบเบอร์ซ้ำ',
+                      html: 'ลูกค้า <strong>'+esc(data.existing.name)+'</strong><br>เบอร์: '+esc(data.existing.phone)+'<br><br>ใช้ลูกค้าเดิมแทน?',
+                      showCancelButton:true, confirmButtonText:'ใช้ลูกค้าเดิม' })
+            .then(r => {
+              if (r.isConfirmed) {
+                closeManualAddModal();
+                document.getElementById('crmKeyword').value = data.existing.phone;
+                document.getElementById('crmSearchForm').dispatchEvent(new Event('submit'));
+              }
+            });
+        } else if (data.status === 'suggest_merge') {
+          const list = (data.suggestions || []).map(s => `
+            <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm">
+              <p class="font-bold">${esc(s.name)}</p>
+              <p class="text-xs text-gray-600">📞 ${esc(s.phone)} • ID: ${esc(s.user_id || s.lineUid || '')}</p>
+            </div>`).join('');
+          document.getElementById('maSuggestList').innerHTML = list;
+          document.getElementById('maSuggestSection').classList.remove('hidden');
+        } else {
+          Swal.fire('ไม่สำเร็จ', data.message || 'unknown', 'error');
+        }
+      } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> เพิ่มลูกค้า';
+      }
+    }
+    function forceAddManual() { submitManualAdd(true); }
+
+    // Hook form submit (DOMContentLoaded — added separately to avoid race)
+    document.addEventListener('DOMContentLoaded', function() {
+      const f = document.getElementById('manualAddForm');
+      if (f) f.addEventListener('submit', function(e) { e.preventDefault(); submitManualAdd(false); });
+    });
+
+    // ════════════════════════════════════════════════════════════════════
+    // 🆕 CRM Segmentation v1 — Tier Badge + Call List + Broadcast
+    // ════════════════════════════════════════════════════════════════════
+    window._crmTierCache = null;     // last getCustomerTiers response
+    window._callListFilter = ['pkg_expiring', 'pkg_sleeping', 'dormant'];   // default
+
+    function _tierBadgeHtml(tier) {
+      if (!tier || !tier.label) return '';
+      return '<span class="px-2 py-1 rounded-full text-[10px] font-bold ml-1" '
+           + 'style="background:' + (tier.color || '#9CA3AF') + '20;color:' + (tier.color || '#374151') + ';">'
+           + esc(tier.label) + '</span>';
+    }
+
+    async function _fetchTiers(tierFilter) {
+      const body = new URLSearchParams({ action: 'getCustomerTiers' });
+      if (Array.isArray(tierFilter) && tierFilter.length) {
+        body.set('tierFilter', tierFilter.join(','));
+      }
+      const res = await fetch(API_URL, { method: 'POST', body: (typeof withAuth === 'function') ? withAuth(body) : body });
+      return await res.json();
+    }
+
+    async function refreshAllTiers() {
+      const btn = document.getElementById('btnRefreshTiers');
+      if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      try {
+        const j = await _fetchTiers([]);   // all tiers (no filter)
+        if (j.ok || j.tiers) {
+          window._crmTierCache = j.tiers || [];
+          // Update Call List badge count
+          const callListCount = (j.tiers || []).filter(t => window._callListFilter.includes(t.tier)).length;
+          const badgeEl = document.getElementById('callListBadge');
+          if (badgeEl) badgeEl.textContent = callListCount;
+          Swal.fire({ icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'โหลด tier ' + (j.tiers || []).length + ' ลูกค้า', timer: 1500 });
+        } else {
+          Swal.fire('ผิดพลาด', j.message || 'ดึง tier ไม่สำเร็จ', 'error');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+      finally { if (btn) btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i>'; }
+    }
+
+    async function openCallList() {
+      const wrap = document.getElementById('crmResults');
+      if (!wrap) return;
+      wrap.innerHTML = '<div class="text-center py-6"><i class="fa-solid fa-spinner fa-spin text-2xl text-orange-500"></i><p class="text-xs text-gray-500 mt-2">กำลังโหลด Call List...</p></div>';
+
+      const j = await _fetchTiers(window._callListFilter);
+      const tiers = j.tiers || [];
+      window._crmTierCache = tiers;
+
+      // Filter toggle UI
+      const filterUi =
+        '<div class="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-3 text-xs">' +
+        '<p class="font-bold mb-2 text-gray-600">🎯 Filter:</p>' +
+        '<div class="flex flex-wrap gap-2">' +
+          _callListToggle('pkg_expiring', '⏰ Expiring (เร่งด่วน)', '#EF4444') +
+          _callListToggle('pkg_sleeping', '😴 Sleeping (>14d)', '#F97316') +
+          _callListToggle('dormant',      '💤 Dormant (>60d)', '#6B7280') +
+          _callListToggle('new_lead',     '🆕 New Lead', '#3B82F6') +
+        '</div></div>';
+
+      if (tiers.length === 0) {
+        wrap.innerHTML = filterUi + '<div class="text-center text-gray-400 text-sm py-10 border-2 border-dashed border-gray-200 rounded-xl">✨ ไม่มีลูกค้าต้องโทรตาม — เรียบร้อย!</div>';
+        return;
+      }
+
+      // Group by tier for breakdown badge
+      const breakdown = {};
+      tiers.forEach(t => { breakdown[t.tier] = (breakdown[t.tier] || 0) + 1; });
+
+      const summaryBar =
+        '<div class="bg-orange-50 border border-orange-200 rounded-xl p-3 mb-3 flex justify-between items-center">' +
+          '<div>' +
+            '<p class="text-xs text-orange-700 font-bold">📞 ต้องโทรตาม</p>' +
+            '<p class="text-2xl font-bold text-orange-800">' + tiers.length + ' <span class="text-sm font-normal">คน</span></p>' +
+          '</div>' +
+          '<button onclick="openBroadcastModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-xs font-bold">' +
+            '<i class="fa-solid fa-bullhorn"></i> Broadcast' +
+          '</button>' +
+        '</div>';
+
+      const cards = tiers.map(_renderCallListCard).join('');
+      wrap.innerHTML = filterUi + summaryBar + '<div class="space-y-2">' + cards + '</div>';
+
+      // Update badge count
+      const badgeEl = document.getElementById('callListBadge');
+      if (badgeEl) badgeEl.textContent = tiers.length;
+    }
+
+    function _callListToggle(tier, label, color) {
+      const checked = window._callListFilter.includes(tier) ? 'checked' : '';
+      return '<label class="flex items-center gap-1 cursor-pointer">' +
+             '<input type="checkbox" ' + checked + ' onchange="toggleCallListFilter(\'' + tier + '\')" class="w-3 h-3">' +
+             '<span style="color:' + color + ';font-weight:bold;">' + label + '</span>' +
+             '</label>';
+    }
+
+    function toggleCallListFilter(tier) {
+      const i = window._callListFilter.indexOf(tier);
+      if (i >= 0) window._callListFilter.splice(i, 1);
+      else window._callListFilter.push(tier);
+      openCallList();
+    }
+
+    function _renderCallListCard(t) {
+      const reasonMap = {
+        pkg_expiring: 'Package หมดอายุใน ' + (t.daysToExpire != null ? t.daysToExpire + ' วัน' : '—'),
+        pkg_sleeping: 'ไม่มาใช้ ' + t.daysSinceVisit + ' วัน (package active)',
+        dormant:      'ไม่มาใช้ ' + t.daysSinceVisit + ' วัน',
+        new_lead:     'สมัครแล้ว ยังไม่จองครั้งแรก'
+      };
+      const reason = reasonMap[t.tier] || '—';
+      const phoneEsc = esc(t.phone || '');
+      return '<div class="bg-white border border-gray-200 rounded-xl p-3 flex items-center gap-3 shadow-sm">' +
+        '<span class="px-2 py-1 rounded-full text-[10px] font-bold flex-shrink-0" ' +
+          'style="background:' + (t.color || '#9CA3AF') + '20;color:' + (t.color || '#374151') + ';">' + esc(t.label || '') + '</span>' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="font-bold text-sm text-gray-800 truncate">' + esc(t.name || '-') + '</p>' +
+          '<p class="text-xs text-gray-500">📞 ' + (phoneEsc ? '<a href="tel:' + phoneEsc + '" class="text-blue-600 hover:underline">' + phoneEsc + '</a>' : '—') + '</p>' +
+          '<p class="text-[11px] text-gray-600">' + esc(reason) + '</p>' +
+        '</div>' +
+        '<button onclick="markCalled(\'' + esc(t.lineUid) + '\', this)" ' +
+          'class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-xs font-bold flex-shrink-0">' +
+          '<i class="fa-solid fa-check"></i> โทรแล้ว' +
+        '</button>' +
+      '</div>';
+    }
+
+    async function markCalled(lineUid, btnEl) {
+      if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      }
+      try {
+        const body = new URLSearchParams({
+          action: 'logCallFollowup',
+          lineUid: lineUid,
+          adminUid: (localStorage.getItem('karshine_admin_uid') || 'admin')
+        });
+        const r = await fetch(API_URL, { method: 'POST', body: (typeof withAuth === 'function') ? withAuth(body) : body });
+        const j = await r.json();
+        if (j.ok || j.status === 'success') {
+          // Grey out the card
+          if (btnEl) {
+            const card = btnEl.closest('div.bg-white');
+            if (card) {
+              card.style.opacity = '0.4';
+              btnEl.outerHTML = '<span class="text-emerald-700 text-xs font-bold">✅ โทรแล้ว</span>';
+            }
+          }
+        } else {
+          Swal.fire('ผิดพลาด', j.message || 'ลอง log ไม่สำเร็จ', 'error');
+          if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fa-solid fa-check"></i> โทรแล้ว'; }
+        }
+      } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fa-solid fa-check"></i> โทรแล้ว'; }
+      }
+    }
+
+    // ─── Broadcast Modal (Part D — stub) ───
+    function openBroadcastModal() {
+      const filter = window._callListFilter;
+      const labels = { pkg_expiring: '⏰ Expiring', pkg_sleeping: '😴 Sleeping', dormant: '💤 Dormant', new_lead: '🆕 New Lead' };
+      const tierLabel = filter.map(t => labels[t] || t).join(' + ');
+      const count = (window._crmTierCache || []).length;
+      document.getElementById('bcTierLabel').textContent = tierLabel || '—';
+      document.getElementById('bcRecipientCount').textContent = count;
+      document.getElementById('bcMessage').value = '';
+      document.getElementById('broadcastModal').classList.remove('hidden');
+    }
+    function closeBroadcastModal() {
+      document.getElementById('broadcastModal').classList.add('hidden');
+    }
+    async function submitBroadcast() {
+      const msg = document.getElementById('bcMessage').value.trim();
+      if (msg.length < 5) return Swal.fire('แจ้งเตือน', 'ข้อความสั้นเกินไป (อย่างน้อย 5 ตัวอักษร)', 'warning');
+      const body = new URLSearchParams({
+        action: 'broadcastToSegment',
+        tierFilter: window._callListFilter.join(','),
+        message: msg,
+        adminUid: (localStorage.getItem('karshine_admin_uid') || 'admin')
+      });
+      try {
+        const r = await fetch(API_URL, { method: 'POST', body: (typeof withAuth === 'function') ? withAuth(body) : body });
+        const j = await r.json();
+        if (j.ok || j.status === 'success') {
+          Swal.fire('สำเร็จ', j.message || 'ส่ง broadcast แล้ว', 'success');
+          closeBroadcastModal();
+        } else if (j.error === 'NOT_IMPLEMENTED') {
+          Swal.fire('🚧 ยังไม่เปิดใช้งาน', 'ฟีเจอร์ broadcast อยู่ระหว่าง dev — Master จะ build Spec ถัดไป', 'info');
+          closeBroadcastModal();
+        } else {
+          Swal.fire('ผิดพลาด', j.message || 'broadcast ไม่สำเร็จ', 'error');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    }
+
     // ==============================================
     // 👥 3. ระบบ CRM (ค้นหา & Modal)
     // ==============================================
@@ -4758,15 +5156,33 @@
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if(result.status === 'success') {
+          // 🆕 CRM Segmentation v1 (9/6/2026): hydrate tier badges per row (best-effort, non-blocking)
+          //    Use cached _crmTierCache if available; otherwise tag with "—"
+          const _tierByUid = {};
+          (window._crmTierCache || []).forEach(t => { if (t && t.lineUid) _tierByUid[String(t.lineUid)] = t; });
+
           resContainer.innerHTML = result.data.map(u => {
             // 🔒 escape ทุกค่าก่อนเอาไปแปะใน HTML/onclick
             const _name = esc(u.name), _phone = esc(u.phone), _uid = esc(u.uid), _pts = Number(u.points)||0;
+            // 🆕 Tier badge — pulled from cache; renders "👤 Regular" or proper badge
+            const _tier = _tierByUid[String(u.uid)] || null;
+            const _badgeHtml = _tier
+              ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ml-2" '
+                + 'style="background:' + (_tier.color || '#9CA3AF') + '20;color:' + (_tier.color || '#374151') + ';">'
+                + esc(_tier.label || '') + '</span>'
+              : '';
+            const _multiTierHtml = (_tier && _tier.allTiers && _tier.allTiers.length > 1)
+              ? '<div class="flex flex-wrap gap-1 mt-2">'
+                + _tier.allTiers.map(l => '<span class="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">' + esc(l) + '</span>').join('')
+                + '</div>'
+              : '';
             return `
             <div class="bg-gray-50 border border-gray-200 rounded-2xl p-5 shadow-sm">
               <div class="flex justify-between items-start mb-4">
                 <div>
-                  <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-user-circle text-gray-400 mr-1"></i> ${_name}</h3>
+                  <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-user-circle text-gray-400 mr-1"></i> ${_name}${_badgeHtml}</h3>
                   <p class="text-sm text-gray-500"><i class="fa-solid fa-phone text-gray-400 mr-1"></i> ${_phone}</p>
+                  ${_multiTierHtml}
                 </div>
                 <div class="text-right bg-blue-100 px-4 py-2 rounded-xl border border-blue-200 cursor-pointer hover:bg-blue-200 transition" onclick="editPoints('${_uid}', '${_name}', ${_pts})">
                   <p class="text-[10px] font-bold text-blue-600 uppercase mb-1">แต้มสะสม <i class="fa-solid fa-pen text-[8px]"></i></p>
@@ -4778,6 +5194,13 @@
               </button>
             </div>
           `;}).join('');
+
+          // 🆕 If no tier cache yet — fire background fetch to hydrate (next search will have badges)
+          if (!window._crmTierCache && result.data.length > 0) {
+            setTimeout(function() {
+              if (typeof refreshAllTiers === 'function') refreshAllTiers();
+            }, 100);
+          }
         } else { resContainer.innerHTML = `<div class="text-center text-red-400 text-sm py-8 border-2 border-dashed border-red-200 rounded-xl bg-red-50"><i class="fa-solid fa-circle-exclamation text-2xl mb-2 block"></i> ${result.message}</div>`; }
       } catch(e) { resContainer.innerHTML = `<div class="text-center text-red-500 text-sm">${e.message}</div>`; }
     });
