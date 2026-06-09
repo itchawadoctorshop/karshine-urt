@@ -80,8 +80,9 @@
   <section id="board-section" class="section active p-4 lg:p-6">
     <!-- 🚗 F0.2 Valet: ขยายเป็น 5 swim lanes (scroll ซ้าย-ขวาบนมือถือ) — Dashboard ย้ายไป Tab "รายงาน" -->
     <!-- 💰 C4 v1.2 D136 (7/6/2026): + Lane 0 "รอชำระ" → 6 lanes total -->
+    <!-- 📤 v1.3 Fix #3 (9/6/2026): + Lane 0.5 "รอ Verify" → 7 lanes total -->
     <div class="overflow-x-auto pb-2">
-      <div class="grid gap-4 items-start" style="grid-template-columns: repeat(6, minmax(220px, 1fr)); min-width: 1320px;" id="board">
+      <div class="grid gap-4 items-start" style="grid-template-columns: repeat(7, minmax(220px, 1fr)); min-width: 1540px;" id="board">
 
         <!-- Lane 0: 💰 รอชำระ (pending_payment) — C4 v1.2 D136 -->
         <div class="bg-amber-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-amber-400">
@@ -90,6 +91,15 @@
             <span id="countPendingPayment" class="bg-amber-200 text-amber-800 px-2 rounded-full text-xs py-1">0</span>
           </h2>
           <div id="colPendingPayment" class="space-y-3"></div>
+        </div>
+
+        <!-- Lane 0.5: 📤 รอ Verify (slip_submitted) — v1.3 Fix #3 -->
+        <div class="bg-cyan-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-cyan-400">
+          <h2 class="font-bold text-cyan-800 mb-4 pb-2 border-b border-cyan-200 flex justify-between items-center">
+            <span><i class="fa-solid fa-receipt text-cyan-500 mr-1"></i> รอ Verify</span>
+            <span id="countSlipSubmitted" class="bg-cyan-200 text-cyan-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colSlipSubmitted" class="space-y-3"></div>
         </div>
 
         <!-- Lane 1: 🚗 ต้องไปรับ (valet_pickup_pending) -->
@@ -2272,6 +2282,40 @@
         </div>`;
     }
 
+    // 📤 v1.3 Fix #3 (9/6/2026): slip_submitted card — cyan variant of pending_payment
+    //   ลูกค้ายืนยันการโอนแล้ว — admin verify/reject
+    function slipSubmittedCardHtml(b) {
+      const plate     = (typeof esc === 'function') ? esc(b.plate || '-') : (b.plate || '-');
+      const name      = (typeof esc === 'function') ? esc(b.customerName || 'ลูกค้าใหม่') : (b.customerName || 'ลูกค้าใหม่');
+      const phone     = (typeof esc === 'function') ? esc(b.customerPhone || '') : (b.customerPhone || '');
+      const amount    = parseFloat(b.paymentAmount || 0) || 0;
+      const bookingId = (typeof esc === 'function') ? esc(b.bookingId) : b.bookingId;
+      let timeStr = b.bookingDate || '';
+      try { if (timeStr.includes('T')) { const d = new Date(timeStr); timeStr = d.toLocaleString('th-TH', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }); } } catch (e) {}
+      return `
+        <div class="bg-cyan-50 border-2 border-cyan-300 rounded-2xl p-4 shadow-sm">
+          <div class="flex justify-between items-start mb-2">
+            <span class="text-xl font-black text-gray-800">${plate}</span>
+            <span class="text-xs font-bold bg-cyan-200 text-cyan-900 px-2 py-1 rounded-lg">📤 ${amount.toLocaleString()}.-</span>
+          </div>
+          <p class="text-xs text-gray-700 mb-1"><i class="fa-solid fa-user text-gray-400 text-[10px]"></i> ${name}</p>
+          ${phone ? `<p class="text-xs mb-1"><i class="fa-solid fa-phone text-blue-500 text-[10px]"></i> <a href="tel:${phone}" class="text-blue-600 hover:underline">${phone}</a></p>` : ''}
+          <p class="text-[11px] text-gray-500 mb-2">⏰ ${timeStr}</p>
+          <p class="text-[11px] text-cyan-700 font-bold mb-3">📤 ลูกค้ายืนยันการโอนแล้ว — ตรวจสลิป + verify</p>
+          <div class="flex gap-2">
+            <button onclick="verifyPaymentNow('${bookingId}')"
+                    class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-bold active:scale-95">
+              ✅ Verify
+            </button>
+            <button onclick="rejectPaymentNow('${bookingId}')"
+                    class="bg-red-100 hover:bg-red-200 text-red-700 px-3 rounded-lg text-xs active:scale-95"
+                    title="ปฏิเสธ + cancel">
+              ❌
+            </button>
+          </div>
+        </div>`;
+    }
+
     async function verifyPaymentNow(bookingId) {
       const conf = await Swal.fire({
         icon: 'question',
@@ -2343,6 +2387,8 @@
       const colValetDropoff = document.getElementById('colValetDropoff');
       // 💰 C4 v1.2 D136: Pending payment lane
       const colPendingPayment = document.getElementById('colPendingPayment');
+      // 📤 v1.3 Fix #3: Slip submitted lane
+      const colSlipSubmitted  = document.getElementById('colSlipSubmitted');
       if (!colPending || !colCheckedIn || !colInProgress) return;
 
       colValetPickup.innerHTML  = '';
@@ -2351,12 +2397,14 @@
       colInProgress.innerHTML   = '';
       colValetDropoff.innerHTML = '';
       if (colPendingPayment) colPendingPayment.innerHTML = '';
-      let cValetPick = 0, cPend = 0, cCheck = 0, cProg = 0, cValetDrop = 0, cPendPay = 0;
+      if (colSlipSubmitted)  colSlipSubmitted.innerHTML  = '';
+      let cValetPick = 0, cPend = 0, cCheck = 0, cProg = 0, cValetDrop = 0, cPendPay = 0, cSlipSub = 0;
 
       // 🆕 BUG Cash+Preorder FIX (D118): collect pre-order cards separately → append tail (ไปก้นของ column)
       //   buffers[colKey] = { normal: [], preorder: [] }
       const _buf = {
         pendingPayment: { normal: [], preorder: [] },
+        slipSubmitted:  { normal: [], preorder: [] },
         valetPickup:  { normal: [], preorder: [] },
         pending:      { normal: [], preorder: [] },
         checkedIn:    { normal: [], preorder: [] },
@@ -2473,6 +2521,9 @@
         const _bucket = isPreorder ? 'preorder' : 'normal';
         if (b.status === 'pending_payment') {
           _buf.pendingPayment[_bucket].push(paymentPendingCardHtml(b)); cPendPay++;
+        } else if (b.status === 'slip_submitted') {
+          // 📤 v1.3 Fix #3: customer submitted slip — reuse same card (admin verify/reject buttons)
+          _buf.slipSubmitted[_bucket].push(slipSubmittedCardHtml(b)); cSlipSub++;
         } else if (b.status === 'valet_pickup_pending' || b.status === 'valet_going_pickup') {
           _buf.valetPickup[_bucket].push(cardHtml); cValetPick++;
         } else if (b.status === 'pending' || b.status === 'confirmed') {
@@ -2488,6 +2539,7 @@
 
       // 🆕 D118: flush buffers — normal cards ขึ้นบน, pre-order ลงล่าง
       if (colPendingPayment) colPendingPayment.innerHTML = _buf.pendingPayment.normal.join('') + _buf.pendingPayment.preorder.join('');
+      if (colSlipSubmitted)  colSlipSubmitted.innerHTML  = _buf.slipSubmitted.normal.join('')  + _buf.slipSubmitted.preorder.join('');
       colValetPickup.innerHTML  = _buf.valetPickup.normal.join('')  + _buf.valetPickup.preorder.join('');
       colPending.innerHTML      = _buf.pending.normal.join('')      + _buf.pending.preorder.join('');
       colCheckedIn.innerHTML    = _buf.checkedIn.normal.join('')    + _buf.checkedIn.preorder.join('');
@@ -2495,6 +2547,7 @@
       colValetDropoff.innerHTML = _buf.valetDropoff.normal.join('') + _buf.valetDropoff.preorder.join('');
 
       if (colPendingPayment && cPendPay === 0) colPendingPayment.innerHTML = '<div class="text-center text-amber-300 text-sm py-8 border-2 border-dashed border-amber-200 rounded-xl">ว่าง</div>';
+      if (colSlipSubmitted  && cSlipSub === 0) colSlipSubmitted.innerHTML  = '<div class="text-center text-cyan-300 text-sm py-8 border-2 border-dashed border-cyan-200 rounded-xl">ว่าง</div>';
       if (cValetPick === 0)  colValetPickup.innerHTML  = '<div class="text-center text-orange-300 text-sm py-8 border-2 border-dashed border-orange-200 rounded-xl">ว่าง</div>';
       if (cPend === 0)       colPending.innerHTML      = '<div class="text-center text-gray-400 text-sm py-8 border-2 border-dashed border-gray-300 rounded-xl">ว่าง</div>';
       if (cCheck === 0)      colCheckedIn.innerHTML    = '<div class="text-center text-blue-300 text-sm py-8 border-2 border-dashed border-blue-200 rounded-xl">ว่าง</div>';
@@ -2503,6 +2556,8 @@
 
       const _countPendPayEl = document.getElementById('countPendingPayment');
       if (_countPendPayEl) _countPendPayEl.innerText = cPendPay;
+      const _countSlipEl    = document.getElementById('countSlipSubmitted');
+      if (_countSlipEl)    _countSlipEl.innerText    = cSlipSub;
       document.getElementById('countValetPickup').innerText  = cValetPick;
       document.getElementById('countPending').innerText      = cPend;
       document.getElementById('countCheckedIn').innerText    = cCheck;
