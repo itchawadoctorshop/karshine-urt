@@ -527,18 +527,25 @@
   </div>
 
   <!-- ════════════════════════════════════════════════ -->
-  <!-- 📢 Broadcast Modal (Part D — stub, real impl in next Spec) -->
+  <!-- 📢 Broadcast Modal — v1.0 real impl (9/6/2026 — replaces stub) -->
   <!-- ════════════════════════════════════════════════ -->
   <div id="broadcastModal" class="hidden fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-start mb-3">
         <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-bullhorn text-purple-600"></i> 📢 Broadcast LINE OA</h2>
         <button onclick="closeBroadcastModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
       </div>
       <p class="text-xs text-gray-500 mb-3">Tier ที่จะส่ง: <span id="bcTierLabel" class="font-bold text-gray-700">—</span></p>
-      <p class="text-xs text-gray-500 mb-3">จำนวนผู้รับ: <span id="bcRecipientCount" class="font-bold text-purple-700">0</span> คน</p>
+      <p class="text-xs text-gray-500 mb-3">คาดผู้รับ: <span id="bcRecipientCount" class="font-bold text-purple-700">0</span> คน <span class="text-[10px] text-gray-400">(หลัง filter opt-out + cool-down)</span></p>
+      <label class="text-xs font-bold text-gray-700 mb-1 block">ชื่อ Campaign (สำหรับ audit):</label>
+      <input type="text" id="bcCampaignName" class="w-full p-2 border border-gray-300 rounded-lg text-sm mb-3" placeholder="เช่น Members Win-back Jun2026" maxlength="100">
       <label class="text-xs font-bold text-gray-700 mb-1 block">ข้อความ:</label>
       <textarea id="bcMessage" class="w-full p-3 border border-gray-300 rounded-xl text-sm mb-3" rows="5" placeholder="เช่น 🎁 โปรพิเศษ! ลด 30% ทุกแพ็กเกจ Premium..."></textarea>
+      <label class="flex items-center gap-2 cursor-pointer text-sm mb-3 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+        <input type="checkbox" id="bcTestMode" class="w-4 h-4 accent-amber-500">
+        <span class="text-amber-700 font-bold">🧪 Test Mode — ส่งถึงตัวเองคนเดียว</span>
+      </label>
+      <p class="text-[10px] text-gray-500 italic mb-3">⚠️ ระบบจะ skip ลูกค้าที่ opt-out (พิมพ์ "ยกเลิกแจ้งเตือน") + ผู้ที่ได้ broadcast ครบ 2 ครั้งใน 7 วัน</p>
       <div class="flex gap-2">
         <button onclick="closeBroadcastModal()" class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-bold">ยกเลิก</button>
         <button onclick="submitBroadcast()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-bold"><i class="fa-solid fa-paper-plane"></i> ส่ง Broadcast</button>
@@ -3417,6 +3424,105 @@
       }
     }
 
+    // ════════════════════════════════════════════════════════════
+    // 💰 Credit-Back v1.0 (9/6/2026) — Apply Credit in Payment Modal
+    // ════════════════════════════════════════════════════════════
+    async function _checkAndShowCredits(lineUid, bookingTotal) {
+      const wrapper = document.getElementById('creditApplySection');
+      const list    = document.getElementById('creditList');
+      const applyBtn = document.getElementById('btnApplyCredit');
+      if (!wrapper || !list) return;
+      // Reset state for this modal open
+      wrapper.classList.add('hidden');
+      list.innerHTML = '';
+      if (applyBtn) applyBtn.classList.add('hidden');
+      if (!lineUid || String(lineUid).charAt(0) !== 'U') return;
+      try {
+        const body = new URLSearchParams({ action: 'getCustomerCredits', lineUid: lineUid });
+        const r = await fetch(API_URL, { method: 'POST', body: (typeof withAuth === 'function') ? withAuth(body) : body });
+        const data = await r.json();
+        if (!data || !data.ok || !Array.isArray(data.credits) || data.credits.length === 0) return;
+        // Filter by min_redeem_value
+        const eligible = data.credits.filter(function(c) { return (bookingTotal || 0) >= (c.min_redeem_value || 0); });
+        if (eligible.length === 0) {
+          // Show "มี credit แต่ยอดยังไม่ถึง min" hint
+          list.innerHTML = '<p class="text-xs text-amber-700">⚠️ ลูกค้ามี Credit ฿' + (data.total_active_amount || 0).toLocaleString() +
+                           ' แต่ยอด booking ยังไม่ถึงขั้นต่ำ — เพิ่มบริการอีก หรือใช้ครั้งหน้า</p>';
+          wrapper.classList.remove('hidden');
+          return;
+        }
+        // Render eligible credits as radio options
+        list.innerHTML = eligible.map(function(c) {
+          const expireBadge = c.daysLeft <= 7
+            ? '<span class="text-[10px] text-red-600 font-bold">⏰ หมดใน ' + c.daysLeft + ' วัน!</span>'
+            : '<span class="text-[10px] text-gray-500">หมดใน ' + c.daysLeft + ' วัน</span>';
+          return '<label class="flex items-center gap-2 p-2 bg-white rounded-lg cursor-pointer hover:bg-emerald-50 border border-emerald-100">' +
+                 '<input type="radio" name="creditChoice" value="' + esc(c.credit_id) + '" data-amount="' + c.amount + '" onchange="_onCreditSelected()" class="accent-emerald-600">' +
+                 '<div class="flex-1">' +
+                   '<div class="font-bold text-emerald-700">฿' + c.amount.toLocaleString() + ' <span class="font-normal text-xs text-gray-600">' + esc(c.label || c.source_type) + '</span></div>' +
+                   '<div class="text-[10px]">' + expireBadge + ' · ต่ำสุด ฿' + (c.min_redeem_value || 0).toLocaleString() + '</div>' +
+                 '</div>' +
+                 '</label>';
+        }).join('');
+        wrapper.classList.remove('hidden');
+      } catch (e) { console.warn('_checkAndShowCredits err:', e); }
+    }
+
+    function _onCreditSelected() {
+      const selected = document.querySelector('input[name="creditChoice"]:checked');
+      const applyBtn = document.getElementById('btnApplyCredit');
+      const amtSpan  = document.getElementById('creditApplyAmount');
+      if (!selected || !applyBtn) return;
+      if (amtSpan) amtSpan.textContent = Number(selected.dataset.amount || 0).toLocaleString();
+      applyBtn.classList.remove('hidden');
+    }
+
+    async function applySelectedCredit() {
+      const selected = document.querySelector('input[name="creditChoice"]:checked');
+      if (!selected) return Swal.fire('แจ้งเตือน', 'กรุณาเลือก Credit ก่อน', 'warning');
+      const bookingId = window._currentPaymentBookingId;
+      if (!bookingId) return Swal.fire('Error', 'ไม่พบ booking id', 'error');
+      const btn = document.getElementById('btnApplyCredit');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังใช้...'; }
+      try {
+        const body = new URLSearchParams({
+          action: 'useCredit',
+          creditId: selected.value,
+          bookingId: bookingId,
+          adminUid: (localStorage.getItem('karshine_admin_uid') || 'admin')
+        });
+        const r = await fetch(API_URL, { method: 'POST', body: (typeof withAuth === 'function') ? withAuth(body) : body });
+        const j = await r.json();
+        if (j && j.ok) {
+          Swal.fire({
+            icon: 'success',
+            title: '✅ Apply Credit สำเร็จ',
+            html: 'Credit: <b>฿' + Number(j.credit_used).toLocaleString() + '</b><br>' +
+                  'ยอดเดิม: ฿' + Number(j.booking_original_total).toLocaleString() + '<br>' +
+                  'ยอดใหม่: <b class="text-emerald-700">฿' + Number(j.booking_new_total).toLocaleString() + '</b>',
+            timer: 3500
+          }).then(function() {
+            // Refresh Kanban + close modal so admin reopens with new amounts
+            if (typeof loadAdminData === 'function') loadAdminData();
+          });
+        } else {
+          const errMap = {
+            BELOW_MIN_VALUE:    'ยอด booking ต่ำกว่าขั้นต่ำที่ใช้ Credit ได้',
+            CUSTOMER_MISMATCH:  'Credit นี้ไม่ใช่ของลูกค้าคนนี้',
+            CREDIT_NOT_ACTIVE:  'Credit ถูกใช้/หมดอายุ/ยกเลิกแล้ว',
+            SERVICE_NOT_ALLOWED:'Credit นี้ใช้ได้เฉพาะบริการบางตัวเท่านั้น',
+            CREDIT_NOT_FOUND:   'ไม่พบ Credit',
+            BOOKING_NOT_FOUND:  'ไม่พบ booking'
+          };
+          Swal.fire('❌ Apply ไม่สำเร็จ', errMap[j && j.error] || (j && j.message) || 'unknown', 'error');
+        }
+      } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '💰 Apply Credit (ลด ฿<span id="creditApplyAmount">' + Number(selected.dataset.amount || 0).toLocaleString() + '</span>)'; }
+      }
+    }
+
     async function openPaymentModal_(bookingId, opts) {
       opts = opts || {};
       const completeAfter = opts.completeAfter !== false;  // default: true (ล้างเสร็จ)
@@ -3494,6 +3600,15 @@
                 </select>
               </div>
             </div>
+          </div>
+
+          <!-- 💰 Credit-Back v1.0 (9/6/2026): Apply available credit (admin-side) -->
+          <div id="creditApplySection" class="hidden mb-3 p-3 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-emerald-300 rounded-xl">
+            <h4 class="font-bold text-emerald-800 mb-2 flex items-center gap-1"><i class="fa-solid fa-gift text-emerald-600"></i> ลูกค้ามี Credit ใช้ได้</h4>
+            <div id="creditList" class="space-y-1 text-sm"></div>
+            <button id="btnApplyCredit" type="button" onclick="applySelectedCredit()" class="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg font-bold hidden">
+              💰 Apply Credit (ลด ฿<span id="creditApplyAmount">0</span>)
+            </button>
           </div>
 
           <!-- 💵 ยอดสุทธิ (net = gross - discount) — read-only + เด่นสุด -->
@@ -3589,6 +3704,11 @@
         didOpen: () => {
           _recalcNetAmount();
           _updatePaymentQR();
+          // 💰 Credit-Back v1.0 (9/6/2026): check + show available credits
+          window._currentPaymentBookingId = bookingId;
+          if (b.lineUid && b.lineUid !== 'WALKIN_NEW' && String(b.lineUid).charAt(0) === 'U') {
+            _checkAndShowCredits(b.lineUid, estimatedPrice);
+          }
           // 🆕 F2.5f Issue 2: async inject eligible packages เข้า dropdown
           eligiblePkgsPromise.then(eligiblePkgs => {
             window._currentEligiblePkgs = eligiblePkgs || [];
