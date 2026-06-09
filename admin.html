@@ -2603,8 +2603,19 @@
           ? 'bg-purple-50 border-purple-300 ring-1 ring-purple-200'
           : 'bg-white ' + (isPaid ? 'border-green-300' : 'border-gray-100');
 
+        // 🆕 D71 RESTORE v1.4.3 (9/6/2026): ✏️ icon top-right opens CRM modal
+        //   Regression Pattern #3 round 5 — was lost during base file replace
+        //   Hide for walk-in (no LINE UID → no CRM profile to edit)
+        const crmEditIcon = (hasLineUid && b.lineUid !== 'WALKIN_NEW') ? `
+          <button onclick="event.stopPropagation(); openCrmModal('${esc(b.lineUid)}', '${esc(customerName)}')"
+                  class="absolute top-2 right-2 text-gray-400 hover:text-blue-500 transition z-10"
+                  title="แก้ไขข้อมูลลูกค้า (CRM)">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>` : '';
+
         const cardHtml = `
           <div class="${cardWrapperCls} p-4 rounded-2xl shadow-sm border card-hover relative overflow-hidden">
+            ${crmEditIcon}
             ${preorderBadge}
             <div class="flex justify-between items-start mb-2">
               <span class="text-xl font-black text-gray-800">${esc(b.plate)}</span>
@@ -5225,40 +5236,108 @@
       }
     }
 
-    // ─── Broadcast Modal (Part D — stub) ───
+    // ─── Broadcast Modal v1.0 real impl (9/6/2026 — replaces stub) ───
     function openBroadcastModal() {
-      const filter = window._callListFilter;
+      const filter = window._callListFilter || [];
       const labels = { pkg_expiring: '⏰ Expiring', pkg_sleeping: '😴 Sleeping', dormant: '💤 Dormant', new_lead: '🆕 New Lead' };
       const tierLabel = filter.map(t => labels[t] || t).join(' + ');
       const count = (window._crmTierCache || []).length;
+      // Cache tier filter for submitBroadcast
+      window._currentBroadcastTier = filter.join(',');
+      window._currentBroadcastCount = count;
       document.getElementById('bcTierLabel').textContent = tierLabel || '—';
       document.getElementById('bcRecipientCount').textContent = count;
       document.getElementById('bcMessage').value = '';
+      const camp = document.getElementById('bcCampaignName');
+      if (camp) camp.value = '';
+      const testEl = document.getElementById('bcTestMode');
+      if (testEl) testEl.checked = false;
       document.getElementById('broadcastModal').classList.remove('hidden');
     }
     function closeBroadcastModal() {
       document.getElementById('broadcastModal').classList.add('hidden');
     }
+
     async function submitBroadcast() {
-      const msg = document.getElementById('bcMessage').value.trim();
-      if (msg.length < 5) return Swal.fire('แจ้งเตือน', 'ข้อความสั้นเกินไป (อย่างน้อย 5 ตัวอักษร)', 'warning');
-      const body = new URLSearchParams({
-        action: 'broadcastToSegment',
-        tierFilter: window._callListFilter.join(','),
-        message: msg,
-        adminUid: (localStorage.getItem('karshine_admin_uid') || 'admin')
+      const messageText = document.getElementById('bcMessage').value.trim();
+      const campaignName = (document.getElementById('bcCampaignName') ? document.getElementById('bcCampaignName').value.trim() : '');
+      const testMode = !!(document.getElementById('bcTestMode') && document.getElementById('bcTestMode').checked);
+      const tierFilter = window._currentBroadcastTier || (window._callListFilter || []).join(',');
+      const adminUid = (localStorage.getItem('karshine_admin_uid') || '');
+
+      if (messageText.length < 5) return Swal.fire('แจ้งเตือน', 'ข้อความสั้นเกินไป (ขั้นต่ำ 5 ตัวอักษร)', 'warning');
+      if (!tierFilter) return Swal.fire('แจ้งเตือน', 'ยังไม่ได้เลือก tier — กลับไปกด Call List ก่อน', 'warning');
+      if (testMode && (!adminUid || String(adminUid).charAt(0) !== 'U')) {
+        return Swal.fire('Test mode ต้องมี admin UID', 'กรุณา set localStorage.karshine_admin_uid เป็น LINE User ID ที่ขึ้นต้นด้วย U', 'warning');
+      }
+
+      const estCount = window._currentBroadcastCount || 0;
+      const estMinutes = Math.max(1, Math.ceil(estCount / 30 * 2));
+
+      // Pre-flight confirm
+      const conf = await Swal.fire({
+        title: testMode ? '🧪 ส่ง TEST (ถึงคุณคนเดียว)' : '📢 ส่ง Broadcast จริง',
+        html:
+          '<div class="text-left text-sm space-y-2">' +
+            '<p><b>Tier:</b> ' + esc(document.getElementById('bcTierLabel').textContent) + '</p>' +
+            '<p><b>คาดผู้รับ:</b> ' + (testMode ? '1 (test mode)' : estCount + ' คน') + '</p>' +
+            (campaignName ? '<p><b>Campaign:</b> ' + esc(campaignName) + '</p>' : '') +
+            '<p><b>ข้อความ:</b></p>' +
+            '<p class="bg-gray-100 p-2 rounded text-sm">' + esc(messageText.slice(0, 200)) + (messageText.length > 200 ? '...' : '') + '</p>' +
+            (!testMode ? '<p class="text-xs text-amber-600 mt-2">⚠️ ใช้เวลา ~' + estMinutes + ' นาที (rate-limit 30/batch)</p>' : '') +
+            (!testMode ? '<p class="text-xs text-gray-500">💡 ระบบจะ skip ลูกค้าที่ opt-out + cool-down (2/wk)</p>' : '') +
+          '</div>',
+        showCancelButton: true,
+        confirmButtonText: testMode ? '🧪 ส่ง TEST' : '📢 ส่งจริง',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: testMode ? '#F59E0B' : '#9333EA'
       });
+      if (!conf.isConfirmed) return;
+
+      Swal.fire({
+        title: testMode ? 'กำลังส่ง TEST...' : 'กำลังส่ง broadcast...',
+        html: '<p class="text-xs text-gray-500">' + (testMode ? 'ส่งครั้งเดียว' : 'ส่งครั้งละ 30 คน + พัก 1.5s — รอประมาณ ' + estMinutes + ' นาที') + '</p>',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
       try {
+        const body = new URLSearchParams({
+          action: 'broadcastToSegment',
+          tierFilter: tierFilter,
+          messageText: messageText,
+          campaignName: campaignName || ('Campaign-' + new Date().toISOString().slice(0, 10)),
+          testMode: testMode ? '1' : '',
+          adminUid: adminUid
+        });
         const r = await fetch(API_URL, { method: 'POST', body: (typeof withAuth === 'function') ? withAuth(body) : body });
         const j = await r.json();
-        if (j.ok || j.status === 'success') {
-          Swal.fire('สำเร็จ', j.message || 'ส่ง broadcast แล้ว', 'success');
-          closeBroadcastModal();
-        } else if (j.error === 'NOT_IMPLEMENTED') {
-          Swal.fire('🚧 ยังไม่เปิดใช้งาน', 'ฟีเจอร์ broadcast อยู่ระหว่าง dev — Master จะ build Spec ถัดไป', 'info');
+        if (j && j.ok) {
+          Swal.fire({
+            icon: 'success',
+            title: '📢 ส่งสำเร็จ!',
+            html:
+              '<div class="text-left text-sm space-y-1">' +
+                '✅ ส่งสำเร็จ: <b>' + j.success + '</b><br>' +
+                '❌ ล้มเหลว: <b>' + j.failed + '</b><br>' +
+                '🚫 Opt-out skip: <b>' + j.opted_out + '</b><br>' +
+                '⏰ Cool-down skip: <b>' + j.cool_down_skip + '</b><br>' +
+                '⏱ ใช้เวลา: ' + Math.round((j.duration_ms || 0) / 1000) + ' วินาที<br>' +
+                '🆔 Broadcast ID: ' + esc(j.broadcast_id || '-') +
+                (j.test_mode ? '<br><span class="text-amber-600 font-bold">🧪 TEST MODE</span>' : '') +
+              '</div>'
+          });
           closeBroadcastModal();
         } else {
-          Swal.fire('ผิดพลาด', j.message || 'broadcast ไม่สำเร็จ', 'error');
+          const errMap = {
+            LOCK_BUSY:                   'มี broadcast อื่นกำลังรัน — รอ ~10 วินาทีแล้วลองใหม่',
+            MESSAGE_TOO_SHORT:           'ข้อความสั้นเกินไป (ขั้นต่ำ 5 ตัวอักษร)',
+            TIER_FILTER_REQUIRED:        'กรุณาเลือก tier ก่อน',
+            TIER_QUERY_FAILED:           'ดึง tier list ไม่สำเร็จ',
+            TEST_MODE_REQUIRES_ADMIN_UID:'Test mode ต้องระบุ admin LINE UID ที่ขึ้นต้นด้วย U',
+            NOT_IMPLEMENTED:             '🚧 ฟีเจอร์ยังไม่พร้อม — Master จะ build Spec ถัดไป'
+          };
+          Swal.fire('❌ ผิดพลาด', errMap[j && j.error] || (j && (j.message || j.error)) || 'unknown', 'error');
         }
       } catch (e) { Swal.fire('Error', e.message, 'error'); }
     }
