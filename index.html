@@ -139,9 +139,7 @@
         <p id="queueETA" class="text-3xl font-bold text-green-700 mt-1">—</p>
       </div>
     </div>
-    <p class="text-xs text-gray-500 mb-3 italic bg-gray-50 rounded-lg p-3">
-      💡 ล้างด่วน 7 นาที (SHINE Express 139.-) — ไม่ต้องจองล่วงหน้า เข้ามาที่ร้านได้เลย
-    </p>
+    <!-- 🔧 v1.6.0 (10/6/2026): SHINE Express price hint removed — single-lane LIFF UX -->
     <div id="queueList" class="space-y-2"></div>
     <button onclick="loadWalkinQueue_()"
             class="w-full bg-amber-100 text-amber-700 py-3 rounded-xl mt-4 font-bold active:scale-95">
@@ -163,14 +161,14 @@
       <hr class="my-6 border-dashed">
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">2. เลือกบริการ</label>
-        <!-- 🔥 A1 v1.2 D132 (7/6/2026): hide LINE1 button — LIFF customer ใช้ LINE2 (ล้างปกติ) เท่านั้น
-             ล้างด่วนต้อง walk-in หน้าร้าน → เปิดเมนู "🔥 เช็คคิวล้างด่วน" บน Home -->
-        <div class="flex bg-gray-100 p-1 rounded-2xl relative mb-4">
+        <!-- 🔧 v1.6.0 (10/6/2026): Single-Lane LIFF UX — hide LINE selector entirely
+             buttons + lineBg kept (display:none) — selectLine() still callable from pickup mode (F4 v1.1)
+             D132 (7/6) hid btnLine1 only; v1.6.0 completes the deprecation -->
+        <div class="flex bg-gray-100 p-1 rounded-2xl relative mb-4" style="display:none;">
           <div id="lineBg" class="absolute w-1/2 h-[calc(100%-8px)] bg-white rounded-xl shadow-sm transition-all left-1 top-1" style="display:none;"></div>
           <button type="button" onclick="selectLine('LINE1')" class="relative w-1/2 py-2 text-sm font-bold z-10 text-gray-800" id="btnLine1" style="display:none;" disabled>ล้างด่วน (เครื่อง)</button>
-          <button type="button" onclick="selectLine('LINE2')" class="relative w-full py-2 text-sm font-bold z-10 text-gray-800 bg-white rounded-xl shadow-sm" id="btnLine2">ล้างปกติ (คนล้าง)</button>
+          <button type="button" onclick="selectLine('LINE2')" class="relative w-full py-2 text-sm font-bold z-10 text-gray-800 bg-white rounded-xl shadow-sm" id="btnLine2" disabled>ล้างปกติ (คนล้าง)</button>
         </div>
-        <p class="text-[10px] text-amber-600 -mt-2 mb-2 italic">💡 ล้างด่วน → เข้ามาที่ร้านได้เลย ไม่ต้องจอง (ดูคิวบน Home)</p>
         <input type="hidden" id="selectedLineType" value="LINE2">
         <div id="servicesContainer" class="space-y-2"></div>
       </div>
@@ -184,11 +182,11 @@
           <p class="text-[10px] text-blue-400 mt-1 uppercase font-bold">กดเพื่อเลือกเวลา</p>
         </div>
       </div>
-      <!-- 🚗 Valet section — ซ่อนเมื่อเลือก LINE1 (ล้างด่วน เครื่อง) เพราะลูกค้าขับมาเอง -->
+      <!-- 🚗 Valet section — ซ่อนเมื่อเลือก LINE1 (legacy admin path) -->
+      <!-- 🔧 v1.6.0 (10/6/2026): single-lane LIFF — note about ล้างด่วน removed (no longer relevant) -->
       <hr id="valetDivider" class="my-6 border-dashed">
       <div id="valetSection" class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">4. บริการรับ-ส่ง (Valet)</label>
-        <p class="text-[10px] text-gray-400 italic ml-1 -mt-1">เฉพาะล้างปกติ — ล้างด่วน (เครื่อง) ลูกค้าขับมาเองครับ</p>
         <select id="deliverySelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="toggleDelivery()">
           <option value="none">ขับรถมาเองที่ร้าน</option>
           <option value="pickup">ให้ร้านไปรับรถ (ขาเดียว)</option>
@@ -661,7 +659,10 @@
         } else { nextBookingEl.innerHTML = '<p class="text-center py-4 text-sm text-gray-400 italic">ไม่มีรายการจองในขณะนี้</p>'; }
 
         if(masterData.branches) document.getElementById('branchSelect').innerHTML = masterData.branches.map(b => `<option value="${esc(b.branch_id)}">${esc(b.branch_name)}</option>`).join('');
-        selectLine('LINE1');
+        // 🔧 v1.6.0 (10/6/2026): LIFF single-lane — was selectLine('LINE1') which was a legacy bug
+        //   (D132 set hidden input default to LINE2 but missed this init call → caused renderServices
+        //    to enter LINE1 branch on first load, disabling all normal services until user re-clicked)
+        selectLine('LINE2');
         document.getElementById('loading').style.display = 'none';
       } catch(e) { Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้: ' + e.message, 'error'); }
     }
@@ -1139,7 +1140,50 @@
       }
       renderServices();
     }
-    function renderServices() { if(!masterData.services) return; const size = document.getElementById('carSizeSelect').value; const type = document.getElementById('selectedLineType').value; const container = document.getElementById('servicesContainer'); const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {}); let html = ''; for (const cat in grouped) { html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`; grouped[cat].forEach(s => { const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl); const isQuick = s.service_name.includes('ด่วน'); const isNormal = s.service_name.includes('ปกติ') || s.service_name.includes('ภายนอก') || s.service_name.includes('พนักงาน'); let auto = false, disabled = false; if (type==='LINE1') { if(isQuick) auto=true; if(isNormal) disabled=true; } else { if(isNormal) auto=true; if(isQuick) disabled=true; } html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2"> <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()"> <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]"> <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div> <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div> </div> </label>`; }); } container.innerHTML = html; updateSummary(); }
+    function renderServices() {
+      if(!masterData.services) return;
+      const size = document.getElementById('carSizeSelect').value;
+      const type = document.getElementById('selectedLineType').value;
+      const container = document.getElementById('servicesContainer');
+      const grouped = masterData.services.reduce((acc, obj) => { const k = obj.category; if (!acc[k]) acc[k] = []; acc[k].push(obj); return acc; }, {});
+      // 🔧 v1.6.0 (10/6/2026): LIFF single-lane — filter quick services + skip empty categories
+      //   When type !== 'LINE1' (LIFF default LINE2), quick services (SHINE Express) hidden entirely
+      //   This removes the visible "disabled greyed-out" UX from D132 partial implementation
+      const _isQuickName = (name) => String(name || '').includes('ด่วน');
+      const _isNormalName = (name) => {
+        const n = String(name || '');
+        return n.includes('ปกติ') || n.includes('ภายนอก') || n.includes('พนักงาน');
+      };
+      let html = '';
+      for (const cat in grouped) {
+        // Filter list per current line type — drop quick services entirely for LIFF (LINE2)
+        const items = grouped[cat].filter(s => !(type !== 'LINE1' && _isQuickName(s.service_name)));
+        if (items.length === 0) continue;   // skip category header if all items filtered out
+        html += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-4 mb-2 ml-1 tracking-widest">${cat}</div>`;
+        items.forEach(s => {
+          const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl);
+          const isQuick = _isQuickName(s.service_name);
+          const isNormal = _isNormalName(s.service_name);
+          let auto = false, disabled = false;
+          if (type === 'LINE1') {
+            if (isQuick) auto = true;
+            if (isNormal) disabled = true;
+          } else {
+            // LINE2 (LIFF) — quick services already filtered out above; no disabled branch needed
+            if (isNormal) auto = true;
+          }
+          html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2">
+            <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()">
+            <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]">
+              <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div>
+              <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div>
+            </div>
+          </label>`;
+        });
+      }
+      container.innerHTML = html;
+      updateSummary();
+    }
     // 🔧 FIX 3.1: ไม่ reset selectedTime ทุกครั้ง — reset เฉพาะเมื่อเวลาบริการ (currentTotalTime) เปลี่ยน
     //   เดิม: updateSummary() ล้างเวลาทุกครั้งที่ถูกเรียก → กดเลือกสถานที่/Valet ก็ล้างเวลา
     //   ใหม่: ล้างเฉพาะเมื่อ totalT ใหม่ ≠ currentTotalTime (เพราะ slot time ขึ้นกับ duration)
