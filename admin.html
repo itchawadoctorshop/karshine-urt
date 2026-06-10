@@ -440,26 +440,33 @@
         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow transition"><i class="fa-solid fa-magnifying-glass"></i> ค้นหา</button>
       </form>
 
-      <!-- 🔴 D62 RESTORE (9/6/2026 — Regression Pattern #3): Walk-in Customer Manual Add button -->
-      <button type="button" id="btnCrmWalkin" onclick="openManualAddModal()"
-              class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold shadow mb-3 transition">
-        <i class="fa-solid fa-user-plus mr-1"></i> ➕ เพิ่มลูกค้า Walk-in (ไม่มี LINE)
-      </button>
-
-      <!-- 🆕 CRM Segmentation v1 (9/6/2026): Call List + Refresh tiers buttons -->
-      <div class="flex gap-2 mb-6">
+      <!-- 🆕 CRM Enhancement v1.5 (10/6/2026 — D104): Permanent toolbar — Broadcast always visible
+           Patch 1: 5-button toolbar replaces 2-row layout (D62 + Call List + Refresh stayed) -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-6">
+        <button type="button" id="btnCrmWalkin" onclick="openManualAddModal()"
+                class="bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold shadow transition text-xs">
+          <i class="fa-solid fa-user-plus"></i> ➕ Walk-in
+        </button>
         <button type="button" id="btnCallList" onclick="openCallList()"
-                class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold shadow transition">
-          <i class="fa-solid fa-phone-volume mr-1"></i> 📞 Call List <span id="callListBadge" class="bg-white text-orange-700 px-2 py-0.5 rounded-full text-xs ml-1">—</span>
+                class="bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold shadow transition text-xs">
+          <i class="fa-solid fa-phone-volume"></i> 📞 Call List <span id="callListBadge" class="bg-white text-orange-700 px-2 py-0.5 rounded-full text-[10px] ml-1">—</span>
+        </button>
+        <button type="button" id="btnPackageView" onclick="openPackageView()"
+                class="bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold shadow transition text-xs">
+          <i class="fa-solid fa-box"></i> 📦 Package
+        </button>
+        <button type="button" id="btnBroadcastDirect" onclick="openBroadcastModal()"
+                class="bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-bold shadow transition text-xs">
+          <i class="fa-solid fa-bullhorn"></i> 📢 Broadcast
         </button>
         <button type="button" id="btnRefreshTiers" onclick="refreshAllTiers()"
-                class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-bold shadow transition" title="โหลด tier ทั้งหมดใหม่">
-          <i class="fa-solid fa-arrows-rotate"></i>
+                class="bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold shadow transition text-xs" title="โหลด tier ทั้งหมดใหม่">
+          <i class="fa-solid fa-arrows-rotate"></i> รีเฟรช
         </button>
       </div>
 
       <div id="crmResults" class="space-y-4">
-        <div class="text-center text-gray-400 text-sm py-10 border-2 border-dashed border-gray-200 rounded-xl">พิมพ์เบอร์โทรศัพท์ด้านบนเพื่อเริ่มค้นหาลูกค้า หรือกด "📞 Call List"</div>
+        <div class="text-center text-gray-400 text-sm py-10 border-2 border-dashed border-gray-200 rounded-xl">พิมพ์เบอร์โทรศัพท์ด้านบน · หรือกด "📞 Call List" / "📦 Package"</div>
       </div>
     </div>
   </section>
@@ -2167,7 +2174,16 @@
       try {
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
-        if (result.status === 'success') { renderBoard(result.data); _cacheAdminBookings(result.data); if(result.services) { adminServices = result.services; renderWiServices(); } }
+        if (result.status === 'success') {
+          renderBoard(result.data);
+          _cacheAdminBookings(result.data);
+          if(result.services) { adminServices = result.services; renderWiServices(); }
+          // 🆕 CRM Enhancement v1.5 (10/6/2026 Patch 4): tier hydration background (non-blocking)
+          //   Re-renders Kanban with tier badges once data arrives (~2s for 200 users via v1.4.1 preload)
+          if (typeof _hydrateKanbanTiers === 'function') {
+            _hydrateKanbanTiers(result.data);   // fire-and-forget
+          }
+        }
       } catch (e) { console.error(e); }
       finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
 
@@ -2236,7 +2252,7 @@
                  onclick="closeSegmentList(); openCrmModal('${esc(u.uid)}', '${esc(u.name).replace(/'/g,'&apos;')}');">
               <div class="flex-1 min-w-0">
                 <div class="font-bold text-sm text-gray-800 truncate">${idx+1}. ${esc(u.name)}</div>
-                <div class="text-[10px] text-gray-500">${u.phone ? '📞 ' + esc(u.phone) + ' · ' : ''}ใช้บริการ ${u.totalVisits} ครั้ง · ยอดรวม ${u.totalSpent.toLocaleString()}.-</div>
+                <div class="text-[10px] text-gray-500">${u.phone ? '📞 <a href="tel:' + String(u.phone).replace(/[^0-9]/g,'') + '" class="text-blue-600 hover:underline" onclick="event.stopPropagation()">' + esc(u.phone) + '</a> · ' : ''}ใช้บริการ ${u.totalVisits} ครั้ง · ยอดรวม ${u.totalSpent.toLocaleString()}.-</div>
                 <div class="text-[10px] text-gray-400 mt-0.5">${u.lastVisit ? 'ล่าสุด: ' + esc(u.lastVisit) + (u.daysSinceLast >= 0 ? ' (' + u.daysSinceLast + ' วันที่แล้ว)' : '') : 'ยังไม่เคยใช้บริการ'}</div>
               </div>
               <i class="fa-solid fa-chevron-right text-gray-300"></i>
@@ -2613,9 +2629,20 @@
             <i class="fa-solid fa-pen-to-square"></i>
           </button>` : '';
 
+        // 🆕 CRM Enhancement v1.5 (10/6/2026 Patch 4): tier badge top-right (next to ✏️)
+        //   Skip if WALKIN_NEW (no profile = no tier). Hydrated async by _hydrateKanbanTiers
+        const tierBadge = (b._tierInfo && b._tierInfo.label && hasLineUid && b.lineUid !== 'WALKIN_NEW')
+          ? `<span class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-bold z-10"
+                   style="background:${b._tierInfo.color || '#9CA3AF'}20; color:${b._tierInfo.color || '#374151'};"
+                   title="Tier: ${esc(b._tierInfo.label)}">
+               ${esc(b._tierInfo.label)}
+             </span>`
+          : '';
+
         const cardHtml = `
           <div class="${cardWrapperCls} p-4 rounded-2xl shadow-sm border card-hover relative overflow-hidden">
             ${crmEditIcon}
+            ${tierBadge}
             ${preorderBadge}
             <div class="flex justify-between items-start mb-2">
               <span class="text-xl font-black text-gray-800">${esc(b.plate)}</span>
@@ -3147,7 +3174,7 @@
         }).join('');
         return `<div class="mb-2 p-2 bg-white border border-gray-200 rounded-lg">
           <div class="font-bold text-xs text-gray-800">👤 ${esc(owner.owner_name)}</div>
-          <div class="text-[10px] text-gray-500">${owner.owner_phone ? '📞 ' + esc(owner.owner_phone) : ''}</div>
+          <div class="text-[10px] text-gray-500">${owner.owner_phone ? '📞 <a href="tel:' + String(owner.owner_phone).replace(/[^0-9]/g,'') + '" class="text-blue-600 hover:underline" onclick="event.stopPropagation()">' + esc(owner.owner_phone) + '</a>' : ''}</div>
           ${pkgsHtml || '<p class="text-[10px] text-gray-400 italic mt-1">ไม่มีแพ็กเกจที่ใช้ได้</p>'}
         </div>`;
       }).join('');
@@ -5054,7 +5081,7 @@
           const list = (data.suggestions || []).map(s => `
             <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm">
               <p class="font-bold">${esc(s.name)}</p>
-              <p class="text-xs text-gray-600">📞 ${esc(s.phone)} • ID: ${esc(s.user_id || s.lineUid || '')}</p>
+              <p class="text-xs text-gray-600">📞 ${s.phone ? '<a href="tel:' + String(s.phone).replace(/[^0-9]/g,'') + '" class="text-blue-600 hover:underline">' + esc(s.phone) + '</a>' : esc(s.phone)} • ID: ${esc(s.user_id || s.lineUid || '')}</p>
             </div>`).join('');
           document.getElementById('maSuggestList').innerHTML = list;
           document.getElementById('maSuggestSection').classList.remove('hidden');
@@ -5114,7 +5141,44 @@
           Swal.fire('ผิดพลาด', j.message || 'ดึง tier ไม่สำเร็จ', 'error');
         }
       } catch (e) { Swal.fire('Error', e.message, 'error'); }
-      finally { if (btn) btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i>'; }
+      finally { if (btn) btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> รีเฟรช'; }
+    }
+
+    // 🆕 CRM Enhancement v1.5 (10/6/2026 Patch 4): Kanban tier hydration (background, non-blocking)
+    //   Fetch all tiers via v1.4.1 preload pattern → map by lineUid → attach b._tierInfo → re-render Kanban
+    //   Skip WALKIN_NEW + non-U uids (no profile = no tier)
+    async function _hydrateKanbanTiers(bookings) {
+      if (!Array.isArray(bookings) || bookings.length === 0) return;
+      try {
+        // Use cached tier map if available (refreshed within current session)
+        let tierMap = {};
+        if (window._crmTierCache && window._crmTierCache.length) {
+          window._crmTierCache.forEach(function(t) { if (t && t.lineUid) tierMap[String(t.lineUid)] = t; });
+        } else {
+          // Cache miss → fetch all tiers once (preload pattern is fast — ~2s for 200 users)
+          const j = await _fetchTiers([]);
+          if (j && (j.ok || j.tiers)) {
+            window._crmTierCache = j.tiers || [];
+            window._crmTierCache.forEach(function(t) { if (t && t.lineUid) tierMap[String(t.lineUid)] = t; });
+          } else {
+            return;   // Silent fail — Kanban already rendered without badges
+          }
+        }
+        // Attach _tierInfo to each booking (mutates in place)
+        let attached = 0;
+        bookings.forEach(function(b) {
+          if (!b || !b.lineUid || b.lineUid === 'WALKIN_NEW' || String(b.lineUid).charAt(0) !== 'U') return;
+          const t = tierMap[String(b.lineUid)];
+          if (t) {
+            b._tierInfo = { tier: t.tier, label: t.label, color: t.color };
+            attached++;
+          }
+        });
+        // Re-render Kanban only if we attached anything (avoid pointless redraw)
+        if (attached > 0 && typeof renderBoard === 'function') {
+          renderBoard(bookings);
+        }
+      } catch (e) { console.warn('_hydrateKanbanTiers err:', e); }
     }
 
     async function openCallList() {
@@ -5127,6 +5191,7 @@
       window._crmTierCache = tiers;
 
       // Filter toggle UI
+      // 🆕 CRM Enhancement v1.5 (10/6/2026 Patch 2): + 📦 Package Active checkbox
       const filterUi =
         '<div class="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-3 text-xs">' +
         '<p class="font-bold mb-2 text-gray-600">🎯 Filter:</p>' +
@@ -5134,6 +5199,7 @@
           _callListToggle('pkg_expiring', '⏰ Expiring (เร่งด่วน)', '#EF4444') +
           _callListToggle('pkg_sleeping', '😴 Sleeping (>14d)', '#F97316') +
           _callListToggle('dormant',      '💤 Dormant (>60d)', '#6B7280') +
+          _callListToggle('pkg_active',   '📦 Package Active', '#10B981') +
           _callListToggle('new_lead',     '🆕 New Lead', '#3B82F6') +
         '</div></div>';
 
@@ -5181,10 +5247,12 @@
     }
 
     function _renderCallListCard(t) {
+      // 🆕 CRM Enhancement v1.5 (10/6/2026 Patch 2): + pkg_active reason for new filter checkbox
       const reasonMap = {
         pkg_expiring: 'Package หมดอายุใน ' + (t.daysToExpire != null ? t.daysToExpire + ' วัน' : '—'),
         pkg_sleeping: 'ไม่มาใช้ ' + t.daysSinceVisit + ' วัน (package active)',
         dormant:      'ไม่มาใช้ ' + t.daysSinceVisit + ' วัน',
+        pkg_active:   '📦 มี Package · เหลือ ' + (t.activeRemainingTotal || 0) + ' ครั้ง',
         new_lead:     'สมัครแล้ว ยังไม่จองครั้งแรก'
       };
       const reason = reasonMap[t.tier] || '—';
@@ -5342,6 +5410,103 @@
       } catch (e) { Swal.fire('Error', e.message, 'error'); }
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // 📦 CRM Enhancement v1.5 (10/6/2026 Patch 3): Package Active Dedicated View
+    //   3-mode toggle: all / low (≤3) / expiring (≤30d)
+    //   Reuses getCustomerTiers v1.0 + v1.4.1 preload — no new BE endpoint
+    // ════════════════════════════════════════════════════════════════════
+    async function openPackageView() {
+      const wrap = document.getElementById('crmResults');
+      if (!wrap) return;
+      wrap.innerHTML = '<div class="text-center py-6"><i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500"></i><p class="text-xs text-gray-500 mt-2">⏳ กำลังโหลด Package customers...</p></div>';
+      try {
+        const j = await _fetchTiers(['pkg_active']);
+        if (!j || (!j.ok && j.status !== 'success')) {
+          wrap.innerHTML = '<p class="text-center text-red-500 py-6">❌ โหลดผิดพลาด</p>';
+          return;
+        }
+        window._packageViewData = j.tiers || [];
+        window._packageViewMode = 'all';
+        _renderPackageView();
+      } catch (e) {
+        wrap.innerHTML = '<p class="text-center text-red-500 py-6">❌ ' + esc(e.message) + '</p>';
+      }
+    }
+
+    function _renderPackageView() {
+      const mode = window._packageViewMode || 'all';
+      const data = window._packageViewData || [];
+      // 3-mode frontend filter
+      const lowFn = (c) => (c.activeRemainingTotal || 0) <= 3;
+      const expFn = (c) => c.daysToExpire != null && c.daysToExpire <= 30 && c.daysToExpire >= 0;
+      let filtered = data;
+      if (mode === 'low') filtered = data.filter(lowFn);
+      else if (mode === 'expiring') filtered = data.filter(expFn);
+      const countAll = data.length;
+      const countLow = data.filter(lowFn).length;
+      const countExp = data.filter(expFn).length;
+
+      const btnCls = (active, baseColor) =>
+        active
+          ? 'px-3 py-2 rounded-lg text-xs font-bold ' + baseColor + ' text-white shadow'
+          : 'px-3 py-2 rounded-lg text-xs font-bold bg-gray-200 text-gray-700 hover:bg-gray-300';
+
+      const modeButtons =
+        '<div class="flex gap-2 mb-3 flex-wrap">' +
+          '<button onclick="_setPackageMode(\'all\')" class="' + btnCls(mode==='all','bg-emerald-600') + '">🟢 ทั้งหมด (' + countAll + ')</button>' +
+          '<button onclick="_setPackageMode(\'low\')" class="' + btnCls(mode==='low','bg-amber-600') + '">🟡 เหลือน้อย ≤3 (' + countLow + ')</button>' +
+          '<button onclick="_setPackageMode(\'expiring\')" class="' + btnCls(mode==='expiring','bg-red-600') + '">🔴 หมดอายุไว ≤30วัน (' + countExp + ')</button>' +
+        '</div>';
+
+      const headerInfo = '<p class="text-xs text-gray-600 mb-2 font-bold">📦 ลูกค้า Package Active — แสดง: ' + filtered.length + ' คน</p>';
+      const cards = filtered.length
+        ? filtered.map(_renderPackageCard).join('')
+        : '<p class="text-center text-gray-400 py-6 text-sm border-2 border-dashed border-gray-200 rounded-xl">— ไม่มีลูกค้าในหมวดนี้ —</p>';
+
+      document.getElementById('crmResults').innerHTML = modeButtons + headerInfo + '<div class="space-y-2">' + cards + '</div>';
+    }
+
+    function _setPackageMode(mode) {
+      window._packageViewMode = mode;
+      _renderPackageView();
+    }
+
+    function _renderPackageCard(c) {
+      const phoneClean = String(c.phone || '').replace(/\D/g, '');
+      const phoneLink = phoneClean
+        ? '<a href="tel:' + phoneClean + '" class="text-blue-600 hover:underline font-bold">📞 ' + esc(c.phone) + '</a>'
+        : '<span class="text-gray-400">- ไม่มีเบอร์ -</span>';
+      const daysLeft = (c.daysToExpire != null) ? c.daysToExpire : null;
+      const expireWarning = (daysLeft != null && daysLeft <= 7)
+        ? '<span class="text-red-600 font-bold">⚠️ เหลือ ' + daysLeft + ' วัน</span>'
+        : (daysLeft != null ? 'เหลือ ' + daysLeft + ' วัน' : 'ไม่มีวันหมด');
+      const tierBadge = c.label
+        ? '<span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold" style="background:' + (c.color || '#9CA3AF') + '20;color:' + (c.color || '#374151') + ';">' + esc(c.label) + '</span>'
+        : '';
+      const callBtnEnabled = phoneClean
+        ? '<a href="tel:' + phoneClean + '" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-center py-2 rounded-lg text-xs font-bold transition"><i class="fa-solid fa-phone"></i> โทร</a>'
+        : '<button disabled class="flex-1 bg-gray-200 text-gray-400 py-2 rounded-lg text-xs font-bold cursor-not-allowed">— ไม่มีเบอร์ —</button>';
+
+      return '' +
+        '<div class="bg-white border border-gray-200 rounded-xl p-3 flex flex-col gap-2 shadow-sm">' +
+          '<div class="flex justify-between items-start">' +
+            '<div class="flex-1 min-w-0">' +
+              '<p class="font-bold text-sm text-gray-800 truncate">' + esc(c.name || '-') + tierBadge + '</p>' +
+              '<p class="text-xs mt-1">' + phoneLink + '</p>' +
+            '</div>' +
+          '</div>' +
+          '<div class="bg-emerald-50 border border-emerald-200 rounded-lg p-2 text-xs">' +
+            '📦 Package · เหลือ <b>' + (c.activeRemainingTotal || 0) + '</b> ครั้ง · ' + expireWarning +
+          '</div>' +
+          '<div class="flex gap-2">' +
+            callBtnEnabled +
+            '<button onclick="markCalled(\'' + esc(c.lineUid) + '\', this)" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-xs font-bold transition">' +
+              '<i class="fa-solid fa-check"></i> ✅ โทรแล้ว' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+    }
+
     // ==============================================
     // 👥 3. ระบบ CRM (ค้นหา & Modal)
     // ==============================================
@@ -5380,7 +5545,7 @@
               <div class="flex justify-between items-start mb-4">
                 <div>
                   <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-user-circle text-gray-400 mr-1"></i> ${_name}${_badgeHtml}</h3>
-                  <p class="text-sm text-gray-500"><i class="fa-solid fa-phone text-gray-400 mr-1"></i> ${_phone}</p>
+                  <p class="text-sm text-gray-500"><i class="fa-solid fa-phone text-gray-400 mr-1"></i> ${_phone && /^[0-9]/.test(String(_phone).replace(/[^0-9]/g,'')) ? `<a href="tel:${String(_phone).replace(/[^0-9]/g,'')}" class="text-blue-600 hover:underline font-medium">${_phone}</a>` : _phone}</p>
                   ${_multiTierHtml}
                 </div>
                 <div class="text-right bg-blue-100 px-4 py-2 rounded-xl border border-blue-200 cursor-pointer hover:bg-blue-200 transition" onclick="editPoints('${_uid}', '${_name}', ${_pts})">
