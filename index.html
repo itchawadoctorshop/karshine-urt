@@ -429,6 +429,8 @@
 
       // 🛡️ PDPA Consent check ก่อน load main data (v1.0 — 3/6/2026)
       try {
+        // ⚡ PERF v2.0 (25/7/2026): ยิงโหลดข้อมูลหลักขนานกับ consent check (ประหยัด 1 round-trip)
+        window._dataPrefetch = fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'getInitialBookingDataFast', lineUid: userUid, t: String(Date.now()) }) }).then(r => r.json()).catch(() => null);
         const _cRes = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'getConsentStatus', lineUid: userUid }) });
         const _cData = await _cRes.json();
         if (_cData && _cData.needConsent) {
@@ -440,7 +442,7 @@
       } catch(_ce) { console.warn('Consent check failed:', _ce); }
 
 
-      await refreshData();
+      await refreshData(window._dataPrefetch);
       // ⚡ Performance v1.0: profile แนบมาใน refreshData response แล้ว
       //    (ผ่าน getInitialBookingDataFast) — ไม่ต้อง call แยก
       if (masterData.profile) {
@@ -509,14 +511,19 @@
       calendarParent.appendChild(notice);
     }
 
-    async function refreshData() {
+    async function refreshData(prefetch) {
       try {
         // ⚡ v4: ใช้ POST (route อยู่ใน doPost userActions) แทน GET
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          body: new URLSearchParams({ action: 'getInitialBookingDataFast', lineUid: userUid, t: String(Date.now()) })
-        });
-        const data = await res.json();
+        // ⚡ PERF v2.0 (25/7/2026): รองรับ prefetch จาก init (ยิงขนาน consent) — เรียกปกติ = fetch เอง
+        let data = null;
+        if (prefetch) { try { data = await prefetch; } catch (_pe) { data = null; } window._dataPrefetch = null; }
+        if (!data) {
+          const res = await fetch(API_URL, {
+            method: 'POST',
+            body: new URLSearchParams({ action: 'getInitialBookingDataFast', lineUid: userUid, t: String(Date.now()) })
+          });
+          data = await res.json();
+        }
         // 🚨 FIX: เช็ค response shape — backend อาจ return {status:'error'} โดยไม่มี data
         if (!data || data.status === 'error' || !data.data) {
           const errMsg = (data && data.message) ? data.message : 'เซิร์ฟเวอร์ไม่ส่งข้อมูล (status='+(data && data.status)+')';
