@@ -81,6 +81,24 @@
     <!-- 🚗 F0.2 Valet: ขยายเป็น 5 swim lanes (scroll ซ้าย-ขวาบนมือถือ) — Dashboard ย้ายไป Tab "รายงาน" -->
     <!-- 💰 C4 v1.2 D136 (7/6/2026): + Lane 0 "รอชำระ" → 6 lanes total -->
     <!-- 📤 v1.3 Fix #3 (9/6/2026): + Lane 0.5 "รอ Verify" → 7 lanes total -->
+
+    <!-- 🙋 Walk-in LINE Capture v1.0 (D190 — 26/7/2026): ถาดลูกค้าที่สแกนแล้วระบบจับคู่อัตโนมัติไม่ได้
+         ⚠️ PRESERVE: ห้ามลบ — เป็นทางเดียวที่พนักงานเชื่อมลูกค้าเข้าคิวเมื่อพิมพ์ทะเบียนไม่ตรง -->
+    <div id="walkinPendingBar" class="hidden mb-4">
+      <div class="bg-sky-50 border-2 border-sky-300 rounded-2xl p-3 shadow-sm">
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-bold text-sky-800 text-sm">
+            🙋 ลูกค้าสแกนรอเชื่อมคิว
+            <span id="walkinPendingCount" class="bg-sky-600 text-white px-2 py-0.5 rounded-full text-[11px] ml-1">0</span>
+          </div>
+          <button type="button" onclick="loadWalkinPending()" class="text-[11px] text-sky-700 hover:underline">
+            <i class="fa-solid fa-arrows-rotate"></i> รีเฟรช
+          </button>
+        </div>
+        <div id="walkinPendingChips" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+
     <div class="overflow-x-auto pb-2">
       <div class="grid gap-4 items-start" style="grid-template-columns: repeat(7, minmax(220px, 1fr)); min-width: 1540px;" id="board">
 
@@ -2187,6 +2205,8 @@
       } catch (e) { console.error(e); }
       finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
 
+      // 🙋 Walk-in Capture v1.0 (D190): โหลดถาดรอเชื่อมคู่กัน (ไม่ block board)
+      loadWalkinPending();
       // 📊 F0.4 Dashboard — โหลดคู่กัน (ไม่ block board) — 🆕 SPEC V.2: ใช้ range
       loadDashboardSummary();
       // 💵 F2.5 Reconciliation — โหลดเฉพาะ single-day; multi-day โหลด sales history แทน
@@ -4619,6 +4639,130 @@
     }
 
     // 🆕 (Bug A4): เก็บ admin bookings ไว้ใช้ใน slot picker — ใช้ raw IDs เพื่อคำนวน duration ถูกต้อง
+    // ══════════════════════════════════════════════════════════
+    // 🙋 Walk-in LINE Capture v1.0 (D190 — 26/7/2026)
+    //    ถาดรอเชื่อม: เคสที่ลูกค้าพิมพ์ทะเบียนแล้วระบบจับคู่ไม่ได้
+    //    (พิมพ์ผิด / ยังไม่ได้ลงคิว / ตรงเกิน 1 คัน → ระบบไม่เดา ส่งมาให้คนตัดสิน)
+    // ══════════════════════════════════════════════════════════
+    window.walkinPendingCache = [];
+
+    function _wcAgo(ts) {
+      try {
+        const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
+        if (m < 1) return 'เมื่อครู่';
+        if (m < 60) return m + ' นาทีที่แล้ว';
+        return Math.floor(m / 60) + ' ชม.ที่แล้ว';
+      } catch (e) { return ''; }
+    }
+
+    async function loadWalkinPending() {
+      const bar = document.getElementById('walkinPendingBar');
+      if (!bar) return;
+      try {
+        const payload = new URLSearchParams({ action: 'getWalkinPending', t: Date.now() });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status !== 'success') { bar.classList.add('hidden'); return; }
+        window.walkinPendingCache = result.data || [];
+        renderWalkinPending(window.walkinPendingCache);
+      } catch (e) {
+        console.error('loadWalkinPending', e);
+        bar.classList.add('hidden');   // พังก็แค่ไม่โชว์ ห้ามทำให้หน้าจอล่ม
+      }
+    }
+
+    function renderWalkinPending(list) {
+      const bar   = document.getElementById('walkinPendingBar');
+      const chips = document.getElementById('walkinPendingChips');
+      const cnt   = document.getElementById('walkinPendingCount');
+      if (!bar || !chips || !cnt) return;
+
+      if (!list || !list.length) { bar.classList.add('hidden'); chips.innerHTML = ''; return; }
+
+      bar.classList.remove('hidden');
+      cnt.textContent = list.length;
+      chips.innerHTML = list.map(p => {
+        const name  = esc(p.displayName || 'ลูกค้า');
+        const typed = esc(p.typedText || p.digits || '-');
+        const warn  = Number(p.matchCount) > 1
+          ? '<span class="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">ทะเบียนซ้ำ ' + p.matchCount + ' คัน</span>'
+          : '';
+        return '<button type="button" onclick="openLinkWalkinModal(\'' + esc(p.pendingId) + '\')" ' +
+               'class="bg-white border-2 border-sky-400 hover:bg-sky-100 rounded-xl px-3 py-2 text-left transition shadow-sm">' +
+               '<div class="font-bold text-sm text-sky-900">' + name + warn + '</div>' +
+               '<div class="text-[11px] text-gray-600">พิมพ์: <b>' + typed + '</b> · ' + _wcAgo(p.createdAt) + '</div>' +
+               '<div class="text-[10px] text-sky-600 mt-0.5">👆 แตะเพื่อเลือกคิว</div>' +
+               '</button>';
+      }).join('');
+    }
+
+    async function openLinkWalkinModal(pendingId) {
+      const p = (window.walkinPendingCache || []).find(x => x.pendingId === pendingId);
+      if (!p) { loadWalkinPending(); return; }
+
+      // คิวที่ยังไม่มีเจ้าของ (walk-in) — เรียงใหม่สุดขึ้นก่อน
+      const cands = (window.adminBookingsCache || [])
+        .filter(b => !b.lineUid || b.lineUid === 'WALKIN_NEW')
+        .filter(b => ['cancelled','cancelled_noshow','refunded','rejected'].indexOf(b.status) < 0)
+        .sort((a, b) => new Date(b.bookingDate) - new Date(a.bookingDate));
+
+      if (!cands.length) {
+        Swal.fire({ icon: 'info', title: 'ยังไม่มีคิวให้เชื่อม',
+                    text: 'สร้างคิวให้ลูกค้าก่อน แล้วค่อยกลับมาแตะเชื่อมอีกครั้งครับ' });
+        return;
+      }
+
+      const opts = cands.map(b =>
+        '<option value="' + esc(b.bookingId) + '">' +
+        esc(b.plate || '(ไม่มีทะเบียน)') + ' · ' + esc(b.serviceText || '-') + ' · ' + formatTime(b.bookingDate) +
+        '</option>').join('');
+
+      const { value: bookingId } = await Swal.fire({
+        title: '🔗 เชื่อมลูกค้าเข้ากับคิว',
+        html: '<div class="text-left text-sm">' +
+              '<div class="bg-sky-50 border border-sky-200 rounded-lg p-2 mb-3">' +
+              '<b>' + esc(p.displayName || 'ลูกค้า') + '</b><br>' +
+              '<span class="text-xs text-gray-600">ลูกค้าพิมพ์มาว่า: <b>' + esc(p.typedText || '-') + '</b></span>' +
+              '</div>' +
+              '<label class="text-xs font-bold text-gray-700">เลือกคิวของลูกค้าคนนี้</label>' +
+              '<select id="wcBookingSel" class="swal2-select w-full mt-1">' + opts + '</select>' +
+              '<div class="text-[11px] text-gray-500 mt-2">⚠️ ดูทะเบียนที่รถจริงก่อนเลือกนะครับ</div>' +
+              '</div>',
+        showCancelButton: true, confirmButtonText: '🔗 เชื่อมเลย', cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#0284c7',
+        preConfirm: () => document.getElementById('wcBookingSel').value
+      });
+      if (!bookingId) return;
+      await doLinkWalkin(pendingId, bookingId);
+    }
+
+    async function doLinkWalkin(pendingId, bookingId) {
+      try {
+        const payload = new URLSearchParams({ action: 'linkWalkinPending', pendingId, bookingId });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (handleAuthError(result)) return;
+        if (result.status === 'success') {
+          const d = result.data || {};
+          Swal.fire({ icon: 'success', title: 'เชื่อมสำเร็จ',
+                      text: 'คิวที่ ' + (d.queueNo || '-') + ' · แจ้งลูกค้าทาง LINE แล้ว',
+                      timer: 2200, showConfirmButton: false });
+          loadWalkinPending();
+          loadAdminData();
+        } else {
+          Swal.fire({ icon: 'error', title: 'เชื่อมไม่สำเร็จ', text: result.message || 'ลองใหม่อีกครั้ง' });
+        }
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'เชื่อมไม่สำเร็จ', text: String(e.message || e) });
+      }
+    }
+
+    // โหลดซ้ำทุก 60 วินาที (เบามาก — คืนแค่รายการที่ยัง open)
+    setInterval(function () {
+      const sec = document.getElementById('board-section');
+      if (sec && sec.classList.contains('active')) loadWalkinPending();
+    }, 60000);
+
     function _cacheAdminBookings(bookings) {
       window.adminBookingsCache = bookings.map(b => ({
         bookingId:   b.bookingId,                  // 🆕 ใช้ใน reschedule (ข้ามตัวเอง)
