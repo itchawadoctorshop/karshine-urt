@@ -2175,8 +2175,8 @@
       document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active');
       window.scrollTo(0,0);
       
-      if(id === 'board-section') loadAdminData();
-      if(id === 'dashboard-section') loadAdminData();
+      if(id === 'board-section') loadAdminData({ boardOnly: true });   // ⚡ D197: แท็บกระดานไม่ต้องโหลดรายงาน
+      if(id === 'dashboard-section') loadAdminData();                  // แท็บรายงาน = โหลดครบ
       if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); _fetchB2BContracts_(); }
       if(id === 'config-section') loadStoreConfig();
       if(id === 'sales-tracker-section') stInitTab();
@@ -2186,7 +2186,13 @@
     // ==============================================
     // 📋 1. ระบบ Kanban
     // ==============================================
-    async function loadAdminData() {
+    // ⚡ PERF v3.0 (27/7/2026 — D197): loadAdminData(opts)
+    //   opts.boardOnly = true  → โหลดเฉพาะกระดาน (1 request)
+    //   ไม่ใส่ opts           → โหลดครบทั้ง dashboard/reconciliation/segment (5-6 requests)
+    //   ROOT CAUSE เดิม: ถูกเรียก 17 จุดหลังทุกการกระทำ + auto-refresh ทุก 30 วิ
+    //                    → กดปุ่ม 1 ครั้ง = โหลดข้อมูลทั้งร้านใหม่ 5-6 รอบ
+    async function loadAdminData(opts) {
+      opts = opts || {};
       const loading = document.getElementById('loading'); const board = document.getElementById('board');
       if(loading && board) { loading.classList.remove('hidden'); board.style.opacity = '0.5'; }
       try {
@@ -2207,6 +2213,11 @@
 
       // 🙋 Walk-in Capture v1.0 (D190): โหลดถาดรอเชื่อมคู่กัน (ไม่ block board)
       loadWalkinPending();
+
+      // ⚡ PERF v3.0 (D197): จบตรงนี้ถ้าขอแค่กระดาน — ประหยัด 4-5 requests ต่อครั้ง
+      //    ตัวเลขใน dashboard/รายงาน จะรีเฟรชเองตอนสลับไปแท็บนั้น (showSection)
+      if (opts.boardOnly) return;
+
       // 📊 F0.4 Dashboard — โหลดคู่กัน (ไม่ block board) — 🆕 SPEC V.2: ใช้ range
       loadDashboardSummary();
       // 💵 F2.5 Reconciliation — โหลดเฉพาะ single-day; multi-day โหลด sales history แทน
@@ -2483,7 +2494,7 @@
         const j = await res.json();
         if (j.status === 'success') {
           Swal.fire('สำเร็จ', j.message || 'ยืนยันรับเงิน', 'success');
-          if (typeof loadAdminData === 'function') loadAdminData();
+          if (typeof loadAdminData === 'function') loadAdminData({ boardOnly: true });
         } else {
           Swal.fire('ผิดพลาด', j.message || 'ไม่สามารถยืนยันได้', 'error');
         }
@@ -2516,7 +2527,7 @@
         const j = await res.json();
         if (j.status === 'success') {
           Swal.fire('ปฏิเสธสำเร็จ', j.message || 'Booking ถูก cancel', 'success');
-          if (typeof loadAdminData === 'function') loadAdminData();
+          if (typeof loadAdminData === 'function') loadAdminData({ boardOnly: true });
         } else {
           Swal.fire('ผิดพลาด', j.message || 'ไม่สามารถปฏิเสธได้', 'error');
         }
@@ -2843,7 +2854,7 @@
             const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
             const result = await r.json();
             if (result.status === 'success') {
-              Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ปิดงานเรียบร้อย', timer: 2000 }).then(() => loadAdminData());
+              Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ปิดงานเรียบร้อย', timer: 2000 }).then(() => loadAdminData({ boardOnly: true }));
             } else throw new Error(result.message);
           } catch (e) { Swal.fire('Error', e.message, 'error'); }
           return;
@@ -2867,7 +2878,7 @@
         try {
           const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: newStatus });
           const response = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await response.json();
-          if(result.status === 'success') { Swal.close(); loadAdminData(); } else throw new Error(result.message);
+          if(result.status === 'success') { Swal.close(); loadAdminData({ boardOnly: true }); } else throw new Error(result.message);
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
       }
     }
@@ -3561,7 +3572,7 @@
             timer: 3500
           }).then(function() {
             // Refresh Kanban + close modal so admin reopens with new amounts
-            if (typeof loadAdminData === 'function') loadAdminData();
+            if (typeof loadAdminData === 'function') loadAdminData({ boardOnly: true });
           });
         } else {
           const errMap = {
@@ -3941,7 +3952,7 @@
           } else {
             successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method})${tail}`;
           }
-          Swal.fire({ icon: 'success', title: 'สำเร็จ!', html: successMsg, timer: 2500 }).then(() => loadAdminData());
+          Swal.fire({ icon: 'success', title: 'สำเร็จ!', html: successMsg, timer: 2500 }).then(() => loadAdminData({ boardOnly: true }));
         } catch (e) { Swal.fire('Error', e.message, 'error'); }
       } else if (res.isDenied) {
         // ข้าม payment — complete อย่างเดียว
@@ -3951,7 +3962,7 @@
           const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
           const result = await r.json();
           if (result.status === 'success') {
-            Swal.fire('สำเร็จ', 'ล้างเสร็จ (ไม่ได้บันทึกการจ่าย — จะแสดงเป็น "ยังไม่จ่าย" ใน dashboard)', 'success').then(() => loadAdminData());
+            Swal.fire('สำเร็จ', 'ล้างเสร็จ (ไม่ได้บันทึกการจ่าย — จะแสดงเป็น "ยังไม่จ่าย" ใน dashboard)', 'success').then(() => loadAdminData({ boardOnly: true }));
           } else throw new Error(result.message);
         } catch (e) { Swal.fire('Error', e.message, 'error'); }
       }
@@ -4253,7 +4264,7 @@
           const changeText = (result.changes && result.changes.length)
             ? '<br><span class="text-[10px] text-gray-500">เปลี่ยน: ' + result.changes.length + ' field</span>'
             : '';
-          Swal.fire({ icon: 'success', title: 'สำเร็จ', html: 'แก้ไขคิวเรียบร้อย' + changeText }).then(() => loadAdminData());
+          Swal.fire({ icon: 'success', title: 'สำเร็จ', html: 'แก้ไขคิวเรียบร้อย' + changeText }).then(() => loadAdminData({ boardOnly: true }));
         } else {
           Swal.fire('ไม่สำเร็จ', result.message || 'เกิดข้อผิดพลาด', 'warning');
         }
@@ -4373,7 +4384,7 @@
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if (result.status === 'success') {
-          Swal.fire('สำเร็จ!', 'เลื่อนเวลาเรียบร้อย ลูกค้าจะได้รับแจ้งใน LINE', 'success').then(() => loadAdminData());
+          Swal.fire('สำเร็จ!', 'เลื่อนเวลาเรียบร้อย ลูกค้าจะได้รับแจ้งใน LINE', 'success').then(() => loadAdminData({ boardOnly: true }));
         } else {
           Swal.fire('ไม่สำเร็จ', result.message || 'เกิดข้อผิดพลาด', 'warning');
         }
@@ -4398,7 +4409,7 @@
         const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await r.json();
         if (result.status === 'success') {
-          Swal.fire('สำเร็จ', 'ยกเลิกคิวเรียบร้อย', 'success').then(() => loadAdminData());
+          Swal.fire('สำเร็จ', 'ยกเลิกคิวเรียบร้อย', 'success').then(() => loadAdminData({ boardOnly: true }));
         } else {
           Swal.fire('ไม่สำเร็จ', result.message || 'เกิดข้อผิดพลาด', 'warning');
         }
@@ -4748,7 +4759,7 @@
                       text: 'คิวที่ ' + (d.queueNo || '-') + ' · แจ้งลูกค้าทาง LINE แล้ว',
                       timer: 2200, showConfirmButton: false });
           loadWalkinPending();
-          loadAdminData();
+          loadAdminData({ boardOnly: true });   // ⚡ D197
         } else {
           Swal.fire({ icon: 'error', title: 'เชื่อมไม่สำเร็จ', text: result.message || 'ลองใหม่อีกครั้ง' });
         }
@@ -5139,7 +5150,7 @@
             title: '📝 บันทึกย้อนหลังสำเร็จ',
             html: `รหัส: <b>${esc(result.bookingId)}</b><br>ยอด ${result.payAmount.toLocaleString()}.- (${esc(result.payMethod)})${result.earnedPoints ? '<br>+ แต้ม ' + result.earnedPoints : ''}`,
             confirmButtonColor: '#7c3aed'
-          }).then(() => loadAdminData());
+          }).then(() => loadAdminData({ boardOnly: true }));
         } else {
           Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: result.message || '-' });
         }
@@ -7023,7 +7034,7 @@
         if (statusResult.status !== 'success') throw new Error(statusResult.message || 'Status update failed');
 
         Swal.close();
-        loadAdminData();
+        loadAdminData({ boardOnly: true });
       } catch (e) {
         Swal.fire('Error', e.message, 'error');
       }
@@ -7277,7 +7288,13 @@
           console.log('[AutoRefresh] skipped — modal open');
           return;
         }
-        loadAdminData();
+        // ⚡ PERF v3.0 (D197): ข้ามถ้าแท็บถูกซ่อน/สลับไปแอปอื่น — ไม่ต้องยิงทิ้ง
+        if (document.hidden) return;
+        // ⚡ PERF v3.0 (D197): ข้ามถ้าไม่ได้อยู่หน้ากระดาน
+        const _bs = document.getElementById('board-section');
+        if (!_bs || !_bs.classList.contains('active')) return;
+        // ⚡ PERF v3.0 (D197): รีเฟรชเฉพาะกระดาน (เดิมยิง 5-6 requests ทุก 30 วิ)
+        loadAdminData({ boardOnly: true });
       }, 30000);
     });
     // ══════════════════════════════════════════════════════
