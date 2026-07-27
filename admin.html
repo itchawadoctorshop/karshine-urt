@@ -2592,6 +2592,14 @@
         // 🆕 (Bug A1): ปุ่ม "เลื่อน" + "ลบ" (เฉพาะ status ที่ยังจัดการได้)
         const canReschedule = ['pending', 'confirmed', 'valet_pickup_pending'].includes(b.status);
         const canEdit = ['pending', 'confirmed', 'valet_pickup_pending'].includes(b.status); // 🛠️ F0.7a
+        // 🆕 [Sprint1 #1 — D199] "🔧 แก้บริการ" — แยกจาก "✏️ แก้คิว" · ปลดล็อกเพิ่ม checked_in/in_progress
+        //   เหตุผล: golden moment คือลูกค้าเช็คอินแล้ว/กำลังล้างอยู่ (upsell กลางทาง) — เดิมกดไม่ได้เลย
+        const canEditService = [
+          'pending_payment', 'slip_submitted',
+          'pending', 'confirmed',
+          'checked_in', 'in_progress',
+          'valet_pickup_pending'
+        ].includes(b.status);
         const canCancel = !['completed', 'cancelled', 'cancelled_noshow'].includes(b.status);
 
         // 🆕 F2.5f: ปุ่ม "💵 รับเงิน" + "🎁 ขายแพ็กเกจ" + payment badge
@@ -2614,8 +2622,9 @@
             ${canSellPackage ? `<button onclick="openSellPackageFromCard_('${esc(b.lineUid)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-orange-50 text-orange-700 rounded-md hover:bg-orange-100 transition font-bold"><i class="fa-solid fa-box-open"></i> ขายแพ็กเกจ</button>` : ''}
           </div>` : '';
 
-        const adminActionBtns = (canReschedule || canCancel || canEdit) ? `
+        const adminActionBtns = (canReschedule || canCancel || canEdit || canEditService) ? `
           <div class="flex gap-1 mt-2 pt-2 border-t border-gray-100">
+            ${canEditService ? `<button onclick="openEditServiceModal('${esc(b.bookingId)}','${esc(b.plate)}','${esc(b.serviceIds)}','${esc(b.carSize || 'M')}','${b.paymentAmount || 0}','${esc(b.paymentMethod || '')}','${esc(b.status)}')" class="flex-1 text-[10px] py-1.5 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 transition font-bold"><i class="fa-solid fa-screwdriver-wrench"></i> แก้บริการ</button>` : ''}
             ${canEdit ? `<button onclick="openEditBookingModal('${esc(b.bookingId)}','${esc(b.plate)}','${esc(b.serviceIds)}')" class="flex-1 text-[10px] py-1.5 bg-cyan-50 text-cyan-600 rounded-md hover:bg-cyan-100 transition font-bold"><i class="fa-solid fa-pen"></i> แก้คิว</button>` : ''}
             ${canReschedule ? `<button onclick="openRescheduleModal('${esc(b.bookingId)}','${esc(b.bookingDate)}','${esc(b.lineTypeRaw)}','${esc(b.serviceIds)}','${esc(b.branchId)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition font-bold"><i class="fa-solid fa-clock-rotate-left"></i> เลื่อนเวลา</button>` : ''}
             ${canCancel ? `<button onclick="confirmCancelBooking('${esc(b.bookingId)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition font-bold"><i class="fa-solid fa-trash"></i> ลบคิว</button>` : ''}
@@ -4099,40 +4108,14 @@
     // 🛠️ (F0.7a) Admin: แก้ไขคิว (services + size)
     // ==============================================
 
-    // เปิด Modal แก้ไขคิว — checkbox services + dropdown size
+    // ✏️ [Sprint1 #1 — D199] "แก้คิว" — เดิมมี services checklist ฝังอยู่ ตอนนี้ย้ายไปปุ่ม
+    //   "🔧 แก้บริการ" แยกต่างหาก (openEditServiceModal) แล้ว ที่นี่เหลือแค่ plate/brand/model/branch/line
+    //   currentServiceIds ยังรับไว้เป็น param เผื่อ callsite เก่า (เช่น Pickup/Delivery tab) — ไม่ใช้แล้ว
     function openEditBookingModal(bookingId, plate, currentServiceIds) {
-      const currentIds = String(currentServiceIds || '').split(',').map(s => s.trim()).filter(Boolean);
-
       // หาข้อมูล booking ปัจจุบันจาก cache
       const cached = (window.adminBookingsCache || []).find(b => b.bookingId === bookingId) || {};
       const currentBranch = String(cached.branchId || '');
       const currentLine = String(cached.lineTypeRaw || 'LINE2');
-      // หา size — ใน admin ไม่มี vehicle data ตรงๆ จาก booking → ใช้ M เป็น default
-      const currentSize = 'M';
-
-      // Group services by category
-      const grouped = {};
-      (adminServices || []).forEach(s => {
-        const cat = s.category || 'ทั่วไป';
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push(s);
-      });
-
-      let svcHtml = '';
-      Object.keys(grouped).forEach(cat => {
-        svcHtml += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-3 mb-1">${esc(cat)}</div>`;
-        grouped[cat].forEach(s => {
-          const id = s.service_id || s.id;
-          const name = s.service_name || s.name || '-';
-          const time = s.std_time_mins || s.stdtime || 0;
-          const isChecked = currentIds.includes(String(id));
-          svcHtml += `
-            <label class="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg mb-1 cursor-pointer hover:bg-blue-50 text-xs">
-              <input type="checkbox" class="edit-svc-cb" value="${esc(id)}" ${isChecked ? 'checked' : ''}>
-              <span class="flex-1">${esc(name)} <span class="text-gray-400 text-[10px]">(${time}น.)</span></span>
-            </label>`;
-        });
-      });
 
       // 🆕 BUG #2 FIX (5/6/2026 — Master approved Q2): branch + line + plate/brand/model inputs
       const branchOptions = ((configData && configData.branches) || []).map(b => {
@@ -4147,30 +4130,21 @@
 
           <div class="grid grid-cols-2 gap-2 mb-3">
             <div>
-              <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถ</label>
-              <select id="editSize" class="w-full p-2 border border-gray-300 rounded-md text-sm mt-1">
-                <option value="M">M (Eco)</option>
-                <option value="L">L (SUV)</option>
-                <option value="XL">XL (กระบะ)</option>
-              </select>
-            </div>
-            <div>
               <label class="text-[10px] font-bold text-gray-500 uppercase">ช่อง (LINE)</label>
               <select id="editLine" class="w-full p-2 border border-gray-300 rounded-md text-sm mt-1">
                 <option value="LINE1" ${currentLine === 'LINE1' ? 'selected' : ''}>LINE1 (เครื่อง)</option>
                 <option value="LINE2" ${currentLine === 'LINE2' ? 'selected' : ''}>LINE2 (คน)</option>
               </select>
             </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">สาขา</label>
+              <select id="editBranch" class="w-full p-2 border border-gray-300 rounded-md text-sm mt-1">
+                ${branchOptions || `<option value="${esc(currentBranch)}">${esc(currentBranch || 'BR-01')}</option>`}
+              </select>
+            </div>
           </div>
 
-          <div class="mb-3">
-            <label class="text-[10px] font-bold text-gray-500 uppercase">สาขา</label>
-            <select id="editBranch" class="w-full p-2 border border-gray-300 rounded-md text-sm mt-1">
-              ${branchOptions || `<option value="${esc(currentBranch)}">${esc(currentBranch || 'BR-01')}</option>`}
-            </select>
-          </div>
-
-          <details class="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-2">
+          <details class="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-2" open>
             <summary class="cursor-pointer text-[11px] font-bold text-amber-700">🚗 แก้ข้อมูลรถ (กระทบทุก booking ของรถคันนี้) ▼</summary>
             <div class="mt-2 space-y-2">
               <div>
@@ -4191,11 +4165,7 @@
             </div>
           </details>
 
-          <label class="text-[10px] font-bold text-gray-500 uppercase">เลือกบริการ</label>
-          <div class="max-h-56 overflow-y-auto mt-1 p-2 bg-gray-50 rounded-lg">
-            ${svcHtml || '<p class="text-gray-400 text-sm text-center py-4">ไม่มีบริการในระบบ</p>'}
-          </div>
-          <p class="text-[10px] text-blue-600 mt-2">💡 ใช้ "เลื่อนเวลา" สำหรับเปลี่ยนเวลา · ใช้ "ลบ+จองใหม่" สำหรับเปลี่ยนเจ้าของ</p>
+          <p class="text-[10px] text-blue-600 mt-2">💡 ใช้ "🔧 แก้บริการ" สำหรับเปลี่ยนบริการ/ขนาดรถ · ใช้ "เลื่อนเวลา" สำหรับเปลี่ยนเวลา · ใช้ "ลบ+จองใหม่" สำหรับเปลี่ยนเจ้าของ</p>
         </div>`;
 
       Swal.fire({
@@ -4205,13 +4175,9 @@
         confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึก',
         cancelButtonText: 'ยกเลิก',
         confirmButtonColor: '#06B6D4',
-        width: 560,
-        didOpen: () => { document.getElementById('editSize').value = currentSize; }
+        width: 480
       }).then(async res => {
         if (!res.isConfirmed) return;
-        const ids = Array.from(document.querySelectorAll('.edit-svc-cb:checked')).map(el => el.value);
-        if (ids.length === 0) return Swal.fire('แจ้งเตือน', 'ต้องเลือกบริการอย่างน้อย 1 รายการ', 'warning');
-        const newSize   = document.getElementById('editSize').value;
         const newLine   = document.getElementById('editLine').value;
         const newBranch = document.getElementById('editBranch').value;
         const newPlate  = (document.getElementById('editPlate').value || '').trim();
@@ -4233,8 +4199,6 @@
         }
 
         _doEditBookingFields(bookingId, {
-          services: ids.join(','),
-          vehicleSize: newSize,
           lineType: newLine,
           branchId: newBranch,
           plate: (newPlate && newPlate !== plate) ? newPlate : '',
@@ -4242,6 +4206,165 @@
           carModel: newModel
         });
       });
+    }
+
+    // 🆕 [Sprint1 #1 — D199] "🔧 แก้บริการ" — services + ขนาดรถ + live price preview
+    //   แยกจาก openEditBookingModal โดยตั้งใจ — แอดมินกดเร็วกว่า ไม่ต้องไล่ผ่าน field อื่นที่ไม่เกี่ยว
+    //   ปลดล็อกเพิ่ม checked_in/in_progress (golden moment สำหรับ upsell กลางทาง)
+    function openEditServiceModal(bookingId, plate, currentServiceIds, currentSize, paidAmount, paidMethod, currentStatus) {
+      currentSize = currentSize || 'M';
+      paidAmount = parseFloat(paidAmount) || 0;
+      paidMethod = String(paidMethod || '');
+      currentStatus = String(currentStatus || '');
+      const isPaid = paidAmount > 0 || !!paidMethod;
+      const isPackagePaid = paidMethod === 'package' ||
+                            paidMethod.indexOf('package:') === 0 ||
+                            paidMethod.indexOf('package_group:') === 0;
+
+      // 🛡️ Client-side early exit — package-paid ห้ามแก้บริการ (backend reject เหมือนกัน — กันตั้งแต่ต้น)
+      if (isPackagePaid) {
+        Swal.fire({
+          icon: 'warning',
+          title: '🔒 คิวจ่ายด้วยแพ็กเกจ',
+          html: '<p>ห้ามเปลี่ยนบริการของคิวที่หักแพ็กเกจแล้ว</p>' +
+                '<p class="text-xs text-gray-500 mt-2">ให้ลบคิว + สร้างใหม่พร้อมตัดแพ็กเกจใหม่แทน</p>',
+          confirmButtonText: 'เข้าใจแล้ว'
+        });
+        return;
+      }
+
+      const currentIds = String(currentServiceIds || '').split(',').map(s => s.trim()).filter(Boolean);
+
+      // Group services by category
+      const grouped = {};
+      (adminServices || []).forEach(s => {
+        const cat = s.category || 'ทั่วไป';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(s);
+      });
+
+      let svcHtml = '';
+      Object.keys(grouped).forEach(cat => {
+        svcHtml += `<div class="text-[9px] font-bold text-gray-400 uppercase mt-3 mb-1">${esc(cat)}</div>`;
+        grouped[cat].forEach(s => {
+          const id = s.service_id || s.id;
+          const name = s.service_name || s.name || '-';
+          const time = s.std_time_mins || s.stdtime || 0;
+          const isChecked = currentIds.includes(String(id));
+          svcHtml += `
+            <label class="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg mb-1 cursor-pointer hover:bg-teal-50 text-xs">
+              <input type="checkbox" class="edit-svc-cb" value="${esc(id)}" ${isChecked ? 'checked' : ''}>
+              <span class="flex-1">${esc(name)} <span class="text-gray-400 text-[10px]">(${time}น.)</span></span>
+            </label>`;
+        });
+      });
+
+      // ⚠️ Warning banner ตามสถานะ — เตือนเมื่อคิวอยู่ระหว่างล้าง/เช็คอินแล้ว
+      const statusWarn = (currentStatus === 'in_progress')
+        ? '<div class="mb-3 p-2 bg-orange-50 border border-orange-300 rounded-lg text-[11px] text-orange-800"><b>⚠️ กำลังล้างอยู่</b> · เปลี่ยนบริการอาจกระทบเวลาที่เหลือ · ตรวจสอบกับพนักงานล้างก่อนบันทึก</div>'
+        : (currentStatus === 'checked_in')
+          ? '<div class="mb-3 p-2 bg-blue-50 border border-blue-300 rounded-lg text-[11px] text-blue-800">💡 <b>ลูกค้าเช็คอินแล้ว</b> · แก้ไขได้ (ยังไม่เริ่มล้าง)</div>'
+          : '';
+
+      const html = `
+        <div class="text-left text-xs">
+          <p class="text-gray-500 mb-2">รหัส: ${esc(bookingId)} — <b>${esc(plate)}</b></p>
+          ${statusWarn}
+
+          <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถ</label>
+          <select id="editSize" class="w-full p-2 border border-gray-300 rounded-md text-sm mt-1 mb-3">
+            <option value="M">M (Eco)</option>
+            <option value="L">L (SUV)</option>
+            <option value="XL">XL (กระบะ)</option>
+          </select>
+
+          <label class="text-[10px] font-bold text-gray-500 uppercase">เลือกบริการ</label>
+          <div class="max-h-48 overflow-y-auto mt-1 p-2 bg-gray-50 rounded-lg">
+            ${svcHtml || '<p class="text-gray-400 text-sm text-center py-4">ไม่มีบริการในระบบ</p>'}
+          </div>
+
+          <div id="editPriceRecalc" class="mt-3 p-2 bg-teal-50 border border-teal-200 rounded-lg text-xs hidden">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-gray-600">ราคาปัจจุบัน (catalog):</span>
+              <span id="editOldPrice" class="tabular-nums font-semibold">-</span>
+            </div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-gray-600">ราคาใหม่:</span>
+              <span id="editNewPrice" class="tabular-nums font-bold text-teal-700">-</span>
+            </div>
+            <div id="editPriceDelta" class="mt-2 pt-2 border-t border-teal-300 hidden"></div>
+          </div>
+        </div>`;
+
+      Swal.fire({
+        title: '🔧 แก้บริการ ' + plate,
+        html: html,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึก',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#0D9488',
+        width: 520,
+        didOpen: () => {
+          document.getElementById('editSize').value = currentSize;
+          _wireLivePriceRecalc(currentIds, currentSize, isPaid, paidAmount);
+        }
+      }).then(async res => {
+        if (!res.isConfirmed) return;
+        const ids = Array.from(document.querySelectorAll('.edit-svc-cb:checked')).map(el => el.value);
+        if (ids.length === 0) return Swal.fire('แจ้งเตือน', 'ต้องเลือกบริการอย่างน้อย 1 รายการ', 'warning');
+        const newSize = document.getElementById('editSize').value;
+
+        _doEditBookingFields(bookingId, {
+          services: ids.join(','),
+          vehicleSize: newSize
+        });
+      });
+    }
+
+    // 🆕 [Sprint1 #1] Live price preview — คำนวณสดตอน toggle checkbox / เปลี่ยนขนาดรถ
+    //   สูตรเดียวกับ backend _sumPrice ใน editBookingFields (price_m/price_l/price_xl จาก adminServices)
+    function _wireLivePriceRecalc(initialIds, size, isPaid, paidAmount) {
+      const box = document.getElementById('editPriceRecalc');
+      if (!box) return;
+      const sumPrice = (ids, sz) => {
+        let t = 0;
+        ids.forEach(id => {
+          const svc = (adminServices || []).find(x => String(x.service_id) === String(id));
+          if (!svc) return;
+          if (sz === 'L')       t += parseFloat(svc.price_l)  || 0;
+          else if (sz === 'XL') t += parseFloat(svc.price_xl) || 0;
+          else                  t += parseFloat(svc.price_m)  || 0;
+        });
+        return Math.round(t * 100) / 100;
+      };
+      const recompute = () => {
+        const ids = Array.from(document.querySelectorAll('.edit-svc-cb:checked')).map(el => el.value);
+        const sz = document.getElementById('editSize').value;
+        const oldT = sumPrice(initialIds, size);
+        const newT = sumPrice(ids, sz);
+        const delta = Math.round((newT - oldT) * 100) / 100;
+        box.classList.remove('hidden');
+        document.getElementById('editOldPrice').textContent = oldT.toLocaleString() + ' .-';
+        document.getElementById('editNewPrice').textContent = newT.toLocaleString() + ' .-';
+        const dBox = document.getElementById('editPriceDelta');
+        if (delta === 0) {
+          dBox.classList.add('hidden');
+        } else if (isPaid) {
+          dBox.classList.remove('hidden');
+          dBox.className = 'mt-2 pt-2 border-t text-[11px] font-bold ' +
+            (delta > 0 ? 'border-red-300 text-red-700' : 'border-amber-300 text-amber-700');
+          dBox.innerHTML = (delta > 0
+            ? '⚠️ ต้อง <b>เก็บเพิ่ม ' + Math.abs(delta).toLocaleString() + ' บาท</b> จากลูกค้า · ใช้ "แก้ใบเสร็จ" อัปเดตยอดหลังเก็บ'
+            : '⚠️ ต้อง <b>คืน ' + Math.abs(delta).toLocaleString() + ' บาท</b> ให้ลูกค้า · ใช้ "แก้ใบเสร็จ" อัปเดตยอดหลังคืน');
+        } else {
+          dBox.classList.remove('hidden');
+          dBox.className = 'mt-2 pt-2 border-t border-teal-300 text-[11px] text-teal-700';
+          dBox.innerHTML = '💡 ราคา' + (delta > 0 ? 'เพิ่มขึ้น +' : 'ลดลง ') + delta.toLocaleString() + ' บาท (ยังไม่จ่าย — จะบันทึกราคาใหม่ให้อัตโนมัติ)';
+        }
+      };
+      document.querySelectorAll('.edit-svc-cb').forEach(cb => cb.addEventListener('change', recompute));
+      document.getElementById('editSize').addEventListener('change', recompute);
+      recompute();
     }
 
     // 🆕 BUG #2 FIX: ใช้ editBookingFields แทน editBookingByAdmin
@@ -4261,9 +4384,20 @@
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if (result.status === 'success') {
-          const changeText = (result.changes && result.changes.length)
+          let changeText = (result.changes && result.changes.length)
             ? '<br><span class="text-[10px] text-gray-500">เปลี่ยน: ' + result.changes.length + ' field</span>'
             : '';
+          // 🆕 [Sprint1 #1] แสดง delta ราคาจาก backend (editBookingFields.priceRecalc)
+          if (result.priceRecalc) {
+            const pr = result.priceRecalc;
+            if (pr.wasUnpaid && pr.delta) {
+              changeText += '<br><span class="text-[11px] text-blue-600">💰 ราคาใหม่ ' + pr.newTotal.toLocaleString() + ' บาท (บันทึกแล้ว)</span>';
+            } else if (!pr.wasUnpaid && pr.delta) {
+              const verb = pr.delta > 0 ? 'เก็บเพิ่ม' : 'คืนลูกค้า';
+              const color = pr.delta > 0 ? 'red' : 'amber';
+              changeText += '<br><span class="text-[11px] font-bold text-' + color + '-700">⚠️ ต้อง' + verb + ' ' + Math.abs(pr.delta).toLocaleString() + ' บาท (ยอดในระบบยังไม่เปลี่ยน — กด "แก้ใบเสร็จ" หลังเก็บ/คืนเงินเสร็จ)</span>';
+            }
+          }
           Swal.fire({ icon: 'success', title: 'สำเร็จ', html: 'แก้ไขคิวเรียบร้อย' + changeText }).then(() => loadAdminData({ boardOnly: true }));
         } else {
           Swal.fire('ไม่สำเร็จ', result.message || 'เกิดข้อผิดพลาด', 'warning');
