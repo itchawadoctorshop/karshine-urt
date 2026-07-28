@@ -195,7 +195,7 @@
     </div>
 
     <!-- 📊 F0.4 Mini Dashboard — สรุปยอดในช่วงเวลาที่เลือก -->
-    <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+    <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">📋 คิววันนี้</p>
         <p class="text-2xl font-bold text-gray-800 mt-1"><span id="dsQueueToday">-</span></p>
@@ -208,7 +208,14 @@
           <p class="text-gray-500">ยอดเต็ม: <span id="dsGrossRevenue" class="font-bold text-gray-700">-</span>.-</p>
           <p class="text-amber-600">🎁 ส่วนลด: <span id="dsDiscountToday">-</span>.-</p>
         </div>
-        <p class="text-[10px] text-gray-400 mt-1">เฉลี่ย/บิล <span id="dsAvgPerBill">-</span>.-</p>
+        <p class="text-[10px] text-gray-400 mt-1">เฉลี่ย/คัน <span id="dsAvgPerBill">-</span>.- <span class="text-[8px] text-gray-300">(AOV — ไม่รวมขายสินค้า)</span></p>
+      </div>
+      <!-- 🛒 D200: รายได้ขายสินค้า — แยกก้อนจาก "รับเงินวันนี้" (ล้างรถ) เพราะไม่มี "คัน" ⇒ ห้ามเอาไปหาร AOV -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-sky-100">
+        <p class="text-[10px] text-gray-400 font-bold uppercase">🛒 ขายสินค้า <span class="text-[8px] text-gray-300 normal-case">(ไม่กินเวลาเครื่อง)</span></p>
+        <p class="text-2xl font-bold text-sky-600 mt-1"><span id="dsPosRevenue">-</span><span class="text-sm text-gray-400">.-</span></p>
+        <p class="text-[10px] text-gray-500 mt-1"><span id="dsPosBills">-</span> บิล · <span id="dsPosItems">-</span> ชิ้น</p>
+        <p class="text-[10px] text-gray-400 mt-1">กำไรขั้นต้น <span id="dsPosProfit" class="font-bold text-emerald-600">-</span>.- · ต่อบิล <span id="dsPosAvg">-</span>.-</p>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">⏳ ค้างจ่าย + 📦 หักแพ็กเกจ</p>
@@ -324,13 +331,15 @@
                 <th class="px-2 py-2 text-right font-bold text-green-700">ยอดสุทธิ</th>
                 <!-- 🆕 D120-D121 (5/6/2026 Late Evening — Master Spec): Pre-order + รวม(ระบบ) -->
                 <th class="px-2 py-2 text-right font-bold text-purple-700 bg-purple-50" title="Pre-order จ่ายวันนี้ booking วันอื่น (จาก paid_at)">📅 Pre-order</th>
-                <th class="px-2 py-2 text-right font-bold text-emerald-700 bg-emerald-50" title="ยอดสุทธิ + Pre-order = เงินรับจริงวันนี้">💰 รวม(ระบบ)</th>
+                <!-- 🛒 D200: ขายสินค้า (POS) — เงินเข้าลิ้นชักจริง แต่ไม่มี "คัน" จึงไม่นับใน AOV -->
+                <th class="px-2 py-2 text-right font-bold text-sky-700 bg-sky-50" title="ขายสินค้าหน้าร้าน (ไม่มีคิว) — เข้าลิ้นชักจริง แต่ไม่นับเป็นคัน">🛒 ขายสินค้า</th>
+                <th class="px-2 py-2 text-right font-bold text-emerald-700 bg-emerald-50" title="ยอดสุทธิ + Pre-order + ขายสินค้า = เงินรับจริงวันนี้">💰 รวม(ระบบ)</th>
                 <th class="px-2 py-2 text-right font-bold text-blue-700">ยอดจริง (พนง.นับ)</th>
                 <th class="px-2 py-2 text-right font-bold">ผลต่าง</th>
               </tr>
             </thead>
             <tbody id="reconTableBody" class="divide-y divide-gray-100">
-              <tr><td colspan="9" class="text-center py-6 text-gray-400">กำลังโหลด...</td></tr>
+              <tr><td colspan="10" class="text-center py-6 text-gray-400">กำลังโหลด...</td></tr>
             </tbody>
             <tfoot class="bg-gray-50 font-bold">
               <tr>
@@ -341,6 +350,8 @@
                 <td class="px-2 py-2 text-right text-green-700" id="reconSumNet">0</td>
                 <!-- 🆕 D120-D121 footer cells -->
                 <td class="px-2 py-2 text-right text-purple-700 bg-purple-50" id="reconSumPreorder">0</td>
+                <!-- 🛒 D200 POS footer cell -->
+                <td class="px-2 py-2 text-right text-sky-700 bg-sky-50" id="reconSumPos">0</td>
                 <td class="px-2 py-2 text-right text-emerald-700 bg-emerald-50" id="reconSumSystem">0</td>
                 <td class="px-2 py-2 text-right text-blue-700" id="reconSumActual">0</td>
                 <td class="px-2 py-2 text-right" id="reconSumDiff">0</td>
@@ -459,8 +470,9 @@
       </form>
 
       <!-- 🆕 CRM Enhancement v1.5 (10/6/2026 — D104): Permanent toolbar — Broadcast always visible
-           Patch 1: 5-button toolbar replaces 2-row layout (D62 + Call List + Refresh stayed) -->
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-6">
+           Patch 1: 5-button toolbar replaces 2-row layout (D62 + Call List + Refresh stayed)
+           🛒 D200 (28/7/2026): เพิ่มปุ่มที่ 6 "ขายสินค้า" — 5 ปุ่มเดิมต้องอยู่ครบและกดได้เหมือนเดิม -->
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-6">
         <button type="button" id="btnCrmWalkin" onclick="openManualAddModal()"
                 class="bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold shadow transition text-xs">
           <i class="fa-solid fa-user-plus"></i> ➕ Walk-in
@@ -481,6 +493,11 @@
                 class="bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold shadow transition text-xs" title="โหลด tier ทั้งหมดใหม่">
           <i class="fa-solid fa-arrows-rotate"></i> รีเฟรช
         </button>
+        <!-- 🛒 D200: ปุ่มที่ 6 — ขายสินค้า (ไม่ผูกการ์ด Kanban ใดๆ เปิดจากหน้าไหนก็ขายได้) -->
+        <button type="button" id="btnQuickSale" onclick="openPOSModal()"
+                class="bg-sky-600 hover:bg-sky-700 text-white py-3 rounded-xl font-bold shadow transition text-xs" title="ขายสินค้าโดยไม่ต้องมีคิว">
+          <i class="fa-solid fa-cart-shopping"></i> 🛒 ขายสินค้า
+        </button>
       </div>
 
       <div id="crmResults" class="space-y-4">
@@ -488,6 +505,112 @@
       </div>
     </div>
   </section>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- 🛒 POS Quick Sale v1 (28/7/2026 — D200)                        -->
+  <!--    ขายสินค้าโดยไม่ต้องมีคิว — เขียนลงชีต Sales/Sale_Items      -->
+  <!--    🛡️ ห้ามแตะ Bookings เด็ดขาด (กัน AOV/จำนวนคันเพี้ยน)        -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div id="posModal" class="hidden fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-2 sm:p-4">
+    <div class="bg-gray-50 rounded-2xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- header -->
+      <div class="flex justify-between items-center px-4 py-3 bg-sky-600 text-white shrink-0">
+        <h2 class="text-lg font-bold"><i class="fa-solid fa-cart-shopping"></i> ขายสินค้า <span class="text-xs font-normal opacity-80">(ไม่กินเวลาเครื่องล้าง)</span></h2>
+        <button type="button" onclick="closePOSModal()" class="text-white/80 hover:text-white text-xl px-2"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- ── หน้าขาย ── -->
+      <div id="posSellView" class="flex-1 grid grid-cols-1 md:grid-cols-5 gap-0 overflow-hidden">
+        <!-- ซ้าย: แคตตาล็อก -->
+        <div class="md:col-span-3 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
+          <div class="p-3 border-b border-gray-100 shrink-0 space-y-2">
+            <input type="text" id="posSearch" oninput="renderPOSCatalog()" placeholder="🔎 ค้นหา / สแกนบาร์โค้ด (ชื่อ หรือ SKU)…"
+                   class="w-full p-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500">
+            <div id="posCategories" class="flex gap-1.5 flex-wrap"></div>
+          </div>
+          <div id="posProductGrid" class="flex-1 overflow-y-auto p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 content-start min-h-[180px]">
+            <div class="col-span-full text-center text-gray-400 text-sm py-10">กำลังโหลดสินค้า…</div>
+          </div>
+        </div>
+
+        <!-- ขวา: ตะกร้า -->
+        <div class="md:col-span-2 flex flex-col bg-gray-50 overflow-hidden">
+          <div class="px-3 py-2 border-b border-gray-200 shrink-0 flex justify-between items-center">
+            <p class="text-xs font-bold text-gray-600 uppercase">🧺 ตะกร้า</p>
+            <button type="button" onclick="posClearCart()" class="text-[11px] text-red-500 hover:text-red-700 font-bold">ล้างตะกร้า</button>
+          </div>
+          <div id="posCartBody" class="flex-1 overflow-y-auto p-3 space-y-2 min-h-[120px]">
+            <p class="text-center text-gray-400 text-xs py-8">ยังไม่มีสินค้า — กดที่ปุ่มสินค้าด้านซ้าย</p>
+          </div>
+          <div class="border-t border-gray-200 p-3 space-y-2 bg-white shrink-0">
+            <div class="flex justify-between text-xs text-gray-600">
+              <span>รวม (<span id="posItemCount">0</span> ชิ้น)</span>
+              <span id="posSubtotal" class="font-bold">0.00</span>
+            </div>
+            <div class="flex justify-between items-center text-xs">
+              <label for="posDiscount" class="text-gray-600">ส่วนลด (บาท)</label>
+              <input type="number" id="posDiscount" min="0" step="1" value="" placeholder="0" oninput="renderPOSCart()"
+                     class="w-24 text-right border border-gray-300 rounded-lg px-2 py-1 text-xs">
+            </div>
+            <div class="flex justify-between items-baseline border-t border-dashed pt-2">
+              <span class="text-sm font-bold text-gray-700">สุทธิ</span>
+              <span id="posTotal" class="text-2xl font-extrabold text-sky-700">0.00</span>
+            </div>
+            <div>
+              <label class="text-[11px] font-bold text-gray-600">ช่องทางรับเงิน <span class="text-red-500">*</span></label>
+              <select id="posPayMethod" class="w-full p-2 border border-gray-300 rounded-lg text-sm"></select>
+            </div>
+            <details class="border border-gray-200 rounded-lg p-2 bg-gray-50">
+              <summary class="text-[11px] font-bold text-gray-600 cursor-pointer">🔗 ผูกกับลูกค้า LINE (ไม่ผูกก็ขายได้)</summary>
+              <div class="mt-2 space-y-1.5">
+                <div class="flex gap-1.5">
+                  <input type="text" id="posCustSearch" placeholder="ชื่อ หรือ เบอร์โทร" class="flex-1 p-2 border border-gray-300 rounded-lg text-xs">
+                  <button type="button" onclick="posSearchCustomer()" class="bg-gray-700 hover:bg-gray-800 text-white px-3 rounded-lg text-xs font-bold">ค้นหา</button>
+                </div>
+                <div id="posCustResult" class="text-xs"></div>
+                <div id="posCustPicked" class="hidden text-xs bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex justify-between items-center">
+                  <span id="posCustPickedName" class="font-bold text-emerald-800"></span>
+                  <button type="button" onclick="posClearCustomer()" class="text-red-500 font-bold">✕ ยกเลิก</button>
+                </div>
+              </div>
+            </details>
+            <input type="text" id="posStaff" placeholder="ชื่อพนักงานขาย (ไม่บังคับ)" class="w-full p-2 border border-gray-200 rounded-lg text-xs">
+            <button type="button" id="posSubmitBtn" onclick="posSubmitSale()" disabled
+                    class="w-full py-3 rounded-xl font-extrabold text-white bg-gray-300 cursor-not-allowed transition text-base">
+              💰 รับเงิน
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── หน้าใบเสร็จ (หลังรับเงินสำเร็จ) ── -->
+      <div id="posReceiptView" class="hidden flex-1 flex flex-col overflow-hidden bg-white">
+        <div class="p-4 text-center border-b border-gray-100 shrink-0">
+          <p class="text-4xl mb-1">✅</p>
+          <p class="font-bold text-lg text-emerald-700">รับเงินเรียบร้อย</p>
+          <p id="posReceiptSummary" class="text-sm text-gray-600 mt-1"></p>
+          <div id="posLowStockWarn" class="hidden mt-2 text-xs bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-2 text-left"></div>
+        </div>
+        <div class="flex-1 overflow-auto bg-gray-100 p-3 flex justify-center">
+          <iframe id="posReceiptPreview" class="bg-white shadow-lg border-0" style="width:302px;min-height:360px;"></iframe>
+        </div>
+        <div class="p-3 border-t border-gray-200 grid grid-cols-2 gap-2 shrink-0">
+          <button type="button" onclick="posPrintReceipt()" class="py-3 bg-gray-800 hover:bg-black text-white rounded-xl font-bold text-sm">
+            🧾 พิมพ์ใบเสร็จ
+          </button>
+          <button type="button" id="posTaxInvoiceBtn" disabled title="รอเปิดใช้งาน (เฟส 2 — หลังร้านจด VAT)"
+                  class="py-3 bg-gray-200 text-gray-400 rounded-xl font-bold text-sm cursor-not-allowed">
+            📄 ออกใบกำกับภาษี
+          </button>
+          <div class="col-span-2 grid grid-cols-3 gap-2">
+            <button type="button" onclick="posSetReceiptWidth(58)" id="posW58" class="py-2 border border-gray-300 rounded-lg text-xs font-bold text-gray-600">58mm</button>
+            <button type="button" onclick="posSetReceiptWidth(80)" id="posW80" class="py-2 border border-sky-500 bg-sky-50 text-sky-700 rounded-lg text-xs font-bold">80mm</button>
+            <button type="button" onclick="posNewSale()" class="py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold">➕ ขายบิลใหม่</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ════════════════════════════════════════════════ -->
   <!-- 👥 D62 RESTORE — CRM Manual Add Modal (9/6/2026) -->
@@ -1592,10 +1715,19 @@
           //   ถ้า is_preorder → bucket preorderAmount/preorderCount (กัน double-count กับ net)
           const map = {};
           const _ensureBucket = (key) => {
-            if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0, serviceValue: 0, preorderAmount: 0, preorderCount: 0 };
+            if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0, serviceValue: 0, preorderAmount: 0, preorderCount: 0, posAmount: 0, posCount: 0 };
             return map[key];
           };
           (salesRes.data.rows || []).forEach(r => {
+            // 🛒 D200: แถวขายสินค้า (POS) — เข้าลิ้นชักจริง แต่ไม่มี "คัน"
+            //    ⇒ bucket แยกเป็น posAmount/posCount · ห้ามบวกเข้า net/count (จะทำ AOV เพี้ยนซ้ำรอยแพ็กเกจ)
+            if (r.source === 'pos') {
+              if (r.voided || r.status === 'cancelled') return;
+              const bp = _ensureBucket(r.payment_method || 'unknown');
+              bp.posAmount += (Number(r.net) || 0);
+              bp.posCount  += 1;
+              return;
+            }
             // 🆕 D120: pre-order rows (paid_at วันแสดง + booking_date วันอื่น) — bucket แยก
             if (r.is_preorder && r.payment_status === 'paid' && r.payment_method && r.payment_method !== 'package') {
               const bucket = _ensureBucket(r.payment_method);
@@ -1671,18 +1803,21 @@
       // 🆕 D120-D121 (5/6/2026 Late Evening): Pre-order paid วันนี้ (booking วันอื่น) → รวม(ระบบ) + ผลต่าง formula
       const isLocked = !!(saved && saved.is_locked);
       let totalCount = 0, totalGross = 0, totalDiscount = 0, totalNet = 0, totalPreorder = 0, totalSumSystem = 0, totalActual = 0, totalDiff = 0;
+      let totalPos = 0;                          // 🛒 D200: ยอดขายสินค้ารวมทุกช่องทาง
       const orderedPaid = Array.from(allPaidIds).sort((a,b) => _methodLabel(a).localeCompare(_methodLabel(b)));
 
       const rows = orderedPaid.map(mid => {
-        const stat = methods.find(m => m.method === mid) || { count: 0, gross: 0, discount: 0, net: 0, preorderAmount: 0, preorderCount: 0 };
+        const stat = methods.find(m => m.method === mid) || { count: 0, gross: 0, discount: 0, net: 0, preorderAmount: 0, preorderCount: 0, posAmount: 0, posCount: 0 };
         const preorderAmt = Number(stat.preorderAmount || 0);
-        const sumSystem   = Number(stat.net || 0) + preorderAmt;     // 🆕 D121: ยอดสุทธิ + Pre-order
+        const posAmt      = Number(stat.posAmount || 0);             // 🛒 D200: ขายสินค้า (POS)
+        const sumSystem   = Number(stat.net || 0) + preorderAmt + posAmt;   // 🆕 D121 + D200: ยอดสุทธิ + Pre-order + ขายสินค้า
         const savedItem = savedMap[mid] || null;
         const actual = savedItem ? savedItem.actual_amount : '';
         // 🆕 D121: ผลต่าง = ยอดจริง − รวม(ระบบ)  (ไม่ใช่ ยอดจริง − ยอดสุทธิ เดิม)
         const diff = (actual === '' || actual === null) ? 0 : (actual - sumSystem);
         totalCount += stat.count; totalGross += stat.gross; totalDiscount += stat.discount; totalNet += stat.net;
         totalPreorder  += preorderAmt;
+        totalPos       += posAmt;               // 🛒 D200
         totalSumSystem += sumSystem;
         if (actual !== '' && actual !== null) totalActual += actual;
         totalDiff += diff;
@@ -1694,6 +1829,11 @@
         const preorderCell = preorderAmt > 0
           ? '<span class="font-bold text-purple-700">' + preorderAmt.toLocaleString() + '</span>'
           : '<span class="text-gray-300">—</span>';
+        // 🛒 D200 cell
+        const posCell = posAmt > 0
+          ? '<span class="font-bold text-sky-700">' + posAmt.toLocaleString() +
+            '</span><span class="text-[9px] text-gray-400"> (' + (stat.posCount || 0) + ' บิล)</span>'
+          : '<span class="text-gray-300">—</span>';
         return `
           <tr class="${isLocked ? 'bg-gray-50' : ''}">
             <td class="px-2 py-2 text-left">${_methodLabel(mid)}</td>
@@ -1702,6 +1842,7 @@
             <td class="px-2 py-2 text-right text-amber-600">${stat.discount.toLocaleString()}</td>
             <td class="px-2 py-2 text-right font-bold text-green-700">${stat.net.toLocaleString()}</td>
             <td class="px-2 py-2 text-right bg-purple-50">${preorderCell}</td>
+            <td class="px-2 py-2 text-right bg-sky-50">${posCell}</td>
             <td class="px-2 py-2 text-right font-bold text-emerald-700 bg-emerald-50">${sumSystem.toLocaleString()}</td>
             <td class="px-2 py-2 text-right">${actualCell}</td>
             <td class="px-2 py-2 text-right font-bold ${diffColor}" data-diff="${mid}">
@@ -1717,7 +1858,7 @@
           <tr class="bg-orange-50 border-t-2 border-orange-200">
             <td class="px-2 py-2 text-left text-orange-800">📦 หักจากแพ็กเกจ <span class="text-[9px] text-gray-500 font-normal">(ไม่รวมในยอดรวม)</span></td>
             <td class="px-2 py-2 text-center text-orange-700">${packageMethod.count}</td>
-            <td class="px-2 py-2 text-right text-gray-400" colspan="5">มูลค่าบริการ <span class="font-bold text-orange-700">${svcVal.toLocaleString()}.-</span></td>
+            <td class="px-2 py-2 text-right text-gray-400" colspan="6">มูลค่าบริการ <span class="font-bold text-orange-700">${svcVal.toLocaleString()}.-</span></td>
             <td class="px-2 py-2 text-center text-gray-400">-</td>
             <td class="px-2 py-2 text-center text-gray-400">-</td>
           </tr>`);
@@ -1736,10 +1877,11 @@
             <td class="px-2 py-2 text-center text-gray-400">-</td>
             <td class="px-2 py-2 text-center text-gray-400">-</td>
             <td class="px-2 py-2 text-center text-gray-400">-</td>
+            <td class="px-2 py-2 text-center text-gray-400">-</td>
           </tr>`);
       }
 
-      tbody.innerHTML = rows.length > 0 ? rows.join('') : `<tr><td colspan="9" class="text-center py-6 text-gray-400">ยังไม่มีรายการสำหรับวันนี้</td></tr>`;
+      tbody.innerHTML = rows.length > 0 ? rows.join('') : `<tr><td colspan="10" class="text-center py-6 text-gray-400">ยังไม่มีรายการสำหรับวันนี้</td></tr>`;
 
       // Footer ใช้ตัวเลขจาก paid only
       document.getElementById('reconSumCount').textContent = totalCount;
@@ -1749,6 +1891,8 @@
       // 🆕 D120-D121 footer
       const preEl = document.getElementById('reconSumPreorder');
       if (preEl) preEl.textContent = totalPreorder > 0 ? totalPreorder.toLocaleString() : '0';
+      const posEl = document.getElementById('reconSumPos');           // 🛒 D200
+      if (posEl) posEl.textContent = totalPos > 0 ? totalPos.toLocaleString() : '0';
       const sumSysEl = document.getElementById('reconSumSystem');
       if (sumSysEl) sumSysEl.textContent = totalSumSystem.toLocaleString();
       document.getElementById('reconSumActual').textContent = totalActual.toLocaleString();
@@ -1824,8 +1968,9 @@
       // 🆕 D121 (5/6/2026 Late Evening): ผลต่าง = ยอดจริง − (net + preorder) = ยอดจริง − sumSystem
       const mid = inputEl.dataset.method;
       const actual = parseFloat(inputEl.value) || 0;
-      const stat = (_reconCache.dashboardMethods || []).find(m => m.method === mid) || { net: 0, preorderAmount: 0 };
-      const _sumSystem = (Number(stat.net) || 0) + (Number(stat.preorderAmount) || 0);
+      const stat = (_reconCache.dashboardMethods || []).find(m => m.method === mid) || { net: 0, preorderAmount: 0, posAmount: 0 };
+      // 🛒 D200: เงินลิ้นชัก = ยอดสุทธิ + Pre-order + ขายสินค้า
+      const _sumSystem = (Number(stat.net) || 0) + (Number(stat.preorderAmount) || 0) + (Number(stat.posAmount) || 0);
       const diff = actual - _sumSystem;
       const cell = document.querySelector(`td[data-diff="${mid}"]`);
       if (cell) {
@@ -1836,8 +1981,8 @@
       document.querySelectorAll('input.recon-actual').forEach(inp => {
         const val = parseFloat(inp.value) || 0;
         const m = inp.dataset.method;
-        const s = (_reconCache.dashboardMethods || []).find(x => x.method === m) || { net: 0, preorderAmount: 0 };
-        const _ss = (Number(s.net) || 0) + (Number(s.preorderAmount) || 0);
+        const s = (_reconCache.dashboardMethods || []).find(x => x.method === m) || { net: 0, preorderAmount: 0, posAmount: 0 };
+        const _ss = (Number(s.net) || 0) + (Number(s.preorderAmount) || 0) + (Number(s.posAmount) || 0);
         totalActual += val;
         totalDiff += (val - _ss);
       });
@@ -1855,8 +2000,11 @@
         const mid = inp.dataset.method;
         const actual = parseFloat(inp.value);
         if (isNaN(actual)) return;
-        const stat = (_reconCache.dashboardMethods || []).find(m => m.method === mid) || { net: 0 };
-        items.push({ method_id: mid, system_amount: stat.net, actual_amount: actual, note: note });
+        const stat = (_reconCache.dashboardMethods || []).find(m => m.method === mid) || { net: 0, posAmount: 0 };
+        // 🛒 D200: บันทึก system_amount ให้ตรงกับช่อง "รวม(ระบบ)" ที่แอดมินเห็นตอนกรอก
+        //    = ยอดสุทธิล้างรถ + ขายสินค้า (ไม่งั้นผลต่างในชีตจะไม่ตรงกับที่หน้าจอโชว์)
+        const _sysAmt = (Number(stat.net) || 0) + (Number(stat.posAmount) || 0);
+        items.push({ method_id: mid, system_amount: _sysAmt, actual_amount: actual, note: note });
       });
       if (items.length === 0) {
         Swal.fire({ icon: 'warning', title: 'ยังไม่มีข้อมูล', text: 'กรุณาใส่ยอดจริงอย่างน้อย 1 ช่องทาง' });
@@ -1929,6 +2077,7 @@
             paidCount: 0,     paidNet: 0,      paidGross: 0,    paidDiscount: 0,    // 💵 รับเงินจริง
             packageCount: 0,  packageValue: 0,                                        // 📦 หักแพ็กเกจ (service value, info only)
             unpaidCount: 0,   unpaidNet: 0,                                           // ⏳ ค้างจ่าย
+            posCount: 0,      posNet: 0,                                              // 🛒 D200 ขายสินค้า (ไม่ใช่คัน)
             cancelledCount: 0                                                         // ❌ ยกเลิก
           };
         }
@@ -1938,10 +2087,16 @@
         const isCancelled = (r.status === 'cancelled' || r.status === 'cancelled_noshow');
         const isCompleted = (r.status === 'completed');
         const isPackage   = (r.payment_method === 'package' && r.payment_status === 'paid');
-        const isPaid      = (isCompleted && r.payment_status === 'paid' && !isPackage);
-        const isUnpaid    = (isCompleted && r.payment_status !== 'paid');
+        // 🛒 D200: ขายสินค้า (POS) — เงินจริง แต่ไม่ใช่ "คัน" ⇒ bucket แยก posNet
+        //    ห้ามให้ไหลเข้า paidNet ไม่งั้นสรุปตรงนี้จะไม่ match กับ revenueToday บน Dashboard
+        const isPos       = (r.source === 'pos');
+        const isPaid      = (!isPos && isCompleted && r.payment_status === 'paid' && !isPackage);
+        const isUnpaid    = (!isPos && isCompleted && r.payment_status !== 'paid');
 
-        if (isCancelled) {
+        if (isPos) {
+          if (r.voided || isCancelled) { groups[key].cancelledCount++; }
+          else { groups[key].posCount++; groups[key].posNet += (r.net || 0); }
+        } else if (isCancelled) {
           groups[key].cancelledCount++;
         } else if (isPackage) {
           groups[key].packageCount++;
@@ -1964,10 +2119,12 @@
       const totalPaid    = groupArr.reduce((s, g) => s + g.paidNet, 0);
       const totalPkg     = groupArr.reduce((s, g) => s + g.packageValue, 0);
       const totalUnpaid  = groupArr.reduce((s, g) => s + g.unpaidNet, 0);
+      const totalPos     = groupArr.reduce((s, g) => s + g.posNet, 0);      // 🛒 D200
+      const totalPosBill = groupArr.reduce((s, g) => s + g.posCount, 0);
       const summaryHtml = `
         <div class="mb-3 p-3 bg-gradient-to-r from-emerald-50 via-orange-50 to-red-50 rounded-xl border border-gray-200">
           <p class="text-[10px] font-bold text-gray-500 uppercase mb-2">📊 สรุปรวม (match กับ Dashboard)</p>
-          <div class="grid grid-cols-3 gap-2 text-xs">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
             <div class="bg-white rounded-lg p-2 border border-emerald-200">
               <p class="text-[9px] text-gray-500">💵 จ่ายจริง</p>
               <p class="font-bold text-emerald-700 text-base">${totalPaid.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
@@ -1979,6 +2136,10 @@
             <div class="bg-white rounded-lg p-2 border border-red-200">
               <p class="text-[9px] text-gray-500">⏳ ค้างจ่าย</p>
               <p class="font-bold text-red-600 text-base">${totalUnpaid.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
+            </div>
+            <div class="bg-white rounded-lg p-2 border border-sky-200">
+              <p class="text-[9px] text-gray-500">🛒 ขายสินค้า <span class="text-gray-400">(${totalPosBill} บิล · ไม่ใช่คัน)</span></p>
+              <p class="font-bold text-sky-700 text-base">${totalPos.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
             </div>
           </div>
         </div>
@@ -2011,12 +2172,15 @@
         if (g.packageCount > 0)   badges.push(`<span class="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px]">📦 แพ็กเกจ ${g.packageCount}</span>`);
         if (g.unpaidCount > 0)    badges.push(`<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px]">⏳ ค้าง ${g.unpaidCount}</span>`);
         if (g.cancelledCount > 0) badges.push(`<span class="px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-[10px]">❌ ยกเลิก ${g.cancelledCount}</span>`);
+        // 🛒 D200: บิลขายสินค้า — ป้ายคนละสี เพื่อไม่ให้เข้าใจผิดว่าเป็นคิวล้างรถ
+        if (g.posCount > 0)       badges.push(`<span class="px-1.5 py-0.5 bg-sky-100 text-sky-700 rounded text-[10px]">🛒 ขายสินค้า ${g.posCount} บิล</span>`);
 
         // 💰 Right-side summary
         const moneyLines = [];
-        moneyLines.push(`<div class="font-bold text-emerald-700 text-sm">💵 ${g.paidNet.toLocaleString()}.-</div>`);
+        if (g.paidNet > 0 || g.posNet === 0) moneyLines.push(`<div class="font-bold text-emerald-700 text-sm">💵 ${g.paidNet.toLocaleString()}.-</div>`);
         if (g.packageValue > 0) moneyLines.push(`<div class="text-orange-600 text-[10px]">📦 ${g.packageValue.toLocaleString()}.-</div>`);
         if (g.unpaidNet > 0)    moneyLines.push(`<div class="text-red-600 text-[10px]">⏳ ${g.unpaidNet.toLocaleString()}.-</div>`);
+        if (g.posNet > 0)       moneyLines.push(`<div class="text-sky-700 text-[10px]">🛒 ${g.posNet.toLocaleString()}.-</div>`);
         if (g.paidDiscount > 0) moneyLines.push(`<div class="text-amber-600 text-[10px]">🎁 ลด ${g.paidDiscount.toLocaleString()}.-</div>`);
 
         return `
@@ -2030,7 +2194,7 @@
                 </div>
               </div>
               <div class="flex flex-col items-end text-[10px] flex-shrink-0">
-                <div class="text-gray-500">รวม ${g.totalCount} คิว</div>
+                <div class="text-gray-500">รวม ${g.totalCount} ${g.posCount === g.totalCount ? 'บิล' : 'คิว'}</div>
                 ${moneyLines.join('')}
               </div>
             </summary>
@@ -2073,11 +2237,13 @@
         Swal.fire({ icon: 'info', title: 'ไม่มีข้อมูล', text: 'ยังไม่มีรายการในวันนี้' });
         return;
       }
-      const header = ['เวลา','Booking ID','ลูกค้า','ทะเบียน','จังหวัด','ยี่ห้อ','รุ่น','สี','ขนาด','บริการ','ยอดเต็ม','ส่วนลด','เหตุผลส่วนลด','ยอดสุทธิ','ช่องทาง','สถานะจ่าย','เวลาจ่าย','สถานะคิว'];
+      // 🛒 D200: คอลัมน์ "ประเภท" แยกล้างรถ/ขายสินค้า — ห้ามให้สองก้อนนี้ปนกันเงียบๆ ในไฟล์ export
+      const header = ['ประเภท','เวลา','Booking ID','ลูกค้า','ทะเบียน','จังหวัด','ยี่ห้อ','รุ่น','สี','ขนาด','บริการ','ยอดเต็ม','ส่วนลด','เหตุผลส่วนลด','ยอดสุทธิ','ช่องทาง','สถานะจ่าย','เวลาจ่าย','สถานะคิว'];
       const lines = [header.join(',')];
       rows.forEach(r => {
         const esc = (v) => `"${String(v||'').replace(/"/g,'""')}"`;
         lines.push([
+          esc(r.source === 'pos' ? '🛒 ขายสินค้า' : '🚗 ล้างรถ'),
           esc(r.time), esc(r.booking_id), esc(r.customer_name),
           esc(r.plate), esc(r.province), esc(r.brand), esc(r.model), esc(r.color), esc(r.size),
           esc(r.services_name), r.gross||0, r.discount||0, esc(r.discount_reason), r.net||0,
@@ -2108,18 +2274,20 @@
 
       let totalCount=0, totalGross=0, totalDiscount=0, totalNet=0, totalActual=0, totalDiff=0;
       const trs = ordered.map(mid => {
-        const stat = methods.find(m => m.method === mid) || { count:0, gross:0, discount:0, net:0 };
+        const stat = methods.find(m => m.method === mid) || { count:0, gross:0, discount:0, net:0, posAmount:0 };
         const savedItem = savedMap[mid] || null;
         const actual = savedItem ? savedItem.actual_amount : 0;
-        const diff = mid === '_unpaid' ? 0 : (actual - stat.net);
-        totalCount+=stat.count; totalGross+=stat.gross; totalDiscount+=stat.discount; totalNet+=stat.net;
+        // 🛒 D200: เงินลิ้นชัก = ยอดสุทธิล้างรถ + ยอดขายสินค้า
+        const _sysNet = (Number(stat.net)||0) + (Number(stat.posAmount)||0);
+        const diff = mid === '_unpaid' ? 0 : (actual - _sysNet);
+        totalCount+=stat.count; totalGross+=stat.gross; totalDiscount+=stat.discount; totalNet+=_sysNet;
         if (mid !== '_unpaid') { totalActual+=actual; totalDiff+=diff; }
         return `<tr>
           <td>${_methodLabel(mid)}</td>
           <td style="text-align:center">${stat.count}</td>
           <td style="text-align:right">${stat.gross.toLocaleString()}</td>
           <td style="text-align:right;color:#b45309">${stat.discount.toLocaleString()}</td>
-          <td style="text-align:right;font-weight:bold;color:#047857">${stat.net.toLocaleString()}</td>
+          <td style="text-align:right;font-weight:bold;color:#047857">${_sysNet.toLocaleString()}${(Number(stat.posAmount)||0) > 0 ? `<br><span style="font-size:9px;color:#0369a1;font-weight:normal">(รวมขายสินค้า ${(Number(stat.posAmount)||0).toLocaleString()})</span>` : ''}</td>
           <td style="text-align:right">${mid==='_unpaid' ? '-' : actual.toLocaleString()}</td>
           <td style="text-align:right">${mid==='_unpaid' ? '-' : (diff>0?'+':'')+diff.toLocaleString()}</td>
         </tr>`;
@@ -2317,6 +2485,12 @@
           setText('dsCompletedToday',    (d.completedToday || 0) + ' คิว');
           setText('dsRevenueToday',      (d.revenueToday || 0).toLocaleString());
           setText('dsAvgPerBill',        (d.avgPerBill || 0).toLocaleString());
+          // 🛒 D200 POS tile — ตัวเลขคนละก้อนกับ revenueToday (ห้ามบวกรวมกันเองในหัว)
+          setText('dsPosRevenue',        (d.posRevenueToday || 0).toLocaleString());
+          setText('dsPosBills',          d.posBillCount || 0);
+          setText('dsPosItems',          d.posItemCount || 0);
+          setText('dsPosProfit',         (d.posGrossProfitToday || 0).toLocaleString());
+          setText('dsPosAvg',            (d.posAvgPerBill || 0).toLocaleString());
           setText('dsDiscountToday',     (d.totalDiscountToday || 0).toLocaleString());   // 🆕 F1.5b
           setText('dsGrossRevenue',      (d.grossRevenueToday || d.revenueToday || 0).toLocaleString()); // 🆕 ยอดเต็ม
           // toggle breakdown — แสดงเฉพาะถ้ามีส่วนลด
@@ -7667,6 +7841,352 @@
       } catch (e) { alert('❌ ' + e.message); }
     }
     // ══ End Sales Tracker Module ══
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🛒 POS Quick Sale v1 (28/7/2026 — D200)
+    //    ขายสินค้าโดยไม่ผูกการ์ด Kanban · ไม่กินเวลาเครื่องล้าง
+    //    ⚠️ ห้ามใช้ localStorage เก็บ state ตะกร้า — เก็บในตัวแปร JS เท่านั้น
+    // ═══════════════════════════════════════════════════════════════
+    let _posCatalog   = { products: [], payments: [] };
+    let _posCart      = [];        // [{ productId, name, price, qty, stock, unit }]
+    let _posCategory  = '';        // '' = ทุกหมวด
+    let _posCustomer  = null;      // { uid, name } — ว่างได้ ขายโดยไม่รู้จักลูกค้าก็ได้
+    let _posLastSale  = null;      // { saleId, receiptNo, total }
+    let _posRcptWidth = 80;
+    let _posBusy      = false;
+
+    function _posMoney(x) { return Math.round((Number(x) || 0) * 100) / 100; }
+    function _posFmt(x) {
+      return _posMoney(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    async function openPOSModal() {
+      document.getElementById('posModal').classList.remove('hidden');
+      posNewSale();
+      await loadPOSCatalog();
+    }
+    function closePOSModal() {
+      document.getElementById('posModal').classList.add('hidden');
+    }
+
+    /** กลับไปหน้าขาย + เคลียร์ทุกอย่าง */
+    function posNewSale() {
+      _posCart = []; _posCustomer = null; _posLastSale = null;
+      document.getElementById('posSellView').classList.remove('hidden');
+      document.getElementById('posReceiptView').classList.add('hidden');
+      const d = document.getElementById('posDiscount'); if (d) d.value = '';
+      const s = document.getElementById('posSearch'); if (s) s.value = '';
+      posClearCustomer();
+      renderPOSCatalog();
+      renderPOSCart();
+    }
+
+    async function loadPOSCatalog() {
+      const grid = document.getElementById('posProductGrid');
+      grid.innerHTML = '<div class="col-span-full text-center text-gray-400 text-sm py-10">กำลังโหลดสินค้า…</div>';
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({ action: 'getPOSCatalog', t: Date.now() }))
+        }).then(r => r.json());
+        if (handleAuthError(res)) return;
+        if (res.status !== 'success') {
+          grid.innerHTML = `<div class="col-span-full text-center text-red-500 text-xs py-10">${esc(res.message || 'โหลดสินค้าไม่สำเร็จ')}</div>`;
+          return;
+        }
+        _posCatalog = res.data || { products: [], payments: [] };
+
+        // ช่องทางรับเงิน — ใช้ pay_id จากชีต Payment_Methods เท่านั้น ห้ามพิมพ์ค่าอิสระ
+        const sel = document.getElementById('posPayMethod');
+        sel.innerHTML = (_posCatalog.payments || [])
+          .map(p => `<option value="${esc(p.payId)}">${esc(p.payName || p.payId)}</option>`).join('');
+        if (!(_posCatalog.payments || []).length) {
+          sel.innerHTML = '<option value="">— ไม่มีช่องทางที่เปิดใช้ —</option>';
+        }
+
+        // หมวดสินค้า
+        const cats = Array.from(new Set((_posCatalog.products || []).map(p => p.category || 'อื่นๆ')));
+        document.getElementById('posCategories').innerHTML =
+          [`<button type="button" onclick="posSetCategory('')" data-cat="" class="pos-cat px-2.5 py-1 rounded-full text-[11px] font-bold border border-sky-500 bg-sky-50 text-sky-700">ทั้งหมด</button>`]
+          .concat(cats.map(c =>
+            `<button type="button" onclick="posSetCategory('${esc(c).replace(/'/g, "\\'")}')" data-cat="${esc(c)}" class="pos-cat px-2.5 py-1 rounded-full text-[11px] font-bold border border-gray-300 text-gray-600">${esc(c)}</button>`
+          )).join('');
+
+        renderPOSCatalog();
+        renderPOSCart();
+      } catch (e) {
+        grid.innerHTML = `<div class="col-span-full text-center text-red-500 text-xs py-10">${esc(e.message)}</div>`;
+      }
+    }
+
+    function posSetCategory(c) {
+      _posCategory = c;
+      document.querySelectorAll('.pos-cat').forEach(b => {
+        const on = (b.getAttribute('data-cat') || '') === c;
+        b.className = 'pos-cat px-2.5 py-1 rounded-full text-[11px] font-bold border ' +
+                      (on ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-300 text-gray-600');
+      });
+      renderPOSCatalog();
+    }
+
+    function renderPOSCatalog() {
+      const grid = document.getElementById('posProductGrid');
+      const kw = String((document.getElementById('posSearch') || {}).value || '').trim().toLowerCase();
+      const list = (_posCatalog.products || []).filter(p => {
+        if (_posCategory && (p.category || 'อื่นๆ') !== _posCategory) return false;
+        if (!kw) return true;
+        return String(p.name || '').toLowerCase().includes(kw) ||
+               String(p.sku || '').toLowerCase().includes(kw) ||
+               String(p.productId || '').toLowerCase().includes(kw);
+      });
+      if (!list.length) {
+        grid.innerHTML = `<div class="col-span-full text-center text-gray-400 text-xs py-10">
+          ${(_posCatalog.products || []).length ? 'ไม่พบสินค้าที่ค้นหา' : 'ยังไม่มีสินค้าในชีต Products — กรอกสินค้า + สต็อกตั้งต้นก่อนเปิดใช้งาน'}
+        </div>`;
+        return;
+      }
+      grid.innerHTML = list.map(p => {
+        // นับของที่อยู่ในตะกร้าแล้ว — กันกดเกินสต็อกตั้งแต่หน้าจอ
+        const inCart = (_posCart.find(c => c.productId === p.productId) || {}).qty || 0;
+        const left = (Number(p.stock) || 0) - inCart;
+        const out = left <= 0;
+        const low = !out && left <= (Number(p.reorderPoint) || 0);
+        const badge = out
+          ? '<span class="absolute top-1 right-1 bg-gray-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">หมด</span>'
+          : (low ? `<span class="absolute top-1 right-1 bg-orange-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">ใกล้หมด (${left})</span>` : '');
+        return `
+          <button type="button" ${out ? 'disabled' : ''} onclick="posAddToCart('${esc(p.productId)}')"
+                  class="relative text-left p-2.5 rounded-xl border transition ${out
+                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-white border-gray-200 hover:border-sky-400 hover:bg-sky-50 active:scale-95 shadow-sm'}">
+            ${badge}
+            <p class="text-xs font-bold leading-tight pr-8 line-clamp-2">${esc(p.name)}</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">${esc(p.category || '')}${p.unit ? ' · ' + esc(p.unit) : ''}</p>
+            <p class="text-base font-extrabold ${out ? 'text-gray-400' : 'text-sky-700'} mt-1">฿${_posFmt(p.price)}</p>
+            <p class="text-[10px] ${out ? 'text-gray-400' : 'text-gray-500'}">คงเหลือ ${left}</p>
+          </button>`;
+      }).join('');
+    }
+
+    function posAddToCart(pid) {
+      const p = (_posCatalog.products || []).find(x => x.productId === pid);
+      if (!p) return;
+      const line = _posCart.find(c => c.productId === pid);
+      const inCart = line ? line.qty : 0;
+      if (inCart + 1 > (Number(p.stock) || 0)) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'warning',
+                    title: `${p.name} เหลือ ${p.stock} เท่านั้น`, showConfirmButton: false, timer: 1800 });
+        return;
+      }
+      if (line) line.qty += 1;
+      else _posCart.push({ productId: p.productId, name: p.name, price: _posMoney(p.price),
+                           qty: 1, stock: Number(p.stock) || 0, unit: p.unit || '' });
+      renderPOSCart(); renderPOSCatalog();
+    }
+
+    function posChangeQty(pid, delta) {
+      const line = _posCart.find(c => c.productId === pid);
+      if (!line) return;
+      const next = line.qty + delta;
+      if (next <= 0) { _posCart = _posCart.filter(c => c.productId !== pid); }
+      else if (next > line.stock) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'warning',
+                    title: `${line.name} เหลือ ${line.stock} เท่านั้น`, showConfirmButton: false, timer: 1800 });
+        return;
+      } else line.qty = next;
+      renderPOSCart(); renderPOSCatalog();
+    }
+
+    function posClearCart() { _posCart = []; renderPOSCart(); renderPOSCatalog(); }
+
+    /** live total — ปัดเงินแบบเดียวกับ backend ทุกบรรทัด (Math.round(x*100)/100) */
+    function renderPOSCart() {
+      const body = document.getElementById('posCartBody');
+      let subtotal = 0, count = 0;
+      if (!_posCart.length) {
+        body.innerHTML = '<p class="text-center text-gray-400 text-xs py-8">ยังไม่มีสินค้า — กดที่ปุ่มสินค้าด้านซ้าย</p>';
+      } else {
+        body.innerHTML = _posCart.map(c => {
+          const lineTotal = _posMoney(c.price * c.qty);
+          subtotal = _posMoney(subtotal + lineTotal);
+          count += c.qty;
+          return `
+            <div class="bg-white rounded-xl border border-gray-200 p-2 flex items-center gap-2">
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold truncate">${esc(c.name)}</p>
+                <p class="text-[10px] text-gray-400">฿${_posFmt(c.price)} × ${c.qty}</p>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="posChangeQty('${esc(c.productId)}',-1)" class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 font-bold text-gray-700">−</button>
+                <span class="w-6 text-center text-xs font-bold">${c.qty}</span>
+                <button type="button" onclick="posChangeQty('${esc(c.productId)}',1)" class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 font-bold text-gray-700">+</button>
+              </div>
+              <p class="w-16 text-right text-xs font-bold shrink-0">${_posFmt(lineTotal)}</p>
+            </div>`;
+        }).join('');
+      }
+      // นับใหม่จากศูนย์ ถ้าตะกร้าว่าง
+      if (!_posCart.length) { subtotal = 0; count = 0; }
+
+      const rawDisc = Number((document.getElementById('posDiscount') || {}).value || 0) || 0;
+      const discount = _posMoney(Math.max(0, rawDisc));
+      const total = _posMoney(subtotal - Math.min(discount, subtotal));
+
+      document.getElementById('posItemCount').textContent = count;
+      document.getElementById('posSubtotal').textContent = _posFmt(subtotal);
+      document.getElementById('posTotal').textContent = _posFmt(total);
+
+      const overDiscount = discount > subtotal;
+      document.getElementById('posTotal').className =
+        'text-2xl font-extrabold ' + (overDiscount ? 'text-red-600' : 'text-sky-700');
+
+      const btn = document.getElementById('posSubmitBtn');
+      const payOk = !!(document.getElementById('posPayMethod') || {}).value;
+      const ok = _posCart.length > 0 && !overDiscount && payOk && !_posBusy;
+      btn.disabled = !ok;
+      btn.className = 'w-full py-3 rounded-xl font-extrabold text-white transition text-base ' +
+        (ok ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 shadow' : 'bg-gray-300 cursor-not-allowed');
+      btn.innerHTML = _posBusy ? '⏳ กำลังบันทึก…'
+                    : (overDiscount ? '❌ ส่วนลดมากกว่ายอดรวม' : `💰 รับเงิน ฿${_posFmt(total)}`);
+    }
+
+    // ── ผูกลูกค้า LINE (ไม่บังคับ) ──
+    async function posSearchCustomer() {
+      const kw = String(document.getElementById('posCustSearch').value || '').trim();
+      const box = document.getElementById('posCustResult');
+      if (!kw) { box.innerHTML = ''; return; }
+      box.innerHTML = '<p class="text-gray-400">กำลังค้นหา…</p>';
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST', body: withAuth(new URLSearchParams({ action: 'searchUser', keyword: kw }))
+        }).then(r => r.json());
+        if (handleAuthError(res)) return;
+        const list = (res.status === 'success')
+          ? (Array.isArray(res.data) ? res.data : [res.data]) : [];
+        if (!list.length) { box.innerHTML = '<p class="text-gray-400">ไม่พบลูกค้า — ขายโดยไม่ผูกก็ได้</p>'; return; }
+        box.innerHTML = list.slice(0, 6).map(u => `
+          <button type="button" onclick="posPickCustomer('${esc(u.uid)}','${esc(u.name).replace(/'/g, "\\'")}')"
+                  class="block w-full text-left px-2 py-1.5 rounded-lg hover:bg-sky-50 border-b border-gray-100">
+            <span class="font-bold">${esc(u.name)}</span> <span class="text-gray-400">${esc(u.phone || '')}</span>
+          </button>`).join('');
+      } catch (e) { box.innerHTML = `<p class="text-red-500">${esc(e.message)}</p>`; }
+    }
+    function posPickCustomer(uid, name) {
+      _posCustomer = { uid: uid, name: name };
+      document.getElementById('posCustResult').innerHTML = '';
+      document.getElementById('posCustSearch').value = '';
+      document.getElementById('posCustPickedName').textContent = '🔗 ' + name;
+      document.getElementById('posCustPicked').classList.remove('hidden');
+    }
+    function posClearCustomer() {
+      _posCustomer = null;
+      const p = document.getElementById('posCustPicked'); if (p) p.classList.add('hidden');
+      const r = document.getElementById('posCustResult'); if (r) r.innerHTML = '';
+    }
+
+    // ── รับเงิน ──
+    async function posSubmitSale() {
+      if (_posBusy || !_posCart.length) return;
+      const payMethod = document.getElementById('posPayMethod').value;
+      if (!payMethod) { Swal.fire({ icon: 'warning', title: 'ยังไม่ได้เลือกช่องทางรับเงิน' }); return; }
+      _posBusy = true; renderPOSCart();
+      try {
+        const payload = new URLSearchParams({
+          action: 'createQuickSale',
+          items: JSON.stringify(_posCart.map(c => ({ productId: c.productId, qty: c.qty }))),
+          paymentMethod: payMethod,
+          discount: String(Number(document.getElementById('posDiscount').value || 0) || 0),
+          staff: String(document.getElementById('posStaff').value || '').trim()
+        });
+        if (_posCustomer) {
+          payload.append('lineUid', _posCustomer.uid);
+          payload.append('customerName', _posCustomer.name);
+        }
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }).then(r => r.json());
+        if (handleAuthError(res)) return;
+        if (res.status !== 'success') {
+          const short = (res.data && res.data.shortage) || [];
+          Swal.fire({
+            icon: 'error', title: 'ขายไม่สำเร็จ',
+            html: esc(res.message || '') + (short.length
+              ? '<br><br>' + short.map(s => `<b>${esc(s.name || s.productId)}</b> — ${esc(s.reason)}` +
+                  (s.have !== undefined ? ` (มี ${s.have} ขอ ${s.need})` : '')).join('<br>')
+              : '')
+          });
+          return;
+        }
+        _posLastSale = res.data;
+        await posShowReceipt(res.data);
+        // รีเฟรชตัวเลขบน dashboard/กระทบยอด ให้เห็นยอดขายลอยทันที
+        try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
+        try { if (typeof loadReconciliation === 'function') loadReconciliation(); } catch (e) {}
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+      } finally {
+        _posBusy = false; renderPOSCart();
+      }
+    }
+
+    // ── ใบเสร็จ ──
+    async function posShowReceipt(sale) {
+      document.getElementById('posSellView').classList.add('hidden');
+      document.getElementById('posReceiptView').classList.remove('hidden');
+      document.getElementById('posReceiptSummary').innerHTML =
+        `เลขที่ <b>${esc(sale.receiptNo)}</b> · รับเงิน <b>฿${_posFmt(sale.total)}</b> · ${esc(sale.payName || sale.paymentMethod)}`;
+
+      const warn = document.getElementById('posLowStockWarn');
+      if (sale.lowStock && sale.lowStock.length) {
+        warn.classList.remove('hidden');
+        warn.innerHTML = '⚠️ <b>สินค้าใกล้หมด — ควรสั่งเพิ่ม</b><br>' +
+          sale.lowStock.map(l => `· ${esc(l.name)} เหลือ ${l.left} (จุดสั่งซื้อ ${l.reorderPoint})`).join('<br>');
+      } else { warn.classList.add('hidden'); warn.innerHTML = ''; }
+
+      await posLoadReceiptHtml();
+      // โหลดแคตตาล็อกใหม่เพื่อ sync สต็อกหลังตัด
+      loadPOSCatalog();
+    }
+
+    async function posLoadReceiptHtml() {
+      if (!_posLastSale) return;
+      const frame = document.getElementById('posReceiptPreview');
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({
+            action: 'getReceiptHtml', saleId: _posLastSale.saleId, width: String(_posRcptWidth)
+          }))
+        }).then(r => r.json());
+        if (res.status !== 'success') {
+          frame.srcdoc = `<p style="font-family:sans-serif;padding:12px;color:#b91c1c">${esc(res.message || 'โหลดใบเสร็จไม่สำเร็จ')}</p>`;
+          return;
+        }
+        frame.srcdoc = res.data.html;
+        frame.style.width = (_posRcptWidth === 58 ? 220 : 302) + 'px';
+      } catch (e) {
+        frame.srcdoc = `<p style="font-family:sans-serif;padding:12px;color:#b91c1c">${esc(e.message)}</p>`;
+      }
+    }
+
+    function posSetReceiptWidth(w) {
+      _posRcptWidth = (w === 58 ? 58 : 80);
+      document.getElementById('posW58').className = 'py-2 rounded-lg text-xs font-bold border ' +
+        (_posRcptWidth === 58 ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-300 text-gray-600');
+      document.getElementById('posW80').className = 'py-2 rounded-lg text-xs font-bold border ' +
+        (_posRcptWidth === 80 ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-300 text-gray-600');
+      posLoadReceiptHtml();
+    }
+
+    /** สั่งพิมพ์ผ่าน iframe ของ preview — ไม่ต้องเปิดหน้าต่างใหม่ (กัน popup blocker) */
+    function posPrintReceipt() {
+      const frame = document.getElementById('posReceiptPreview');
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'สั่งพิมพ์ไม่สำเร็จ', text: e.message });
+      }
+    }
+    // ══ End POS Quick Sale ══
 
   </script>
 </body>
