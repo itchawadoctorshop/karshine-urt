@@ -524,7 +524,8 @@
         <!-- ซ้าย: แคตตาล็อก -->
         <div class="md:col-span-3 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
           <div class="p-3 border-b border-gray-100 shrink-0 space-y-2">
-            <input type="text" id="posSearch" oninput="renderPOSCatalog()" placeholder="🔎 ค้นหา / สแกนบาร์โค้ด (ชื่อ หรือ SKU)…"
+            <input type="text" id="posSearch" oninput="renderPOSCatalog()" onkeydown="posSearchKey(event)"
+                   placeholder="🔎 ค้นหา / สแกนบาร์โค้ด (ชื่อ หรือ SKU)…" autocomplete="off"
                    class="w-full p-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500">
             <div id="posCategories" class="flex gap-1.5 flex-wrap"></div>
           </div>
@@ -7864,6 +7865,9 @@
       document.getElementById('posModal').classList.remove('hidden');
       posNewSale();
       await loadPOSCatalog();
+      // โฟกัสช่องค้นหาทันที — พนักงานยิงสแกนเนอร์ได้เลยโดยไม่ต้องคลิกก่อน
+      const box = document.getElementById('posSearch');
+      if (box) box.focus();
     }
     function closePOSModal() {
       document.getElementById('posModal').classList.add('hidden');
@@ -7929,16 +7933,53 @@
       renderPOSCatalog();
     }
 
+    /** กรองสินค้าตามคำค้น — helper เดียว ใช้ทั้งตอน render และตอนสแกนบาร์โค้ด (กันตรรกะ drift) */
+    function _posFilter(kw, useCategory) {
+      const k = String(kw || '').trim().toLowerCase();
+      return (_posCatalog.products || []).filter(p => {
+        if (useCategory && _posCategory && (p.category || 'อื่นๆ') !== _posCategory) return false;
+        if (!k) return true;
+        return String(p.name || '').toLowerCase().includes(k) ||
+               String(p.sku || '').toLowerCase().includes(k) ||
+               String(p.productId || '').toLowerCase().includes(k);
+      });
+    }
+
+    /**
+     * 🔫 เครื่องสแกนบาร์โค้ดทำงานเหมือนคีย์บอร์ด — ยิงเลขแล้วกด Enter ให้เอง
+     *    ⇒ Enter = ถ้าเจอสินค้าตรงตัวเดียว ใส่ตะกร้าแล้วล้างช่องค้นหาให้พร้อมยิงชิ้นถัดไป
+     *    (คอลัมน์ B ของชีต Products เก็บบาร์โค้ดจริงจาก Chemicals_Master ไว้แล้ว)
+     */
+    function posSearchKey(ev) {
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      const box = document.getElementById('posSearch');
+      const kw = String(box.value || '').trim();
+      if (!kw) return;
+      // สแกนบาร์โค้ด = ต้องเจอ "ตัวเดียวเป๊ะ" เท่านั้น — หาข้ามหมวดเสมอ กันกรณีเลือกหมวดอื่นค้างไว้
+      const exact = (_posCatalog.products || []).filter(p => String(p.sku || '').trim() === kw);
+      const hits = exact.length ? exact : _posFilter(kw, false);
+      if (hits.length === 1) {
+        if (hits[0].outOfStock) {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'warning',
+                      title: `${hits[0].name} หมดสต็อก`, showConfirmButton: false, timer: 1800 });
+        } else {
+          posAddToCart(hits[0].productId);
+        }
+        box.value = '';
+        renderPOSCatalog();
+        box.focus();
+      } else if (hits.length === 0) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'error',
+                    title: 'ไม่พบสินค้า: ' + kw, showConfirmButton: false, timer: 2000 });
+      }
+      // เจอหลายตัว = ปล่อยให้เลือกเองจากปุ่มด้านซ้าย (ไม่เดาแทน)
+    }
+
     function renderPOSCatalog() {
       const grid = document.getElementById('posProductGrid');
       const kw = String((document.getElementById('posSearch') || {}).value || '').trim().toLowerCase();
-      const list = (_posCatalog.products || []).filter(p => {
-        if (_posCategory && (p.category || 'อื่นๆ') !== _posCategory) return false;
-        if (!kw) return true;
-        return String(p.name || '').toLowerCase().includes(kw) ||
-               String(p.sku || '').toLowerCase().includes(kw) ||
-               String(p.productId || '').toLowerCase().includes(kw);
-      });
+      const list = _posFilter(kw, true);
       if (!list.length) {
         grid.innerHTML = `<div class="col-span-full text-center text-gray-400 text-xs py-10">
           ${(_posCatalog.products || []).length ? 'ไม่พบสินค้าที่ค้นหา' : 'ยังไม่มีสินค้าในชีต Products — กรอกสินค้า + สต็อกตั้งต้นก่อนเปิดใช้งาน'}
