@@ -516,7 +516,14 @@
       <!-- header -->
       <div class="flex justify-between items-center px-4 py-3 bg-sky-600 text-white shrink-0">
         <h2 class="text-lg font-bold"><i class="fa-solid fa-cart-shopping"></i> ขายสินค้า <span class="text-xs font-normal opacity-80">(ไม่กินเวลาเครื่องล้าง)</span></h2>
-        <button type="button" onclick="closePOSModal()" class="text-white/80 hover:text-white text-xl px-2"><i class="fa-solid fa-xmark"></i></button>
+        <div class="flex items-center gap-1">
+          <!-- 🆕 D202: ดูรายการขาย + ยกเลิกบิล -->
+          <button type="button" onclick="posOpenSalesView()" title="ดูรายการขายและยกเลิกบิล"
+                  class="px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-lg text-xs font-bold transition-colors">
+            <i class="fa-solid fa-receipt"></i> ยอดขายวันนี้
+          </button>
+          <button type="button" onclick="closePOSModal()" class="text-white/80 hover:text-white text-xl px-2"><i class="fa-solid fa-xmark"></i></button>
+        </div>
       </div>
 
       <!-- ── หน้าขาย ── -->
@@ -609,6 +616,25 @@
             <button type="button" onclick="posNewSale()" class="py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold">➕ ขายบิลใหม่</button>
           </div>
         </div>
+      </div>
+
+      <!-- ── 🆕 D202: หน้ารายการขาย + ยกเลิกบิล ── -->
+      <div id="posSalesView" class="hidden flex-1 flex flex-col overflow-hidden bg-white">
+        <div class="p-3 border-b border-gray-100 shrink-0 flex items-center gap-2 flex-wrap">
+          <label class="text-xs font-bold text-gray-600">วันที่</label>
+          <input type="date" id="posSalesDate" onchange="loadPOSSales()"
+                 class="p-2 border border-gray-300 rounded-lg text-sm">
+          <button type="button" onclick="loadPOSSales()"
+                  class="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold text-gray-700">
+            <i class="fa-solid fa-rotate"></i> รีเฟรช
+          </button>
+          <button type="button" onclick="posNewSale()"
+                  class="ml-auto px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold">
+            ← กลับไปหน้าขาย
+          </button>
+        </div>
+        <div id="posSalesSummary" class="px-3 py-2 text-sm bg-sky-50 border-b border-sky-100 shrink-0 text-gray-700"></div>
+        <div id="posSalesList" class="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50"></div>
       </div>
     </div>
   </div>
@@ -7878,6 +7904,9 @@
       _posCart = []; _posCustomer = null; _posLastSale = null;
       document.getElementById('posSellView').classList.remove('hidden');
       document.getElementById('posReceiptView').classList.add('hidden');
+      // 🆕 D202
+      const _sv = document.getElementById('posSalesView');
+      if (_sv) _sv.classList.add('hidden');
       const d = document.getElementById('posDiscount'); if (d) d.value = '';
       const s = document.getElementById('posSearch'); if (s) s.value = '';
       posClearCustomer();
@@ -8225,6 +8254,161 @@
         frame.contentWindow.print();
       } catch (e) {
         Swal.fire({ icon: 'error', title: 'สั่งพิมพ์ไม่สำเร็จ', text: e.message });
+      }
+    }
+    // ═══════════════════════════════════════════════════════════════
+    // 🆕 D202 (29/7/2026) — รายการขาย + ยกเลิกบิล
+    //   backend `getSalesList` / `voidSale` มีอยู่แล้วตั้งแต่ D200 — ตรงนี้เติมแค่หน้าจอ
+    //   🛡️ ยกเลิกบิล = voidSale จะคืนสต็อกให้เอง ⇒ ต้องโหลด catalog ใหม่หลังยกเลิก
+    // ═══════════════════════════════════════════════════════════════
+    let _posSales = [];
+
+    /** yyyy-MM-dd ตามเวลาเครื่อง (แอดมินอยู่ไทย) — ไม่ใช้ toISOString เพราะเป็น UTC */
+    function _posToday() {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+
+    function posOpenSalesView() {
+      document.getElementById('posSellView').classList.add('hidden');
+      document.getElementById('posReceiptView').classList.add('hidden');
+      document.getElementById('posSalesView').classList.remove('hidden');
+      const box = document.getElementById('posSalesDate');
+      if (box && !box.value) box.value = _posToday();
+      loadPOSSales();
+    }
+
+    async function loadPOSSales() {
+      const listEl = document.getElementById('posSalesList');
+      const sumEl  = document.getElementById('posSalesSummary');
+      const date   = document.getElementById('posSalesDate').value || _posToday();
+      listEl.innerHTML = '<p class="text-center text-gray-400 text-sm py-6"><i class="fa-solid fa-spinner fa-spin"></i> กำลังโหลด...</p>';
+      sumEl.textContent = '';
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({ action: 'getSalesList', date: date, t: Date.now() }))
+        }).then(r => r.json());
+        if (handleAuthError(res)) return;
+        if (res.status !== 'success') {
+          listEl.innerHTML = `<p class="text-center text-red-600 text-sm py-6">${esc(res.message || 'โหลดไม่สำเร็จ')}</p>`;
+          return;
+        }
+        _posSales = (res.data && res.data.sales) || [];
+        renderPOSSales(res.data);
+      } catch (e) {
+        listEl.innerHTML = `<p class="text-center text-red-600 text-sm py-6">${esc(e.message)}</p>`;
+      }
+    }
+
+    function renderPOSSales(d) {
+      const sumEl  = document.getElementById('posSalesSummary');
+      const listEl = document.getElementById('posSalesList');
+      const sm = (d && d.summary) || { count: 0, total: 0 };
+
+      let methodHtml = '';
+      if (sm.byMethod && typeof sm.byMethod === 'object') {
+        const parts = Object.keys(sm.byMethod)
+          .filter(k => Number(sm.byMethod[k]) > 0)
+          .map(k => `${esc(k)} ฿${_posFmt(sm.byMethod[k])}`);
+        if (parts.length) methodHtml = ` · <span class="text-gray-500">${parts.join(' · ')}</span>`;
+      }
+      sumEl.innerHTML = `<b>${sm.count || 0}</b> บิล · รวม <b class="text-sky-700">฿${_posFmt(sm.total || 0)}</b>${methodHtml}`;
+
+      if (!_posSales.length) {
+        listEl.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">ยังไม่มีการขายในวันนี้</p>';
+        return;
+      }
+
+      listEl.innerHTML = _posSales.map((s, idx) => {
+        // ⚠️ ห้าม esc ตรงนี้ — ตอนแทรกลง HTML ข้างล่าง esc(items) อีกที (escape ซ้ำ = เห็น &amp;amp;)
+        const items = (s.items || []).map(it =>
+          `${it.name || it.productId} ×${Number(it.qty) || 0}`).join(', ');
+        const voided = !!s.voided;
+        return `
+          <div class="bg-white border ${voided ? 'border-gray-200 opacity-60' : 'border-gray-200'} rounded-xl p-3">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <p class="font-bold text-sm text-gray-800">
+                  ${voided ? '<span class="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold mr-1">ยกเลิกแล้ว</span>' : ''}
+                  ${esc(s.receiptNo || s.saleId)}
+                  <span class="font-normal text-gray-400 text-xs">· ${esc(s.datetime || '')}</span>
+                </p>
+                <p class="text-xs text-gray-500 mt-0.5 break-words">${esc(items) || '-'}</p>
+                <p class="text-[11px] text-gray-400 mt-0.5">
+                  ${esc(s.paymentMethod || '')}${s.customerName ? ' · ' + esc(s.customerName) : ''}${s.staff ? ' · ขายโดย ' + esc(s.staff) : ''}
+                </p>
+              </div>
+              <div class="text-right shrink-0">
+                <p class="font-extrabold ${voided ? 'text-gray-400 line-through' : 'text-sky-700'}">฿${_posFmt(s.total)}</p>
+                <div class="flex gap-1 mt-1.5 justify-end">
+                  <button type="button" onclick="posReprintReceipt(${idx})"
+                          class="px-2 py-1 bg-gray-800 hover:bg-black text-white rounded-lg text-[11px] font-bold">🧾 ใบเสร็จ</button>
+                  ${voided ? '' : `<button type="button" onclick="posVoidSale(${idx})"
+                          class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-[11px] font-bold">❌ ยกเลิก</button>`}
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    /** พิมพ์ใบเสร็จย้อนหลัง — ใช้หน้าใบเสร็จเดิม */
+    async function posReprintReceipt(idx) {
+      const s = _posSales[idx];
+      if (!s) return;
+      _posLastSale = { saleId: s.saleId, receiptNo: s.receiptNo, total: s.total, paymentMethod: s.paymentMethod };
+      document.getElementById('posSalesView').classList.add('hidden');
+      document.getElementById('posSellView').classList.add('hidden');
+      document.getElementById('posReceiptView').classList.remove('hidden');
+      document.getElementById('posReceiptSummary').innerHTML =
+        `เลขที่ <b>${esc(s.receiptNo || '')}</b> · ฿${_posFmt(s.total)} · ${esc(s.paymentMethod || '')}` +
+        (s.voided ? ' <span class="text-red-600 font-bold">(บิลนี้ถูกยกเลิกแล้ว)</span>' : '');
+      const warn = document.getElementById('posLowStockWarn');
+      if (warn) { warn.classList.add('hidden'); warn.innerHTML = ''; }
+      await posLoadReceiptHtml();
+    }
+
+    /** ยกเลิกบิล — ต้องระบุเหตุผล (backend บังคับ) · สต็อกถูกคืนอัตโนมัติ */
+    async function posVoidSale(idx) {
+      const s = _posSales[idx];
+      if (!s) return;
+      const ask = await Swal.fire({
+        icon: 'warning',
+        title: 'ยกเลิกบิล ' + (s.receiptNo || s.saleId) + '?',
+        html: `ยอด <b>฿${_posFmt(s.total)}</b><br><span class="text-xs">สต็อกสินค้าจะถูกคืนกลับอัตโนมัติ</span>`,
+        input: 'text',
+        inputLabel: 'เหตุผลที่ยกเลิก (บังคับ)',
+        inputPlaceholder: 'เช่น ลูกค้าเปลี่ยนใจ / คีย์ผิด',
+        inputValidator: (v) => (!v || !String(v).trim()) ? 'ต้องระบุเหตุผล' : undefined,
+        showCancelButton: true,
+        confirmButtonText: 'ยกเลิกบิลนี้',
+        cancelButtonText: 'ไม่ยกเลิก',
+        confirmButtonColor: '#dc2626'
+      });
+      if (!ask.isConfirmed) return;
+
+      Swal.fire({ title: 'กำลังยกเลิก...', didOpen: () => Swal.showLoading() });
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({
+            action: 'voidSale', saleId: s.saleId, reason: String(ask.value).trim()
+          }))
+        }).then(r => r.json());
+        if (handleAuthError(res)) return;
+        if (res.status !== 'success') {
+          Swal.fire({ icon: 'error', title: 'ยกเลิกไม่สำเร็จ', text: res.message || '' });
+          return;
+        }
+        Swal.fire({ icon: 'success', title: 'ยกเลิกบิลแล้ว', text: 'คืนสต็อกเรียบร้อย', timer: 1600, showConfirmButton: false });
+        await loadPOSSales();
+        loadPOSCatalog();   // สต็อกเปลี่ยน → sync หน้าขาย
+        try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
+        try { if (typeof loadReconciliation === 'function') loadReconciliation(); } catch (e) {}
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
       }
     }
     // ══ End POS Quick Sale ══
