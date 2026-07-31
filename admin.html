@@ -517,6 +517,11 @@
       <div class="flex justify-between items-center px-4 py-3 bg-sky-600 text-white shrink-0">
         <h2 class="text-lg font-bold"><i class="fa-solid fa-cart-shopping"></i> ขายสินค้า <span class="text-xs font-normal opacity-80">(ไม่กินเวลาเครื่องล้าง)</span></h2>
         <div class="flex items-center gap-1">
+          <!-- 🆕 D205: ขายแพ็กเกจ (backend พร้อมตั้งแต่ D203) -->
+          <button type="button" onclick="posOpenPackageView()" title="ขายแพ็กเกจให้ลูกค้า"
+                  class="px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-lg text-xs font-bold transition-colors">
+            <i class="fa-solid fa-box-open"></i> ขายแพ็กเกจ
+          </button>
           <!-- 🆕 D202: ดูรายการขาย + ยกเลิกบิล -->
           <button type="button" onclick="posOpenSalesView()" title="ดูรายการขายและยกเลิกบิล"
                   class="px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-lg text-xs font-bold transition-colors">
@@ -635,6 +640,75 @@
         </div>
         <div id="posSalesSummary" class="px-3 py-2 text-sm bg-sky-50 border-b border-sky-100 shrink-0 text-gray-700"></div>
         <div id="posSalesList" class="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50"></div>
+      </div>
+
+      <!-- ── 🆕 D205 (31/7/2026): หน้าขายแพ็กเกจ ── -->
+      <!--    🛡️ 1 บิล = 1 แพ็กเกจ · ต้องเลือกลูกค้าก่อนเสมอ · ราคาอ่านจากชีตเท่านั้น -->
+      <div id="posPackageView" class="hidden flex-1 grid grid-cols-1 md:grid-cols-5 gap-0 overflow-hidden">
+        <!-- ซ้าย: แคตตาล็อกแพ็กเกจ -->
+        <div class="md:col-span-3 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
+          <div class="p-3 border-b border-gray-100 shrink-0 flex items-center gap-2 flex-wrap">
+            <span class="text-sm font-bold text-gray-700">📦 เลือกแพ็กเกจ</span>
+            <span id="posPkgMonth" class="text-[11px] text-gray-500"></span>
+            <button type="button" onclick="loadPOSPackages()"
+                    class="ml-auto px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-[11px] font-bold text-gray-700">
+              <i class="fa-solid fa-rotate"></i> รีเฟรช
+            </button>
+            <button type="button" onclick="posNewSale()"
+                    class="px-2.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[11px] font-bold">
+              ← กลับไปขายสินค้า
+            </button>
+          </div>
+          <div id="posPkgGrid" class="flex-1 overflow-y-auto p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 content-start min-h-[180px]">
+            <div class="col-span-full text-center text-gray-400 text-sm py-10">กำลังโหลดแพ็กเกจ…</div>
+          </div>
+        </div>
+
+        <!-- ขวา: สรุปบิล + ลูกค้า (บังคับ) -->
+        <div class="md:col-span-2 flex flex-col bg-gray-50 overflow-hidden">
+          <div class="px-3 py-2 border-b border-gray-200 shrink-0">
+            <p class="text-xs font-bold text-gray-600 uppercase">🧾 บิลขายแพ็กเกจ
+              <span class="text-[10px] font-normal text-gray-400 normal-case">(1 บิล = 1 แพ็กเกจ)</span></p>
+          </div>
+          <div id="posPkgPicked" class="flex-1 overflow-y-auto p-3 text-sm">
+            <p class="text-center text-gray-400 text-xs py-8">ยังไม่ได้เลือกแพ็กเกจ</p>
+          </div>
+          <div class="border-t border-gray-200 p-3 space-y-2 bg-white shrink-0">
+            <div class="border border-amber-200 bg-amber-50 rounded-lg p-2 space-y-1.5">
+              <p class="text-[11px] font-bold text-amber-800">👤 ลูกค้า <span class="text-red-500">*</span>
+                <span class="font-normal">— ต้องเลือกก่อนถึงขายได้</span></p>
+              <div class="flex gap-1.5">
+                <input type="text" id="posPkgCustSearch" placeholder="ชื่อ หรือ เบอร์โทร" onkeydown="posPkgCustKey(event)"
+                       autocomplete="off" class="flex-1 p-2 border border-gray-300 rounded-lg text-xs">
+                <button type="button" onclick="posPkgSearchCustomer()"
+                        class="bg-gray-700 hover:bg-gray-800 text-white px-3 rounded-lg text-xs font-bold">ค้นหา</button>
+              </div>
+              <div id="posPkgCustResult" class="text-xs"></div>
+              <div id="posPkgCustPicked" class="hidden text-xs bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex justify-between items-center">
+                <span id="posPkgCustPickedName" class="font-bold text-emerald-800"></span>
+                <button type="button" onclick="posPkgClearCustomer()" class="text-red-500 font-bold">✕ เปลี่ยน</button>
+              </div>
+            </div>
+            <div class="flex justify-between items-center text-xs">
+              <label for="posPkgDiscount" class="text-gray-600">ส่วนลด (บาท)</label>
+              <input type="number" id="posPkgDiscount" min="0" step="1" value="" placeholder="0" oninput="posPkgRenderPicked()"
+                     class="w-24 text-right border border-gray-300 rounded-lg px-2 py-1 text-xs">
+            </div>
+            <div class="flex justify-between items-baseline border-t border-dashed pt-2">
+              <span class="text-sm font-bold text-gray-700">สุทธิ</span>
+              <span id="posPkgTotal" class="text-2xl font-extrabold text-purple-700">0.00</span>
+            </div>
+            <div>
+              <label class="text-[11px] font-bold text-gray-600">ช่องทางรับเงิน <span class="text-red-500">*</span></label>
+              <select id="posPkgPayMethod" onchange="posPkgRenderPicked()"
+                      class="w-full p-2 border border-gray-300 rounded-lg text-sm"></select>
+            </div>
+            <button type="button" id="posPkgSubmitBtn" onclick="posPkgSubmitSale()" disabled
+                    class="w-full py-3 rounded-xl font-extrabold text-white bg-gray-300 cursor-not-allowed transition text-base">
+              📦 เลือกแพ็กเกจก่อน
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1742,7 +1816,7 @@
           //   ถ้า is_preorder → bucket preorderAmount/preorderCount (กัน double-count กับ net)
           const map = {};
           const _ensureBucket = (key) => {
-            if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0, serviceValue: 0, preorderAmount: 0, preorderCount: 0, posAmount: 0, posCount: 0 };
+            if (!map[key]) map[key] = { method: key, count: 0, gross: 0, discount: 0, net: 0, serviceValue: 0, preorderAmount: 0, preorderCount: 0, posAmount: 0, posCount: 0, pkgAmount: 0, pkgCount: 0 };
             return map[key];
           };
           (salesRes.data.rows || []).forEach(r => {
@@ -1776,6 +1850,13 @@
               b.gross    += r.gross;
               b.discount += r.discount;
               b.net      += r.net;
+              // 📦 D205: จดไว้ว่าในก้อนนี้เป็น "ขายแพ็กเกจ" กี่ใบ/กี่บาท
+              //    🚨 เงินยังอยู่ใน net ตามเดิม (ถ้าย้ายออก เงินลิ้นชักจะขาดทันที)
+              //    ตรงกับที่ backend getDashboardData ทำไว้แล้วสำหรับ "วันนี้"
+              if (r.is_pkg_sale) {
+                b.pkgAmount = (b.pkgAmount || 0) + (Number(r.net) || 0);
+                b.pkgCount  = (b.pkgCount  || 0) + 1;
+              }
             } else {
               key = '_unpaid';
               const b = _ensureBucket(key);
@@ -1834,7 +1915,7 @@
       const orderedPaid = Array.from(allPaidIds).sort((a,b) => _methodLabel(a).localeCompare(_methodLabel(b)));
 
       const rows = orderedPaid.map(mid => {
-        const stat = methods.find(m => m.method === mid) || { count: 0, gross: 0, discount: 0, net: 0, preorderAmount: 0, preorderCount: 0, posAmount: 0, posCount: 0 };
+        const stat = methods.find(m => m.method === mid) || { count: 0, gross: 0, discount: 0, net: 0, preorderAmount: 0, preorderCount: 0, posAmount: 0, posCount: 0, pkgAmount: 0, pkgCount: 0 };
         const preorderAmt = Number(stat.preorderAmount || 0);
         const posAmt      = Number(stat.posAmount || 0);             // 🛒 D200: ขายสินค้า (POS)
         const sumSystem   = Number(stat.net || 0) + preorderAmt + posAmt;   // 🆕 D121 + D200: ยอดสุทธิ + Pre-order + ขายสินค้า
@@ -1864,7 +1945,8 @@
         return `
           <tr class="${isLocked ? 'bg-gray-50' : ''}">
             <td class="px-2 py-2 text-left">${_methodLabel(mid)}</td>
-            <td class="px-2 py-2 text-center">${stat.count}</td>
+            <td class="px-2 py-2 text-center">${stat.count}${(stat.pkgCount || 0) > 0
+              ? `<div class="text-[9px] text-purple-600 font-bold">📦 ${stat.pkgCount} ใบ<br><span class="font-normal text-gray-400">(ไม่ใช่คัน)</span></div>` : ''}</td>
             <td class="px-2 py-2 text-right">${stat.gross.toLocaleString()}</td>
             <td class="px-2 py-2 text-right text-amber-600">${stat.discount.toLocaleString()}</td>
             <td class="px-2 py-2 text-right font-bold text-green-700">${stat.net.toLocaleString()}</td>
@@ -2105,6 +2187,8 @@
             packageCount: 0,  packageValue: 0,                                        // 📦 หักแพ็กเกจ (service value, info only)
             unpaidCount: 0,   unpaidNet: 0,                                           // ⏳ ค้างจ่าย
             posCount: 0,      posNet: 0,                                              // 🛒 D200 ขายสินค้า (ไม่ใช่คัน)
+            pkgSaleCount: 0,  pkgSaleNet: 0,                                          // 📦 D205 ขายแพ็กเกจ (ไม่ใช่คัน)
+            billCount: 0,                                                             // 🧾 D205 แถวที่เป็น "บิล" ไม่ใช่ "คัน" (POS+แพ็กเกจ · นับแม้ถูกยกเลิก)
             cancelledCount: 0                                                         // ❌ ยกเลิก
           };
         }
@@ -2117,12 +2201,21 @@
         // 🛒 D200: ขายสินค้า (POS) — เงินจริง แต่ไม่ใช่ "คัน" ⇒ bucket แยก posNet
         //    ห้ามให้ไหลเข้า paidNet ไม่งั้นสรุปตรงนี้จะไม่ match กับ revenueToday บน Dashboard
         const isPos       = (r.source === 'pos');
-        const isPaid      = (!isPos && isCompleted && r.payment_status === 'paid' && !isPackage);
-        const isUnpaid    = (!isPos && isCompleted && r.payment_status !== 'paid');
+        // 📦 D205: แถว "ขายแพ็กเกจ" — เงินจริง แต่ไม่ใช่คิวล้างรถ ⇒ bucket แยกเหมือน POS
+        //    🚨 เงินห้ามหาย — ย้ายไป pkgSaleNet ที่โชว์เป็นช่องของตัวเองในสรุปรวม
+        //    (ตรงกับ Dashboard: revenueToday ไม่รวมเงินขายแพ็กเกจ แต่เงินลิ้นชักรวม)
+        const isPkgSale   = (r.is_pkg_sale === true);
+        const isPaid      = (!isPos && !isPkgSale && isCompleted && r.payment_status === 'paid' && !isPackage);
+        const isUnpaid    = (!isPos && !isPkgSale && isCompleted && r.payment_status !== 'paid');
 
         if (isPos) {
+          groups[key].billCount++;                                   // 🧾 D205 บิล ไม่ใช่คัน (นับแม้ถูกยกเลิก)
           if (r.voided || isCancelled) { groups[key].cancelledCount++; }
           else { groups[key].posCount++; groups[key].posNet += (r.net || 0); }
+        } else if (isPkgSale) {
+          groups[key].billCount++;                                   // 🧾 D205 บิล ไม่ใช่คัน (นับแม้ถูกยกเลิก)
+          if (r.voided || isCancelled) { groups[key].cancelledCount++; }
+          else { groups[key].pkgSaleCount++; groups[key].pkgSaleNet += (r.net || 0); }
         } else if (isCancelled) {
           groups[key].cancelledCount++;
         } else if (isPackage) {
@@ -2148,10 +2241,12 @@
       const totalUnpaid  = groupArr.reduce((s, g) => s + g.unpaidNet, 0);
       const totalPos     = groupArr.reduce((s, g) => s + g.posNet, 0);      // 🛒 D200
       const totalPosBill = groupArr.reduce((s, g) => s + g.posCount, 0);
+      const totalPkgSale     = groupArr.reduce((s, g) => s + g.pkgSaleNet, 0);   // 📦 D205
+      const totalPkgSaleBill = groupArr.reduce((s, g) => s + g.pkgSaleCount, 0); // 📦 D205
       const summaryHtml = `
         <div class="mb-3 p-3 bg-gradient-to-r from-emerald-50 via-orange-50 to-red-50 rounded-xl border border-gray-200">
           <p class="text-[10px] font-bold text-gray-500 uppercase mb-2">📊 สรุปรวม (match กับ Dashboard)</p>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
             <div class="bg-white rounded-lg p-2 border border-emerald-200">
               <p class="text-[9px] text-gray-500">💵 จ่ายจริง</p>
               <p class="font-bold text-emerald-700 text-base">${totalPaid.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
@@ -2167,6 +2262,10 @@
             <div class="bg-white rounded-lg p-2 border border-sky-200">
               <p class="text-[9px] text-gray-500">🛒 ขายสินค้า <span class="text-gray-400">(${totalPosBill} บิล · ไม่ใช่คัน)</span></p>
               <p class="font-bold text-sky-700 text-base">${totalPos.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
+            </div>
+            <div class="bg-white rounded-lg p-2 border border-purple-200">
+              <p class="text-[9px] text-gray-500">📦 ขายแพ็กเกจ <span class="text-gray-400">(${totalPkgSaleBill} ใบ · ไม่ใช่คัน)</span></p>
+              <p class="font-bold text-purple-700 text-base">${totalPkgSale.toLocaleString()}<span class="text-[10px] font-normal text-gray-400">.-</span></p>
             </div>
           </div>
         </div>
@@ -2201,13 +2300,16 @@
         if (g.cancelledCount > 0) badges.push(`<span class="px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-[10px]">❌ ยกเลิก ${g.cancelledCount}</span>`);
         // 🛒 D200: บิลขายสินค้า — ป้ายคนละสี เพื่อไม่ให้เข้าใจผิดว่าเป็นคิวล้างรถ
         if (g.posCount > 0)       badges.push(`<span class="px-1.5 py-0.5 bg-sky-100 text-sky-700 rounded text-[10px]">🛒 ขายสินค้า ${g.posCount} บิล</span>`);
+        // 📦 D205: บิลขายแพ็กเกจ — สีม่วง เพื่อไม่ให้เข้าใจผิดว่าเป็นคิวล้างรถ
+        if (g.pkgSaleCount > 0)   badges.push(`<span class="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px]">📦 ขายแพ็กเกจ ${g.pkgSaleCount} ใบ</span>`);
 
         // 💰 Right-side summary
         const moneyLines = [];
-        if (g.paidNet > 0 || g.posNet === 0) moneyLines.push(`<div class="font-bold text-emerald-700 text-sm">💵 ${g.paidNet.toLocaleString()}.-</div>`);
+        if (g.paidNet > 0 || (g.posNet === 0 && g.pkgSaleNet === 0)) moneyLines.push(`<div class="font-bold text-emerald-700 text-sm">💵 ${g.paidNet.toLocaleString()}.-</div>`);
         if (g.packageValue > 0) moneyLines.push(`<div class="text-orange-600 text-[10px]">📦 ${g.packageValue.toLocaleString()}.-</div>`);
         if (g.unpaidNet > 0)    moneyLines.push(`<div class="text-red-600 text-[10px]">⏳ ${g.unpaidNet.toLocaleString()}.-</div>`);
         if (g.posNet > 0)       moneyLines.push(`<div class="text-sky-700 text-[10px]">🛒 ${g.posNet.toLocaleString()}.-</div>`);
+        if (g.pkgSaleNet > 0)   moneyLines.push(`<div class="text-purple-700 text-[10px]">📦 ${g.pkgSaleNet.toLocaleString()}.-</div>`);
         if (g.paidDiscount > 0) moneyLines.push(`<div class="text-amber-600 text-[10px]">🎁 ลด ${g.paidDiscount.toLocaleString()}.-</div>`);
 
         return `
@@ -2221,7 +2323,13 @@
                 </div>
               </div>
               <div class="flex flex-col items-end text-[10px] flex-shrink-0">
-                <div class="text-gray-500">รวม ${g.totalCount} ${g.posCount === g.totalCount ? 'บิล' : 'คิว'}</div>
+                <div class="text-gray-500">${(() => {
+                  // 📦 D205: "คิว" = คันรถจริงเท่านั้น — บิลขายสินค้า/ขายแพ็กเกจนับเป็น "บิล"
+                  const _bill = (g.billCount || 0);
+                  const _car  = g.totalCount - _bill;
+                  if (_car <= 0) return `รวม ${_bill} บิล`;
+                  return `รวม ${_car} คิว` + (_bill > 0 ? ` <span class="text-gray-400">+ ${_bill} บิล</span>` : '');
+                })()}</div>
                 ${moneyLines.join('')}
               </div>
             </summary>
@@ -7907,6 +8015,9 @@
       // 🆕 D202
       const _sv = document.getElementById('posSalesView');
       if (_sv) _sv.classList.add('hidden');
+      // 🆕 D205
+      const _pv = document.getElementById('posPackageView');
+      if (_pv) _pv.classList.add('hidden');
       const d = document.getElementById('posDiscount'); if (d) d.value = '';
       const s = document.getElementById('posSearch'); if (s) s.value = '';
       posClearCustomer();
@@ -8256,6 +8367,266 @@
         Swal.fire({ icon: 'error', title: 'สั่งพิมพ์ไม่สำเร็จ', text: e.message });
       }
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 📦 D205 (31/7/2026) — ขายแพ็กเกจผ่าน POS
+    //   backend พร้อมตั้งแต่ D203: getPackageSaleCatalog / sellPackage / voidPackageSale
+    //   🚨 การ "ขาย" แพ็กเกจ ≠ การ "ใช้" แพ็กเกจ — บิลนี้ไม่ใช่คิวล้างรถ ห้ามนับเป็นคัน
+    //   🛡️ 1 บิล = 1 แพ็กเกจ (ไม่มีตะกร้า) · ต้องเลือกลูกค้าก่อนเสมอ (backend guard มีแล้ว UI กันซ้ำ)
+    //   🛡️ ราคาอ่านจากชีตฝั่ง backend เท่านั้น — ตรงนี้ส่งแค่ pkgId/uid/paymentMethod/discountAmount
+    //   🛡️ ยกเลิกบิล: ใช้ปุ่มเดิมในหน้า "ยอดขายวันนี้" — voidSale ส่งต่อบิล PS- ให้ voidPackageSale เอง
+    // ═══════════════════════════════════════════════════════════════
+    let _posPkgCatalog  = { month: '', packages: [] };
+    let _posPkgSelected = null;   // object จาก catalog
+    let _posPkgCustomer = null;   // { uid, name }
+    let _posPkgBusy     = false;
+
+    async function posOpenPackageView() {
+      document.getElementById('posSellView').classList.add('hidden');
+      document.getElementById('posReceiptView').classList.add('hidden');
+      const _sv3 = document.getElementById('posSalesView');
+      if (_sv3) _sv3.classList.add('hidden');
+      document.getElementById('posPackageView').classList.remove('hidden');
+
+      _posPkgSelected = null;
+      posPkgClearCustomer();
+      const d = document.getElementById('posPkgDiscount'); if (d) d.value = '';
+      // ช่องทางรับเงินใช้ชุดเดียวกับ POS — ถ้ายังไม่ได้โหลด ให้โหลดก่อน
+      if (!((_posCatalog || {}).payments || []).length) { try { await loadPOSCatalog(); } catch (e) {} }
+      posPkgFillPayments();
+      posPkgRenderPicked();
+      await loadPOSPackages();
+    }
+
+    function posPkgFillPayments() {
+      const sel = document.getElementById('posPkgPayMethod');
+      if (!sel) return;
+      const list = (_posCatalog || {}).payments || [];
+      sel.innerHTML = list.length
+        ? list.map(p => `<option value="${esc(p.payId)}">${esc(p.payName || p.payId)}</option>`).join('')
+        : '<option value="">— ไม่มีช่องทางที่เปิดใช้ —</option>';
+    }
+
+    async function loadPOSPackages() {
+      const grid = document.getElementById('posPkgGrid');
+      grid.innerHTML = '<div class="col-span-full text-center text-gray-400 text-sm py-10">กำลังโหลดแพ็กเกจ…</div>';
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({ action: 'getPackageSaleCatalog', t: Date.now() }))
+        }).then(r => r.json());
+        if (handleAuthError(res)) return;
+        if (res.status !== 'success') {
+          grid.innerHTML = `<div class="col-span-full text-center text-red-500 text-xs py-10">${esc(res.message || 'โหลดแพ็กเกจไม่สำเร็จ')}</div>`;
+          return;
+        }
+        _posPkgCatalog = res.data || { month: '', packages: [] };
+        const m = document.getElementById('posPkgMonth');
+        if (m) m.textContent = _posPkgCatalog.month ? ('โควตาเดือน ' + _posPkgCatalog.month) : '';
+        renderPOSPackages();
+      } catch (e) {
+        grid.innerHTML = `<div class="col-span-full text-center text-red-500 text-xs py-10">${esc(e.message)}</div>`;
+      }
+    }
+
+    /** โควตา "เว้นว่างในชีต = ไม่จำกัด"
+     *  🐛 กับดัก: ฝั่ง Apps Script ค่าเป็น NaN แต่ JSON.stringify(NaN) → **null**
+     *     ถ้าเช็คแค่ isFinite(Number(x)) จะได้ Number(null)=0 ⇒ โชว์ "เหลือ 0/0 ใบ" ทั้งที่ไม่จำกัด
+     *     (0 ที่กรอกจริงในชีต = ปิดขายเดือนนี้ ⇒ ห้ามเหมารวมกับค่าว่าง)
+     */
+    function _posPkgUnlimited(p) {
+      const raw = p ? p.quotaLimit : null;
+      if (raw === null || raw === undefined || raw === '') return true;
+      const lim = Number(raw);
+      return !isFinite(lim) || lim < 0;
+    }
+    function _posPkgSoldOut(p) {
+      return !_posPkgUnlimited(p) && !!(p && p.soldOut);
+    }
+
+    function renderPOSPackages() {
+      const grid = document.getElementById('posPkgGrid');
+      const list = _posPkgCatalog.packages || [];
+      if (!list.length) {
+        grid.innerHTML = '<div class="col-span-full text-center text-gray-400 text-sm py-10">ไม่มีแพ็กเกจที่เปิดขาย — ตรวจชีต Master_Packages (status = active และมีราคา)</div>';
+        return;
+      }
+      grid.innerHTML = list.map(p => {
+        const soldOut  = _posPkgSoldOut(p);
+        const quotaTxt = _posPkgUnlimited(p)
+          ? '<span class="text-gray-500">โควตาไม่จำกัด</span>'
+          : (soldOut
+              ? `<span class="text-red-600 font-bold">หมดโควตาเดือนนี้ (${p.quotaSold}/${p.quotaLimit})</span>`
+              : `<span class="text-emerald-700 font-bold">เหลือ ${p.quotaRemaining}/${p.quotaLimit} ใบเดือนนี้</span>`);
+        const usesTxt = (Number(p.totalUses) < 0) ? 'ไม่จำกัดครั้ง' : `${p.totalUses} ครั้ง`;
+        const on = !!(_posPkgSelected && _posPkgSelected.pkgId === p.pkgId);
+        const cls = soldOut
+          ? 'bg-gray-100 border-gray-200 cursor-not-allowed'
+          : (on ? 'bg-purple-50 border-purple-500 ring-2 ring-purple-300' : 'bg-white border-gray-200 hover:border-purple-400');
+        return `
+          <button type="button" data-pkg="${esc(p.pkgId)}" data-soldout="${soldOut ? '1' : '0'}"
+                  ${soldOut ? 'disabled' : `onclick="posPkgSelect('${esc(p.pkgId).replace(/'/g, "\\'")}')"`}
+                  class="pos-pkg-card text-left p-3 rounded-xl border transition ${cls}">
+            <div class="text-sm font-bold ${soldOut ? 'text-gray-400' : 'text-gray-800'} leading-snug">${esc(p.name)}</div>
+            <div class="text-[11px] text-gray-500 mt-0.5">${usesTxt} · ใช้ได้ ${p.validDays} วัน</div>
+            <div class="flex items-baseline justify-between gap-2 mt-1.5">
+              <span class="text-lg font-extrabold ${soldOut ? 'text-gray-400' : 'text-purple-700'}">฿${_posFmt(p.price)}</span>
+              <span class="text-[10px] text-right">${quotaTxt}</span>
+            </div>
+          </button>`;
+      }).join('');
+    }
+
+    function posPkgSelect(pkgId) {
+      const hit = (_posPkgCatalog.packages || []).find(p => String(p.pkgId) === String(pkgId));
+      if (!hit) return;
+      if (_posPkgSoldOut(hit)) return;          // กันอีกชั้นนอกเหนือจาก disabled
+      _posPkgSelected = hit;
+      renderPOSPackages();
+      posPkgRenderPicked();
+    }
+
+    /** สรุปบิล + คุมปุ่ม "รับเงิน" (ปุ่มจะกดไม่ได้จนกว่าจะเลือกลูกค้า) */
+    function posPkgRenderPicked() {
+      const box   = document.getElementById('posPkgPicked');
+      const btn   = document.getElementById('posPkgSubmitBtn');
+      const totEl = document.getElementById('posPkgTotal');
+      if (!box || !btn || !totEl) return;
+      const p     = _posPkgSelected;
+      const disc  = Number((document.getElementById('posPkgDiscount') || {}).value || 0) || 0;
+      const price = p ? _posMoney(p.price) : 0;
+      const over  = p ? (disc > price) : false;
+      const total = p ? _posMoney(Math.max(0, price - disc)) : 0;
+      totEl.textContent = _posFmt(total);
+
+      if (!p) {
+        box.innerHTML = '<p class="text-center text-gray-400 text-xs py-8">ยังไม่ได้เลือกแพ็กเกจ</p>';
+      } else {
+        const usesTxt = (Number(p.totalUses) < 0) ? 'ไม่จำกัดครั้ง' : `${p.totalUses} ครั้ง`;
+        box.innerHTML = `
+          <div class="bg-purple-50 border border-purple-200 rounded-xl p-3">
+            <div class="font-bold text-purple-900 text-sm">${esc(p.name)}</div>
+            <div class="text-[11px] text-gray-600 mt-1">${usesTxt} · ${p.serviceCount} บริการ · ใช้ได้ ${p.validDays} วันนับจากวันขาย</div>
+            <div class="flex justify-between text-xs mt-2"><span class="text-gray-600">ราคาตามชีต</span><span class="font-bold">฿${_posFmt(p.price)}</span></div>
+            ${disc > 0 ? `<div class="flex justify-between text-xs text-amber-600"><span>ส่วนลด</span><span>-฿${_posFmt(disc)}</span></div>` : ''}
+          </div>
+          ${over ? '<p class="mt-2 text-xs text-red-600 font-bold">❌ ส่วนลดมากกว่าราคาแพ็กเกจ</p>' : ''}
+          <p class="mt-2 text-[10px] text-gray-400 leading-relaxed">ℹ️ บิลนี้คือ "การขายสิทธิ์" ไม่ใช่คิวล้างรถ — จะไม่ถูกนับเป็นจำนวนคัน<br>
+          ยกเลิกบิลได้ที่ปุ่ม "ยอดขายวันนี้" (ระบบเพิกถอนเฉพาะสิทธิ์ที่ยังไม่ถูกใช้)</p>`;
+      }
+
+      const payOk = !!((document.getElementById('posPkgPayMethod') || {}).value);
+      const ok = !!p && !!_posPkgCustomer && payOk && !over && !_posPkgBusy;
+      btn.disabled = !ok;
+      btn.className = 'w-full py-3 rounded-xl font-extrabold text-white transition text-base ' +
+        (ok ? 'bg-purple-600 hover:bg-purple-700 active:scale-95 shadow' : 'bg-gray-300 cursor-not-allowed');
+      btn.innerHTML = _posPkgBusy ? '⏳ กำลังบันทึก…'
+        : (!p               ? '📦 เลือกแพ็กเกจก่อน'
+        : (!_posPkgCustomer ? '👤 ต้องเลือกลูกค้าก่อน'
+        : (over             ? '❌ ส่วนลดมากกว่าราคา'
+        : (!payOk           ? '💳 เลือกช่องทางรับเงินก่อน'
+        :                     `💰 รับเงิน ฿${_posFmt(total)}`))));
+    }
+
+    function posPkgCustKey(ev) {
+      if (ev && ev.key === 'Enter') { ev.preventDefault(); posPkgSearchCustomer(); }
+    }
+
+    async function posPkgSearchCustomer() {
+      const kw  = String((document.getElementById('posPkgCustSearch') || {}).value || '').trim();
+      const box = document.getElementById('posPkgCustResult');
+      if (!box) return;
+      if (!kw) { box.innerHTML = '<p class="text-gray-400">พิมพ์ชื่อหรือเบอร์โทรก่อน</p>'; return; }
+      box.innerHTML = '<p class="text-gray-400">กำลังค้นหา…</p>';
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST', body: withAuth(new URLSearchParams({ action: 'searchUser', keyword: kw }))
+        }).then(r => r.json());
+        if (handleAuthError(res)) return;
+        const list = (res.status === 'success')
+          ? (Array.isArray(res.data) ? res.data : [res.data]).filter(Boolean) : [];
+        if (!list.length) {
+          box.innerHTML = '<p class="text-gray-500">ไม่พบลูกค้า — ต้องเพิ่มลูกค้าก่อน (ปุ่ม "เพิ่มลูกค้า Walk-in") แพ็กเกจขายแบบไม่ระบุตัวตนไม่ได้</p>';
+          return;
+        }
+        box.innerHTML = list.slice(0, 6).map(u => `
+          <button type="button" onclick="posPkgPickCustomer('${esc(u.uid)}','${esc(u.name).replace(/'/g, "\\'")}')"
+                  class="block w-full text-left px-2 py-1.5 rounded-lg hover:bg-purple-50 border-b border-gray-100">
+            <span class="font-bold">${esc(u.name)}</span> <span class="text-gray-400">${esc(u.phone || '')}</span>
+          </button>`).join('');
+      } catch (e) { box.innerHTML = `<p class="text-red-500">${esc(e.message)}</p>`; }
+    }
+
+    function posPkgPickCustomer(uid, name) {
+      _posPkgCustomer = { uid: uid, name: name };
+      const r = document.getElementById('posPkgCustResult');  if (r) r.innerHTML = '';
+      const s = document.getElementById('posPkgCustSearch');  if (s) s.value = '';
+      const n = document.getElementById('posPkgCustPickedName'); if (n) n.textContent = '👤 ' + name;
+      const p = document.getElementById('posPkgCustPicked');  if (p) p.classList.remove('hidden');
+      posPkgRenderPicked();
+    }
+
+    function posPkgClearCustomer() {
+      _posPkgCustomer = null;
+      const p = document.getElementById('posPkgCustPicked'); if (p) p.classList.add('hidden');
+      const r = document.getElementById('posPkgCustResult'); if (r) r.innerHTML = '';
+      posPkgRenderPicked();
+    }
+
+    async function posPkgSubmitSale() {
+      if (_posPkgBusy || !_posPkgSelected) return;
+      // 🛡️ กันซ้ำฝั่ง UI — backend ก็เด้งเหมือนกัน แต่ห้ามให้พนักงานกดไปถึงตรงนั้น
+      if (!_posPkgCustomer) {
+        Swal.fire({ icon: 'warning', title: 'ต้องเลือกลูกค้าก่อน',
+                    text: 'แพ็กเกจต้องผูกกับลูกค้าเสมอ — ขายแบบไม่ระบุตัวตนไม่ได้' });
+        return;
+      }
+      const payMethod = (document.getElementById('posPkgPayMethod') || {}).value;
+      if (!payMethod) { Swal.fire({ icon: 'warning', title: 'ยังไม่ได้เลือกช่องทางรับเงิน' }); return; }
+      const disc = Number((document.getElementById('posPkgDiscount') || {}).value || 0) || 0;
+      if (disc > _posMoney(_posPkgSelected.price)) {
+        Swal.fire({ icon: 'warning', title: 'ส่วนลดมากกว่าราคาแพ็กเกจ' }); return;
+      }
+
+      _posPkgBusy = true; posPkgRenderPicked();
+      try {
+        const payload = new URLSearchParams({
+          action: 'sellPackage',
+          pkgId: String(_posPkgSelected.pkgId),
+          uid: String(_posPkgCustomer.uid),
+          paymentMethod: String(payMethod),
+          discountAmount: String(disc)
+        });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }).then(r => r.json());
+        if (handleAuthError(res)) return;
+        if (res.status !== 'success') {
+          Swal.fire({ icon: 'error', title: 'ขายแพ็กเกจไม่สำเร็จ', text: res.message || '' });
+          await loadPOSPackages();     // โควตาอาจเพิ่งเต็มจากเครื่องอื่น → ดึงเลขใหม่
+          return;
+        }
+        const d = res.data || {};
+        _posLastSale = { saleId: d.saleId, receiptNo: d.receiptNo, total: d.total, payName: payMethod };
+        document.getElementById('posPackageView').classList.add('hidden');
+        await posShowReceipt({
+          saleId: d.saleId, receiptNo: d.receiptNo, total: d.total, paymentMethod: payMethod
+        });
+        // เติมรายละเอียดแพ็กเกจต่อท้ายสรุปใบเสร็จ — พนักงานต้องบอกลูกค้าได้ว่าหมดอายุเมื่อไหร่
+        const sum = document.getElementById('posReceiptSummary');
+        if (sum) {
+          const usesTxt = (Number(d.totalUses) < 0) ? 'ไม่จำกัดครั้ง' : `${d.totalUses} ครั้ง`;
+          sum.innerHTML += `<br><span class="text-purple-700 font-bold">📦 ${esc(d.packageName || '')}</span>` +
+            ` · ${usesTxt} · หมดอายุ ${esc(d.expireDate || '-')}` +
+            (Number(d.quotaRemaining) >= 0 ? ` · เหลือโควตาเดือนนี้ ${d.quotaRemaining} ใบ` : '');
+        }
+        _posPkgSelected = null;
+        try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
+        try { if (typeof loadReconciliation === 'function') loadReconciliation(); } catch (e) {}
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+      } finally {
+        _posPkgBusy = false; posPkgRenderPicked();
+      }
+    }
     // ═══════════════════════════════════════════════════════════════
     // 🆕 D202 (29/7/2026) — รายการขาย + ยกเลิกบิล
     //   backend `getSalesList` / `voidSale` มีอยู่แล้วตั้งแต่ D200 — ตรงนี้เติมแค่หน้าจอ
@@ -8273,6 +8644,8 @@
     function posOpenSalesView() {
       document.getElementById('posSellView').classList.add('hidden');
       document.getElementById('posReceiptView').classList.add('hidden');
+      const _pv2 = document.getElementById('posPackageView');       // 🆕 D205
+      if (_pv2) _pv2.classList.add('hidden');
       document.getElementById('posSalesView').classList.remove('hidden');
       const box = document.getElementById('posSalesDate');
       if (box && !box.value) box.value = _posToday();
