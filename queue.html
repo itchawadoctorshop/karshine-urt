@@ -186,6 +186,8 @@
     <div class="fld"><span>🗣️ พูดเป็นเสียง (ถ้าเครื่องมีเสียงไทย)</span><button class="sw" id="swSpeak"></button></div>
     <div class="fld"><span>เสียงที่ใช้</span><select id="selVoice"></select></div>
     <div class="fld"><span>ความเร็วเสียงพูด</span><input type="number" id="inRate" min="0.5" max="1.5" step="0.1"></div>
+    <div class="fld"><span>คำลงท้าย</span>
+      <select id="selPolite"><option value="ครับ">ครับ</option><option value="ค่ะ">ค่ะ</option></select></div>
     <div class="fld"><span>🔒 ปิดทะเบียน 2 ตัวท้าย</span><button class="sw" id="swMask"></button></div>
     <div class="fld"><span>ประกาศตอน "รถจอดรอคิว"</span><button class="sw" id="swAnnWait"></button></div>
     <div class="fld"><span>ประกาศตอน "กำลังให้บริการ"</span><button class="sw" id="swAnnSvc"></button></div>
@@ -222,6 +224,7 @@
 
   var CFG = {
     sound: true, speak: true, voiceURI: '', rate: 0.95,
+    polite: 'ครับ',                    // คำลงท้าย — เปลี่ยนได้ในตั้งค่า (ไม่ต้องแก้โค้ด)
     maskPlate: true, annWaiting: true, annService: true, sec: 20
   };
   try {
@@ -369,13 +372,15 @@
    *    ลูกค้ายืนอยู่หน้าร้าน — พูดแบบนั้นคือทำให้เสียหน้า
    *    สถานะเงินขึ้นเป็นป้ายสีบนการ์ดแทน · เสียงพูดแค่เชิญไปที่เคาน์เตอร์อย่างสุภาพ
    */
+  function politeWord() { return CFG.polite === 'ค่ะ' ? 'ค่ะ' : 'ครับ'; }
+
   function speechFor(laneKey, b) {
-    var no = b.qno;
+    var no = b.qno, P = politeWord();
     if (laneKey === 'waiting') {
-      return 'คิวที่ ' + no + ' เชิญจอดรอคิวได้เลยค่ะ';
+      return 'คิวที่ ' + no + ' เชิญจอดรอคิวได้เลย' + P;
     }
-    var t = 'คิวที่ ' + no + ' ใช้บริการ ' + (b.serviceText || 'ล้างรถ') + ' เริ่มให้บริการแล้วค่ะ';
-    if (!isPaid(b)) t += ' รบกวนเชิญที่เคาน์เตอร์ด้วยค่ะ';
+    var t = 'คิวที่ ' + no + ' ใช้บริการ ' + (b.serviceText || 'ล้างรถ') + ' เริ่มให้บริการแล้ว' + P;
+    if (!isPaid(b)) t += ' รบกวนเชิญที่เคาน์เตอร์ด้วย' + P;
     return t;
   }
 
@@ -513,6 +518,7 @@
     paintSwitch($('swAnnSvc'), CFG.annService);
     $('inRate').value = CFG.rate;
     $('inSec').value = CFG.sec;
+    $('selPolite').value = politeWord();
   }
   function bindSwitch(id, key, after) {
     $(id).addEventListener('click', function () {
@@ -527,13 +533,14 @@
   $('inRate').addEventListener('change', function () { CFG.rate = Number(this.value) || 0.95; saveCfg(); });
   $('inSec').addEventListener('change', function () { CFG.sec = Number(this.value) || 20; saveCfg(); restartTimer(); });
   $('selVoice').addEventListener('change', function () { CFG.voiceURI = this.value; saveCfg(); loadVoices(); });
+  $('selPolite').addEventListener('change', function () { CFG.polite = this.value; saveCfg(); });
 
   $('btnCfg').addEventListener('click', function () { syncCfgUi(); loadVoices(); $('cfgOv').classList.add('on'); });
   $('btnCfgClose').addEventListener('click', function () { $('cfgOv').classList.remove('on'); });
   $('btnTest').addEventListener('click', function () {
     initAudio();
     enqueue({ no: 99, title: 'ทดสอบเสียง', service: 'ล้างสีดูดฝุ่น', plate: maskPlate('กก1234'),
-              speech: 'คิวที่ 99 ใช้บริการ ล้างสีดูดฝุ่น เริ่มให้บริการแล้วค่ะ' });
+              speech: 'คิวที่ 99 ใช้บริการ ล้างสีดูดฝุ่น เริ่มให้บริการแล้ว' + politeWord() });
   });
   $('btnFs').addEventListener('click', function () {
     try {
@@ -556,7 +563,7 @@
   setInterval(function () { if (NUM.day !== todayStr()) { NUM = { day: todayStr(), map: {}, next: 1 }; firstLoad = true; load(); } }, 60000);
 
   // เปิดให้เทสเรียกได้ (ไม่กระทบการใช้งานจริง)
-  window.__q = { load: load, LANES: LANES, cfg: CFG, queueNo: queueNo, speechFor: speechFor,
+  window.__q = { load: load, politeWord: politeWord, LANES: LANES, cfg: CFG, queueNo: queueNo, speechFor: speechFor,
                  maskPlate: maskPlate, isPaid: isPaid, start: start,
                  state: function () { return { prevLane: prevLane, firstLoad: firstLoad, annQ: annQ.slice() }; } };
 })();
