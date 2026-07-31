@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karshine URT — สถานะคิว</title>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  🖥️ จอแสดงสถานะคิวหน้าร้าน + เสียงเรียกคิว (D206 · 31/7/2026)
+  ───────────────────────────────────────────────────────────────
+  · 3 เลนตามที่ CEO เคาะ: รอเช็คอิน · รถจอดรอคิว · กำลังให้บริการ
+    ใช้สถานะชุดเดียวกับ Kanban ในหน้า admin — ไม่ประดิษฐ์สถานะใหม่
+  · ใช้ endpoint `getAdminData` ที่มีอยู่แล้ว ⇒ **ไม่ต้อง clasp deploy**
+  · โทเคนแอดมินอ่านจาก localStorage คีย์ `admin_token` (origin เดียวกับ admin.html)
+    ⇒ เครื่องที่เคยเปิด admin แล้วจะใช้ได้เลย ไม่ต้องกรอกซ้ำ
+
+  🛡️ กติกาที่ยึด
+    · ไม่พูดออกลำโพงว่า "ยังไม่ชำระเงิน" — ขึ้นเป็นป้ายสีบนจอแทน
+      เสียงพูดแค่ประโยคเชิญชวนสุภาพ (ลูกค้ายืนอยู่หน้าร้าน ห้ามทำให้เสียหน้า)
+    · ทะเบียนปิด 2 ตัวท้ายเป็นค่าเริ่มต้น (เปิดเต็มได้ในตั้งค่า)
+    · ไม่มี CDN เลย — ร้านเน็ตล่ม/บล็อก CDN จอก็ยังทำงาน
+    · เสียงพูดไทยไม่มีในเครื่อง → มีกระดิ่ง + การ์ดกระพริบเป็นตัวสำรองเสมอ
+    · เบราว์เซอร์บล็อกเสียงจนกว่าจะมีการคลิก → มีปุ่ม "เริ่มระบบเสียง" ตอนเปิด
+    · ประกาศครั้งเดียวต่อการเปลี่ยนสถานะ 1 ครั้ง · รอบแรกหลังเปิดจอไม่ประกาศ
+  ═══════════════════════════════════════════════════════════════
+-->
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0b1220; --panel:#111c2e; --line:#1e2d45; --txt:#e8eefb; --dim:#8ba0c4;
+    --checkin:#f59e0b; --waiting:#3b82f6; --service:#22c55e; --paid:#22c55e; --unpaid:#f97316;
+  }
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--txt); overflow:hidden;
+    font-family:"Sarabun","Leelawadee UI","Noto Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{height:100vh;display:flex;flex-direction:column}
+
+  /* ── header ── */
+  header{
+    display:flex;align-items:center;gap:16px;padding:12px 22px;
+    background:linear-gradient(90deg,#0f1c33,#132844);border-bottom:2px solid var(--line);flex-shrink:0;
+  }
+  .brand{font-size:clamp(20px,2.2vw,30px);font-weight:800;letter-spacing:.5px}
+  .brand small{display:block;font-size:12px;font-weight:400;color:var(--dim);letter-spacing:2px}
+  .spacer{flex:1}
+  .clock{font-size:clamp(24px,3vw,42px);font-weight:800;font-variant-numeric:tabular-nums}
+  .meta{text-align:right;font-size:12px;color:var(--dim);line-height:1.5}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--service);margin-right:5px}
+  .dot.bad{background:#ef4444}
+  .iconbtn{
+    background:#1b2c48;border:1px solid var(--line);color:var(--txt);border-radius:10px;
+    padding:9px 13px;font-size:16px;cursor:pointer;font-family:inherit
+  }
+  .iconbtn:hover{background:#24395c}
+
+  /* ── lanes ── */
+  .lanes{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:14px 16px;overflow:hidden}
+  .lane{background:var(--panel);border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+  .lane-head{padding:12px 16px;font-size:clamp(16px,1.5vw,24px);font-weight:800;display:flex;align-items:center;gap:10px;border-bottom:2px solid var(--line)}
+  .lane-head .cnt{margin-left:auto;background:rgba(255,255,255,.1);border-radius:999px;padding:2px 14px;font-size:.8em}
+  .lane[data-k="checkin"] .lane-head{color:var(--checkin);border-bottom-color:rgba(245,158,11,.35)}
+  .lane[data-k="waiting"] .lane-head{color:var(--waiting);border-bottom-color:rgba(59,130,246,.35)}
+  .lane[data-k="service"] .lane-head{color:var(--service);border-bottom-color:rgba(34,197,94,.35)}
+  .lane-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .lane-body::-webkit-scrollbar{width:8px}
+  .lane-body::-webkit-scrollbar-thumb{background:#28405f;border-radius:8px}
+  .empty{color:#5b6f92;text-align:center;padding:34px 10px;font-size:15px}
+
+  /* ── card ── */
+  .card{background:#182741;border:1px solid #24395c;border-left:7px solid #24395c;border-radius:13px;padding:12px 15px}
+  .lane[data-k="checkin"] .card{border-left-color:var(--checkin)}
+  .lane[data-k="waiting"] .card{border-left-color:var(--waiting)}
+  .lane[data-k="service"] .card{border-left-color:var(--service)}
+  .card.flash{animation:flash 1.1s ease-in-out 4}
+  @keyframes flash{0%,100%{background:#182741}50%{background:#2b4a2f}}
+  .row1{display:flex;align-items:baseline;gap:12px}
+  .qn{font-size:clamp(26px,2.7vw,42px);font-weight:900;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
+  .qn span{font-size:.42em;font-weight:600;color:var(--dim);margin-right:3px}
+  .plate{font-size:clamp(17px,1.7vw,26px);font-weight:800;letter-spacing:1px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .row2{margin-top:5px;font-size:clamp(12px,1.05vw,16px);color:#b9cbe6}
+  .row3{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tag{font-size:clamp(11px,.95vw,14px);font-weight:700;border-radius:999px;padding:3px 11px}
+  .tag.paid{background:rgba(34,197,94,.16);color:#5ee08a}
+  .tag.unpaid{background:rgba(249,115,22,.18);color:#ffab6b}
+  .tag.line{background:rgba(255,255,255,.09);color:#c2d3ec}
+
+  /* ── overlay ประกาศ ── */
+  #callOv{
+    position:fixed;inset:0;background:rgba(4,10,20,.93);display:none;
+    align-items:center;justify-content:center;z-index:60;text-align:center;padding:24px
+  }
+  #callOv.on{display:flex}
+  .call{border:3px solid var(--service);border-radius:26px;padding:36px 60px;background:#0f2419;max-width:92vw}
+  .call .t{font-size:clamp(16px,1.8vw,26px);color:#8fe0aa;font-weight:700;letter-spacing:2px}
+  .call .n{font-size:clamp(56px,11vw,170px);font-weight:900;line-height:1;margin:6px 0 10px;color:#fff;font-variant-numeric:tabular-nums}
+  .call .s{font-size:clamp(18px,2.4vw,38px);color:#d6f5e0;font-weight:700}
+  .call .p{font-size:clamp(15px,1.6vw,24px);color:#9fb6d4;margin-top:12px}
+
+  /* ── overlay เริ่มระบบเสียง / ตั้งค่า ── */
+  .modal{position:fixed;inset:0;background:rgba(4,10,20,.9);display:none;align-items:center;justify-content:center;z-index:70;padding:20px}
+  .modal.on{display:flex}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px;max-width:520px;width:100%}
+  .box h2{font-size:22px;margin-bottom:6px}
+  .box p{color:var(--dim);font-size:14px;line-height:1.65;margin-bottom:16px}
+  .btn{
+    background:var(--service);color:#04240f;border:0;border-radius:12px;padding:14px 20px;
+    font-size:17px;font-weight:800;cursor:pointer;width:100%;font-family:inherit
+  }
+  .btn.sec{background:#22395c;color:var(--txt);margin-top:9px}
+  .fld{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-top:1px solid var(--line);font-size:15px}
+  .fld input[type=number]{width:88px;background:#0d1728;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 9px;font-family:inherit;text-align:right}
+  .fld select{background:#0d1728;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 9px;font-family:inherit;max-width:230px}
+  .sw{width:52px;height:29px;border-radius:999px;background:#33507b;position:relative;cursor:pointer;flex-shrink:0;border:0}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:23px;height:23px;border-radius:50%;background:#fff;transition:left .15s}
+  .sw.on{background:var(--service)}
+  .sw.on::after{left:26px}
+  .warn{background:rgba(249,115,22,.13);border:1px solid rgba(249,115,22,.35);color:#ffc08f;border-radius:11px;padding:11px 13px;font-size:13px;margin-top:12px;line-height:1.6}
+  #errBar{display:none;background:#7f1d1d;color:#ffd9d9;padding:8px 20px;font-size:14px;flex-shrink:0}
+  #errBar.on{display:block}
+  @media (max-width:900px){ .lanes{grid-template-columns:1fr;overflow-y:auto} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Karshine URT<small>สถานะคิว</small></div>
+    <div class="spacer"></div>
+    <div class="clock" id="clock">--:--</div>
+    <div class="meta">
+      <div><span class="dot" id="dot"></span><span id="conn">กำลังเชื่อมต่อ…</span></div>
+      <div>อัปเดตล่าสุด <span id="upd">-</span></div>
+    </div>
+    <button class="iconbtn" id="btnFs"  title="เต็มจอ">⛶</button>
+    <button class="iconbtn" id="btnCfg" title="ตั้งค่า">⚙</button>
+  </header>
+
+  <div id="errBar"></div>
+
+  <div class="lanes">
+    <div class="lane" data-k="checkin">
+      <div class="lane-head">⏰ รอเช็คอิน <span class="cnt" id="c-checkin">0</span></div>
+      <div class="lane-body" id="l-checkin"></div>
+    </div>
+    <div class="lane" data-k="waiting">
+      <div class="lane-head">📍 รถจอดรอคิว <span class="cnt" id="c-waiting">0</span></div>
+      <div class="lane-body" id="l-waiting"></div>
+    </div>
+    <div class="lane" data-k="service">
+      <div class="lane-head">🫧 กำลังให้บริการ <span class="cnt" id="c-service">0</span></div>
+      <div class="lane-body" id="l-service"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ประกาศเรียกคิว -->
+<div id="callOv">
+  <div class="call">
+    <div class="t" id="callTitle">เชิญเข้ารับบริการ</div>
+    <div class="n" id="callNo">-</div>
+    <div class="s" id="callSvc"></div>
+    <div class="p" id="callPlate"></div>
+  </div>
+</div>
+
+<!-- เริ่มระบบเสียง -->
+<div class="modal on" id="startOv">
+  <div class="box">
+    <h2>🔊 เริ่มระบบเสียง</h2>
+    <p>เบราว์เซอร์จะไม่ยอมให้เล่นเสียงจนกว่าจะมีการคลิกในหน้าอย่างน้อย 1 ครั้ง<br>
+       กดปุ่มด้านล่างครั้งเดียวตอนเปิดจอ แล้วปล่อยทิ้งไว้ได้เลย</p>
+    <button class="btn" id="btnStart">▶ เริ่มแสดงผล + เปิดเสียง</button>
+    <button class="btn sec" id="btnStartMute">เริ่มแบบปิดเสียง</button>
+    <div class="warn" id="voiceWarn" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ตั้งค่า -->
+<div class="modal" id="cfgOv">
+  <div class="box">
+    <h2>⚙ ตั้งค่าจอคิว</h2>
+    <p>ค่าที่ตั้งไว้จะถูกจำไว้ในเครื่องนี้เครื่องเดียว</p>
+    <div class="fld"><span>🔊 เปิดเสียงเรียกคิว</span><button class="sw" id="swVoice"></button></div>
+    <div class="fld"><span>🗣️ พูดเป็นเสียง (ถ้าเครื่องมีเสียงไทย)</span><button class="sw" id="swSpeak"></button></div>
+    <div class="fld"><span>เสียงที่ใช้</span><select id="selVoice"></select></div>
+    <div class="fld"><span>ความเร็วเสียงพูด</span><input type="number" id="inRate" min="0.5" max="1.5" step="0.1"></div>
+    <div class="fld"><span>🔒 ปิดทะเบียน 2 ตัวท้าย</span><button class="sw" id="swMask"></button></div>
+    <div class="fld"><span>ประกาศตอน "รถจอดรอคิว"</span><button class="sw" id="swAnnWait"></button></div>
+    <div class="fld"><span>ประกาศตอน "กำลังให้บริการ"</span><button class="sw" id="swAnnSvc"></button></div>
+    <div class="fld"><span>รีเฟรชทุกกี่วินาที</span><input type="number" id="inSec" min="10" max="120" step="5"></div>
+    <button class="btn sec" id="btnTest">🔔 ทดสอบเสียงเรียกคิว</button>
+    <button class="btn" id="btnCfgClose" style="margin-top:9px">ปิด</button>
+    <div class="warn">
+      ℹ️ จอนี้ <b>ไม่ประกาศออกลำโพงว่าใครยังไม่ชำระเงิน</b> — แสดงเป็นป้ายสีบนการ์ดเท่านั้น
+      เสียงพูดจะเป็นประโยคเชิญชวนสุภาพ
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ═══════════════════════════════════════════════════════════
+  // ตั้งค่า
+  // ═══════════════════════════════════════════════════════════
+  var API_URL = "https://script.google.com/macros/s/AKfycbx-lKOiMMp2enXoijV6rLpqoG-UQzjgamF_QUVS9d9QHGi_ouY7k8hIZya91PPBiwan/exec";
+
+  // 3 เลนที่ CEO เคาะ — map ตรงกับ Kanban ในหน้า admin (ห้ามประดิษฐ์สถานะใหม่)
+  var LANES = [
+    { key: 'checkin', title: 'รอเช็คอิน',       statuses: ['pending', 'confirmed'] },
+    { key: 'waiting', title: 'รถจอดรอคิว',      statuses: ['checked_in'] },
+    { key: 'service', title: 'กำลังให้บริการ',  statuses: ['in_progress'] }
+  ];
+  var STATUS2LANE = {};
+  LANES.forEach(function (l) { l.statuses.forEach(function (s) { STATUS2LANE[s] = l.key; }); });
+
+  var CFG_KEY = 'karshine_queue_cfg_v1';
+  var NUM_KEY = 'karshine_queue_num_v1';
+
+  var CFG = {
+    sound: true, speak: true, voiceURI: '', rate: 0.95,
+    maskPlate: true, annWaiting: true, annService: true, sec: 20
+  };
+  try {
+    var raw = localStorage.getItem(CFG_KEY);
+    if (raw) { var o = JSON.parse(raw); for (var k in o) if (CFG.hasOwnProperty(k)) CFG[k] = o[k]; }
+  } catch (e) {}
+  function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); } catch (e) {} }
+
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 🔢 เลขคิว — ต้อง "นิ่ง" ตลอดวัน
+  //    ถ้าคำนวณจากลำดับในรายการทุกรอบ พอมีคิวจองแทรกเข้ามากลางวัน
+  //    เลขของคนที่รออยู่จะขยับ = ลูกค้าสับสน + พนักงานเรียกผิดคน
+  //    ⇒ จองเลขให้ booking แต่ละใบครั้งเดียว แล้วจำไว้ในเครื่องจนหมดวัน
+  // ═══════════════════════════════════════════════════════════
+  var NUM = { day: '', map: {}, next: 1 };
+  function todayStr() {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  try {
+    var rawN = localStorage.getItem(NUM_KEY);
+    if (rawN) { var n = JSON.parse(rawN); if (n && n.day === todayStr()) NUM = n; }
+  } catch (e) {}
+  function queueNo(bookingId) {
+    var t = todayStr();
+    if (NUM.day !== t) NUM = { day: t, map: {}, next: 1 };      // ขึ้นวันใหม่ = เริ่มนับ 1 ใหม่
+    if (!NUM.map[bookingId]) {
+      NUM.map[bookingId] = NUM.next++;
+      try { localStorage.setItem(NUM_KEY, JSON.stringify(NUM)); } catch (e) {}
+    }
+    return NUM.map[bookingId];
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 🔊 เสียง — กระดิ่ง (WebAudio สร้างเอง ไม่ต้องมีไฟล์) + เสียงพูด
+  // ═══════════════════════════════════════════════════════════
+  var audioCtx = null, voices = [], thVoice = null, soundReady = false;
+
+  function initAudio() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !audioCtx) audioCtx = new AC();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      soundReady = true;
+    } catch (e) { soundReady = false; }
+  }
+
+  /** กระดิ่ง 2 โน้ต — ตัวสำรองที่ต้องดังเสมอแม้ไม่มีเสียงพูดไทย */
+  function chime() {
+    if (!CFG.sound || !audioCtx) return;
+    try {
+      [[880, 0], [1174, 0.18]].forEach(function (p) {
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = p[0];
+        var t0 = audioCtx.currentTime + p[1];
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.55);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t0); o.stop(t0 + 0.6);
+      });
+    } catch (e) {}
+  }
+
+  function loadVoices() {
+    try { voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; } catch (e) { voices = []; }
+    var th = voices.filter(function (v) { return /^th/i.test(v.lang || ''); });
+    thVoice = null;
+    if (CFG.voiceURI) {
+      for (var i = 0; i < voices.length; i++) if (voices[i].voiceURI === CFG.voiceURI) thVoice = voices[i];
+    }
+    if (!thVoice) thVoice = th[0] || null;
+    renderVoiceList(th);
+    var w = $('voiceWarn');
+    if (w) {
+      if (!window.speechSynthesis || th.length === 0) {
+        w.style.display = 'block';
+        w.innerHTML = '⚠️ เครื่องนี้<b>ยังไม่มีเสียงพูดภาษาไทย</b> — จอจะใช้<b>เสียงกระดิ่ง + การ์ดกระพริบ</b>แทน ' +
+                      'ใช้งานได้ปกติทุกอย่าง<br>ถ้าอยากได้เสียงพูด: Windows → ตั้งค่า → เวลาและภาษา → ภาษา → เพิ่มภาษาไทย (ติ๊ก Text-to-speech)';
+      } else { w.style.display = 'none'; }
+    }
+  }
+  function renderVoiceList(th) {
+    var sel = $('selVoice'); if (!sel) return;
+    if (!th.length) { sel.innerHTML = '<option value="">— ไม่พบเสียงไทยในเครื่อง —</option>'; return; }
+    sel.innerHTML = th.map(function (v) {
+      return '<option value="' + esc(v.voiceURI) + '"' + (thVoice && v.voiceURI === thVoice.voiceURI ? ' selected' : '') +
+             '>' + esc(v.name) + '</option>';
+    }).join('');
+  }
+  try {
+    if (window.speechSynthesis) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  } catch (e) {}
+
+  function speak(text) {
+    if (!CFG.sound || !CFG.speak || !text) return;
+    if (!window.speechSynthesis || !thVoice) return;      // ไม่มีเสียงไทย → พึ่งกระดิ่งอย่างเดียว
+    try {
+      var u = new SpeechSynthesisUtterance(text);
+      u.voice = thVoice; u.lang = thVoice.lang || 'th-TH';
+      u.rate = Number(CFG.rate) || 0.95; u.pitch = 1; u.volume = 1;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 📣 คิวประกาศ — ทีละใบ ไม่ให้เสียงทับกัน
+  // ═══════════════════════════════════════════════════════════
+  var ANN_MS = 5000;                 // การ์ดประกาศค้างบนจอกี่ ms ต่อคัน (คิวถัดไปรอต่อคิว)
+  var annQ = [], annBusy = false;
+  function enqueue(item) { annQ.push(item); pump(); }
+  function pump() {
+    if (annBusy || !annQ.length) return;
+    annBusy = true;
+    var it = annQ.shift();
+    showCall(it);
+    chime();
+    setTimeout(function () { speak(it.speech); }, 700);
+    setTimeout(function () {
+      $('callOv').classList.remove('on');
+      annBusy = false;
+      pump();
+    }, ANN_MS);
+  }
+  function showCall(it) {
+    $('callTitle').textContent = it.title;
+    $('callNo').textContent = 'คิวที่ ' + it.no;
+    $('callSvc').textContent = it.service || '';
+    $('callPlate').textContent = it.plate ? ('ทะเบียน ' + it.plate) : '';
+    $('callOv').classList.add('on');
+  }
+
+  /**
+   * 🗣️ ข้อความเสียง
+   * 🚨 ห้ามพูดว่า "ยังไม่ชำระเงิน" ออกลำโพงเด็ดขาด (CEO เคาะ 31/7)
+   *    ลูกค้ายืนอยู่หน้าร้าน — พูดแบบนั้นคือทำให้เสียหน้า
+   *    สถานะเงินขึ้นเป็นป้ายสีบนการ์ดแทน · เสียงพูดแค่เชิญไปที่เคาน์เตอร์อย่างสุภาพ
+   */
+  function speechFor(laneKey, b) {
+    var no = b.qno;
+    if (laneKey === 'waiting') {
+      return 'คิวที่ ' + no + ' เชิญจอดรอคิวได้เลยค่ะ';
+    }
+    var t = 'คิวที่ ' + no + ' ใช้บริการ ' + (b.serviceText || 'ล้างรถ') + ' เริ่มให้บริการแล้วค่ะ';
+    if (!isPaid(b)) t += ' รบกวนเชิญที่เคาน์เตอร์ด้วยค่ะ';
+    return t;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 🖼️ วาดจอ
+  // ═══════════════════════════════════════════════════════════
+  function isPaid(b) {
+    var s = String(b.paymentStatus || '').toLowerCase().trim();
+    return s === 'paid' || s === 'partial' || s === 'จ่ายแล้ว';
+  }
+  /** ปิด 2 ตัวท้ายของทะเบียน — ลูกค้ายังดูออกว่ารถตัวเองจากยี่ห้อ/รุ่นที่โชว์คู่กัน */
+  function maskPlate(p) {
+    var s = String(p || '').trim();
+    if (!s || s === 'ไม่ระบุ') return '-';
+    if (!CFG.maskPlate || s.length <= 2) return s;
+    return s.slice(0, -2) + '••';
+  }
+
+  var flashSet = {};
+  function cardHtml(b, laneKey) {
+    var paid = isPaid(b);
+    return '<div class="card' + (flashSet[b.bookingId] ? ' flash' : '') + '" data-bid="' + esc(b.bookingId) + '">' +
+      '<div class="row1">' +
+        '<div class="qn"><span>คิวที่</span>' + b.qno + '</div>' +
+        '<div class="plate">' + esc(maskPlate(b.plate)) + '</div>' +
+      '</div>' +
+      '<div class="row2">' + esc(b.serviceText || '-') +
+        (b.model ? ' <span style="color:#7f96b8">· ' + esc(b.model) + '</span>' : '') + '</div>' +
+      '<div class="row3">' +
+        '<span class="tag ' + (paid ? 'paid">🟢 ชำระแล้ว' : 'unpaid">🟠 ยังไม่ชำระ') + '</span>' +
+        '<span class="tag line">' + esc(b.lineType || '') + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function render(groups) {
+    LANES.forEach(function (l) {
+      var list = groups[l.key] || [];
+      $('c-' + l.key).textContent = list.length;
+      $('l-' + l.key).innerHTML = list.length
+        ? list.map(function (b) { return cardHtml(b, l.key); }).join('')
+        : '<div class="empty">— ไม่มีรถในสถานะนี้ —</div>';
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 🔄 ดึงข้อมูล
+  // ═══════════════════════════════════════════════════════════
+  var prevLane = {};          // bookingId → lane key รอบก่อน
+  var firstLoad = true;       // 🛡️ รอบแรกหลังเปิดจอ "ห้ามประกาศ" ไม่งั้นจะร้องรัวทั้งกระดาน
+  var timer = null;
+
+  function token() { try { return localStorage.getItem('admin_token') || ''; } catch (e) { return ''; } }
+
+  function setErr(msg) {
+    var bar = $('errBar');
+    if (msg) { bar.textContent = '⚠️ ' + msg; bar.classList.add('on'); $('dot').classList.add('bad'); $('conn').textContent = 'มีปัญหา'; }
+    else { bar.classList.remove('on'); $('dot').classList.remove('bad'); $('conn').textContent = 'เชื่อมต่ออยู่'; }
+  }
+
+  function load() {
+    var tk = token();
+    if (!tk) {
+      setErr('เครื่องนี้ยังไม่ได้ใส่รหัสแอดมิน — เปิดหน้า admin.html บนเครื่องนี้แล้วใส่รหัสก่อน 1 ครั้ง');
+      return;
+    }
+    var body = new URLSearchParams({ action: 'getAdminData', adminToken: tk, t: String(Date.now()) });
+    fetch(API_URL, { method: 'POST', body: body })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || res.status !== 'success') {
+          setErr((res && res.message) ? res.message : 'โหลดข้อมูลไม่สำเร็จ');
+          return;
+        }
+        setErr('');
+        var rows = Array.isArray(res.data) ? res.data : [];
+        var groups = { checkin: [], waiting: [], service: [] };
+        var seen = {}, newFlash = {};
+
+        rows.forEach(function (b) {
+          var lane = STATUS2LANE[String(b.status || '').trim()];
+          if (!lane) return;                                  // สถานะอื่นไม่ขึ้นจอนี้
+          b.qno = queueNo(b.bookingId);
+          groups[lane].push(b);
+          seen[b.bookingId] = lane;
+
+          var before = prevLane[b.bookingId];
+          if (!firstLoad && before !== lane) {
+            var wantAnn = (lane === 'waiting' && CFG.annWaiting) || (lane === 'service' && CFG.annService);
+            if (wantAnn) {
+              newFlash[b.bookingId] = true;
+              enqueue({
+                no: b.qno,
+                title: lane === 'service' ? 'เชิญเข้ารับบริการ' : 'เชิญจอดรอคิว',
+                service: b.serviceText || '',
+                plate: maskPlate(b.plate),
+                speech: speechFor(lane, b)
+              });
+            }
+          }
+        });
+
+        prevLane = seen;
+        flashSet = newFlash;
+        groups.checkin.sort(byQno); groups.waiting.sort(byQno); groups.service.sort(byQno);
+        render(groups);
+        $('upd').textContent = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        firstLoad = false;
+      })
+      .catch(function (e) { setErr('เชื่อมต่อไม่ได้: ' + e.message); });
+  }
+  function byQno(a, b) { return a.qno - b.qno; }
+
+  function restartTimer() {
+    if (timer) clearInterval(timer);
+    var sec = Math.max(10, Math.min(120, Number(CFG.sec) || 20));
+    timer = setInterval(load, sec * 1000);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // นาฬิกา + ปุ่ม + ตั้งค่า
+  // ═══════════════════════════════════════════════════════════
+  function tick() {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    $('clock').textContent = p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  tick(); setInterval(tick, 15000);
+
+  function paintSwitch(el, on) { el.classList.toggle('on', !!on); }
+  function syncCfgUi() {
+    paintSwitch($('swVoice'), CFG.sound);
+    paintSwitch($('swSpeak'), CFG.speak);
+    paintSwitch($('swMask'), CFG.maskPlate);
+    paintSwitch($('swAnnWait'), CFG.annWaiting);
+    paintSwitch($('swAnnSvc'), CFG.annService);
+    $('inRate').value = CFG.rate;
+    $('inSec').value = CFG.sec;
+  }
+  function bindSwitch(id, key, after) {
+    $(id).addEventListener('click', function () {
+      CFG[key] = !CFG[key]; saveCfg(); syncCfgUi(); if (after) after();
+    });
+  }
+  bindSwitch('swVoice', 'sound');
+  bindSwitch('swSpeak', 'speak');
+  bindSwitch('swMask', 'maskPlate', function () { firstLoad = true; load(); });
+  bindSwitch('swAnnWait', 'annWaiting');
+  bindSwitch('swAnnSvc', 'annService');
+  $('inRate').addEventListener('change', function () { CFG.rate = Number(this.value) || 0.95; saveCfg(); });
+  $('inSec').addEventListener('change', function () { CFG.sec = Number(this.value) || 20; saveCfg(); restartTimer(); });
+  $('selVoice').addEventListener('change', function () { CFG.voiceURI = this.value; saveCfg(); loadVoices(); });
+
+  $('btnCfg').addEventListener('click', function () { syncCfgUi(); loadVoices(); $('cfgOv').classList.add('on'); });
+  $('btnCfgClose').addEventListener('click', function () { $('cfgOv').classList.remove('on'); });
+  $('btnTest').addEventListener('click', function () {
+    initAudio();
+    enqueue({ no: 99, title: 'ทดสอบเสียง', service: 'ล้างสีดูดฝุ่น', plate: maskPlate('กก1234'),
+              speech: 'คิวที่ 99 ใช้บริการ ล้างสีดูดฝุ่น เริ่มให้บริการแล้วค่ะ' });
+  });
+  $('btnFs').addEventListener('click', function () {
+    try {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    } catch (e) {}
+  });
+
+  function start(withSound) {
+    CFG.sound = !!withSound; saveCfg();
+    if (withSound) initAudio();
+    $('startOv').classList.remove('on');
+    load();
+    restartTimer();
+  }
+  $('btnStart').addEventListener('click', function () { start(true); });
+  $('btnStartMute').addEventListener('click', function () { start(false); });
+
+  // เผื่อจอค้างข้ามคืน — ขึ้นวันใหม่ให้รีเซ็ตเลขคิวเอง
+  setInterval(function () { if (NUM.day !== todayStr()) { NUM = { day: todayStr(), map: {}, next: 1 }; firstLoad = true; load(); } }, 60000);
+
+  // เปิดให้เทสเรียกได้ (ไม่กระทบการใช้งานจริง)
+  window.__q = { load: load, LANES: LANES, cfg: CFG, queueNo: queueNo, speechFor: speechFor,
+                 maskPlate: maskPlate, isPaid: isPaid, start: start,
+                 state: function () { return { prevLane: prevLane, firstLoad: firstLoad, annQ: annQ.slice() }; } };
+})();
+</script>
+</body>
+</html>
