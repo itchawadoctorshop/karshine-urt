@@ -475,6 +475,15 @@
               <label class="text-[10px] font-bold text-gray-500 uppercase">จำนวนเงิน</label>
               <input type="number" id="wiPayAmount" min="0" step="1" inputmode="numeric" class="w-full p-2 border border-amber-300 rounded-lg text-sm mt-1 font-bold" placeholder="0">
             </div>
+            <!-- 📱 D208.1: QR พร้อมเพย์ — โผล่เองเมื่อเลือกช่องทางที่เป็นพร้อมเพย์ -->
+            <div id="wiPayQR" class="col-span-2 hidden bg-white border border-amber-300 rounded-xl p-3 text-center">
+              <div id="wiPayQRBox" class="flex justify-center [&>img]:mx-auto [&>img]:w-[190px] [&>img]:h-[190px]"></div>
+              <p class="text-[11px] text-gray-600 mt-2">
+                <span id="wiPayQRTarget">-</span> · ยอด <b id="wiPayQRAmount" class="text-amber-700">0</b> บาท
+              </p>
+              <p class="text-[10px] text-gray-400 mt-1">ให้ลูกค้าสแกนจ่าย แล้วค่อยกดสร้างคิว</p>
+            </div>
+
             <p class="col-span-2 text-[10px] text-amber-700 leading-relaxed">
               เติมยอดจาก "ราคารวม" ให้อัตโนมัติ แก้ได้ · <b>ใช้แพ็กเกจ / ส่วนลด / จ่ายบางส่วน</b> ให้กดจ่ายที่การ์ดในกระดานเหมือนเดิม
             </p>
@@ -4482,6 +4491,57 @@
       if (!force && amt.dataset.dirty === '1') return;
       amt.value = _wiPayTotal() || '';
       amt.dataset.dirty = '0';
+      _wiSyncQR();                                 // ยอดเปลี่ยน = QR ต้องเปลี่ยนตาม ไม่งั้นลูกค้าโอนยอดเก่า
+    }
+
+    /**
+     * 📱 D208.1 — วาด QR พร้อมเพย์ในฟอร์มลงคิว
+     *   ใช้ generatePromptPayPayload/renderPromptPayQR/_getPromptPayId **ตัวเดียวกับโมดัลจ่ายเงิน**
+     *   (เขียนใหม่ = มีโอกาสสองที่คิด payload ไม่ตรงกัน แล้วลูกค้าโอนผิดยอด)
+     */
+    function _wiSyncQR() {
+      const wrap = document.getElementById('wiPayQR');
+      const sel  = document.getElementById('wiPayMethod');
+      const amtEl = document.getElementById('wiPayAmount');
+      const on = !!(document.getElementById('wiPayNow') || {}).checked;
+      if (!wrap || !sel || !amtEl) return;
+
+      if (!on) { wrap.classList.add('hidden'); return; }
+
+      const val  = sel.value || '';
+      const text = (sel.options && sel.selectedIndex >= 0 && sel.options[sel.selectedIndex])
+                   ? sel.options[sel.selectedIndex].text : '';
+      const isPromptPay = /promptpay|พร้อมเพย์|พร้อมเพ/i.test(val + ' ' + text);
+      if (!isPromptPay) { wrap.classList.add('hidden'); return; }
+
+      const amount = Number(amtEl.value) || 0;
+      const ppId = (typeof _getPromptPayId === 'function') ? _getPromptPayId() : '';
+      wrap.classList.remove('hidden');
+      const box = document.getElementById('wiPayQRBox');
+
+      if (!ppId) {
+        box.innerHTML = '<p class="text-red-500 text-[11px] p-3">⚠️ ยังไม่ได้ตั้ง <b>promptpay_id</b> ในชีต Branches</p>';
+        document.getElementById('wiPayQRTarget').textContent = '-';
+        document.getElementById('wiPayQRAmount').textContent = amount.toLocaleString();
+        return;
+      }
+      if (!(amount > 0)) {
+        box.innerHTML = '<p class="text-gray-400 text-[11px] p-3">ใส่จำนวนเงินก่อน แล้ว QR จะขึ้นให้เองครับ</p>';
+        document.getElementById('wiPayQRTarget').textContent = '-';
+        document.getElementById('wiPayQRAmount').textContent = '0';
+        return;
+      }
+
+      box.innerHTML = (typeof renderPromptPayQR === 'function')
+        ? renderPromptPayQR(ppId, amount)
+        : '<p class="text-red-500 text-[11px] p-3">⚠️ โหลดตัวสร้าง QR ไม่ได้</p>';
+      document.getElementById('wiPayQRAmount').textContent = amount.toLocaleString();
+      // ปิดเลขบางส่วน — จอนี้พนักงานหันให้ลูกค้าดู
+      let masked = String(ppId);
+      const clean = masked.replace(/\D/g, '');
+      if (clean.length === 10) masked = clean.slice(0, 3) + '-xxx-' + clean.slice(7);
+      else if (clean.length === 13) masked = clean.slice(0, 1) + '-xxxx-xxxxx-' + clean.slice(11);
+      document.getElementById('wiPayQRTarget').textContent = 'พร้อมเพย์: ' + masked;
     }
 
     function _wiTogglePayNow() {
@@ -4500,8 +4560,10 @@
           ? methods.map(m => `<option value="${esc(m.pay_id || m.id)}">${esc(m.pay_name || m.name)}</option>`).join('')
           : '<option value="cash">💵 เงินสด</option><option value="promptpay">📱 PromptPay</option>';
       }
-      if (amt) { amt.dataset.dirty = '0'; amt.oninput = () => { amt.dataset.dirty = '1'; }; }
+      if (amt) { amt.dataset.dirty = '0'; amt.oninput = () => { amt.dataset.dirty = '1'; _wiSyncQR(); }; }
+      if (sel) sel.onchange = _wiSyncQR;          // เปลี่ยนช่องทาง → QR โผล่/หายทันที
       _wiSyncPayAmount(true);
+      _wiSyncQR();
     }
 
     /** ลงเงินให้คิวที่เพิ่งสร้าง — คืน {ok, message} ไม่ throw (คิวสร้างไปแล้ว ห้ามทำ UX พัง) */
@@ -5497,6 +5559,8 @@
             if (_pb) _pb.classList.add('hidden');
             const _pa = document.getElementById('wiPayAmount');
             if (_pa) { _pa.value = ''; _pa.dataset.dirty = '0'; }
+            const _pq = document.getElementById('wiPayQR');
+            if (_pq) { _pq.classList.add('hidden'); }
             // reset B2B dropdown → "— Walk-in ปกติ —"
             const _b2bSelReset = document.getElementById('b2bContractSel');
             if (_b2bSelReset) _b2bSelReset.selectedIndex = 0;
