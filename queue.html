@@ -28,7 +28,7 @@
   *{box-sizing:border-box;margin:0;padding:0}
   :root{
     --bg:#0b1220; --panel:#111c2e; --line:#1e2d45; --txt:#e8eefb; --dim:#8ba0c4;
-    --checkin:#f59e0b; --waiting:#3b82f6; --service:#22c55e; --paid:#22c55e; --unpaid:#f97316;
+    --checkin:#f59e0b; --waiting:#3b82f6; --service:#22c55e; --done:#a78bfa; --paid:#22c55e; --unpaid:#f97316;
   }
   html,body{height:100%}
   body{
@@ -58,12 +58,15 @@
 
   /* ── lanes ── */
   .lanes{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:14px 16px;overflow:hidden}
+  .lanes.n4{grid-template-columns:repeat(4,1fr)}
+  .lane.off{display:none}
   .lane{background:var(--panel);border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
   .lane-head{padding:12px 16px;font-size:clamp(16px,1.5vw,24px);font-weight:800;display:flex;align-items:center;gap:10px;border-bottom:2px solid var(--line)}
   .lane-head .cnt{margin-left:auto;background:rgba(255,255,255,.1);border-radius:999px;padding:2px 14px;font-size:.8em}
   .lane[data-k="checkin"] .lane-head{color:var(--checkin);border-bottom-color:rgba(245,158,11,.35)}
   .lane[data-k="waiting"] .lane-head{color:var(--waiting);border-bottom-color:rgba(59,130,246,.35)}
   .lane[data-k="service"] .lane-head{color:var(--service);border-bottom-color:rgba(34,197,94,.35)}
+  .lane[data-k="done"] .lane-head{color:var(--done);border-bottom-color:rgba(167,139,250,.35)}
   .lane-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
   .lane-body::-webkit-scrollbar{width:8px}
   .lane-body::-webkit-scrollbar-thumb{background:#28405f;border-radius:8px}
@@ -74,6 +77,9 @@
   .lane[data-k="checkin"] .card{border-left-color:var(--checkin)}
   .lane[data-k="waiting"] .card{border-left-color:var(--waiting)}
   .lane[data-k="service"] .card{border-left-color:var(--service)}
+  .lane[data-k="done"] .card{border-left-color:var(--done);background:#1d1b3a}
+  .lane[data-k="done"] .card.flash{animation:flashDone 1.1s ease-in-out 4}
+  @keyframes flashDone{0%,100%{background:#1d1b3a}50%{background:#3b2b63}}
   .card.flash{animation:flash 1.1s ease-in-out 4}
   @keyframes flash{0%,100%{background:#182741}50%{background:#2b4a2f}}
   .row1{display:flex;align-items:baseline;gap:12px}
@@ -120,6 +126,8 @@
   .warn{background:rgba(249,115,22,.13);border:1px solid rgba(249,115,22,.35);color:#ffc08f;border-radius:11px;padding:11px 13px;font-size:13px;margin-top:12px;line-height:1.6}
   #errBar{display:none;background:#7f1d1d;color:#ffd9d9;padding:8px 20px;font-size:14px;flex-shrink:0}
   #errBar.on{display:block}
+  #infoBar{display:none;background:#78350f;color:#ffe4c2;padding:8px 20px;font-size:14px;flex-shrink:0}
+  #infoBar.on{display:block}
   @media (max-width:900px){ .lanes{grid-template-columns:1fr;overflow-y:auto} }
 </style>
 </head>
@@ -138,6 +146,7 @@
   </header>
 
   <div id="errBar"></div>
+  <div id="infoBar"></div>
 
   <div class="lanes">
     <div class="lane" data-k="checkin">
@@ -151,6 +160,10 @@
     <div class="lane" data-k="service">
       <div class="lane-head">🫧 กำลังให้บริการ <span class="cnt" id="c-service">0</span></div>
       <div class="lane-body" id="l-service"></div>
+    </div>
+    <div class="lane" data-k="done" id="lane-done">
+      <div class="lane-head">✅ เสร็จแล้ว รอรับรถ <span class="cnt" id="c-done">0</span></div>
+      <div class="lane-body" id="l-done"></div>
     </div>
   </div>
 </div>
@@ -186,13 +199,18 @@
     <div class="fld"><span>🗣️ พูดเป็นเสียง (ถ้าเครื่องมีเสียงไทย)</span><button class="sw" id="swSpeak"></button></div>
     <div class="fld"><span>เสียงที่ใช้</span><select id="selVoice"></select></div>
     <div class="fld"><span>ความเร็วเสียงพูด</span><input type="number" id="inRate" min="0.5" max="1.5" step="0.1"></div>
+    <div class="fld"><span>🗣️ อ่านเฉพาะภาษาไทย (ตัดอีโมจิ/อังกฤษ)</span><button class="sw" id="swThai"></button></div>
     <div class="fld"><span>คำลงท้าย</span>
       <select id="selPolite"><option value="ครับ">ครับ</option><option value="ค่ะ">ค่ะ</option></select></div>
     <div class="fld"><span>🔒 ปิดทะเบียน 2 ตัวท้าย</span><button class="sw" id="swMask"></button></div>
     <div class="fld"><span>ประกาศตอน "รถจอดรอคิว"</span><button class="sw" id="swAnnWait"></button></div>
     <div class="fld"><span>ประกาศตอน "กำลังให้บริการ"</span><button class="sw" id="swAnnSvc"></button></div>
+    <div class="fld"><span>✅ แสดงเลน "เสร็จแล้ว รอรับรถ"</span><button class="sw" id="swShowDone"></button></div>
+    <div class="fld"><span>ประกาศตอน "ล้างเสร็จ เชิญรับรถ"</span><button class="sw" id="swAnnDone"></button></div>
+    <div class="fld"><span>รถที่เสร็จแล้วค้างบนจอกี่นาที</span><input type="number" id="inPickup" min="1" max="240" step="5"></div>
     <div class="fld"><span>รีเฟรชทุกกี่วินาที</span><input type="number" id="inSec" min="10" max="120" step="5"></div>
     <button class="btn sec" id="btnTest">🔔 ทดสอบเสียงเรียกคิว</button>
+    <button class="btn sec" id="btnTestDone">🚗 ทดสอบเสียงเรียกรับรถ</button>
     <button class="btn" id="btnCfgClose" style="margin-top:9px">ปิด</button>
     <div class="warn">
       ℹ️ จอนี้ <b>ไม่ประกาศออกลำโพงว่าใครยังไม่ชำระเงิน</b> — แสดงเป็นป้ายสีบนการ์ดเท่านั้น
@@ -214,18 +232,23 @@
   var LANES = [
     { key: 'checkin', title: 'รอเช็คอิน',       statuses: ['pending', 'confirmed'] },
     { key: 'waiting', title: 'รถจอดรอคิว',      statuses: ['checked_in'] },
-    { key: 'service', title: 'กำลังให้บริการ',  statuses: ['in_progress'] }
+    { key: 'service', title: 'กำลังให้บริการ',  statuses: ['in_progress'] },
+    // 🆕 D207 เลนที่ 4 — ต้องใช้ endpoint `getQueueBoard` (getAdminData กรอง completed ทิ้ง)
+    { key: 'done',    title: 'เสร็จแล้ว รอรับรถ', statuses: ['completed'] }
   ];
   var STATUS2LANE = {};
   LANES.forEach(function (l) { l.statuses.forEach(function (s) { STATUS2LANE[s] = l.key; }); });
 
-  var CFG_KEY = 'karshine_queue_cfg_v1';
-  var NUM_KEY = 'karshine_queue_num_v1';
+  var CFG_KEY  = 'karshine_queue_cfg_v1';
+  var NUM_KEY  = 'karshine_queue_num_v1';
+  var DONE_KEY = 'karshine_queue_done_v1';   // 🆕 D207: เวลาที่ "เห็นว่าเสร็จ" ครั้งแรก ต่อ booking
 
   var CFG = {
     sound: true, speak: true, voiceURI: '', rate: 0.95,
     polite: 'ครับ',                    // คำลงท้าย — เปลี่ยนได้ในตั้งค่า (ไม่ต้องแก้โค้ด)
-    maskPlate: true, annWaiting: true, annService: true, sec: 20
+    maskPlate: true, annWaiting: true, annService: true, sec: 20,
+    showDone: true, annDone: true, pickupMin: 20,  // 🆕 D207 เลน "เสร็จแล้ว รอรับรถ"
+    thaiOnly: true                                 // 🆕 D207.1 อ่านเฉพาะไทย (ตัดอีโมจิ/อังกฤษ)
   };
   try {
     var raw = localStorage.getItem(CFG_KEY);
@@ -263,6 +286,31 @@
     }
     return NUM.map[bookingId];
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ D207 — เลน "เสร็จแล้ว รอรับรถ"
+  //   ปัญหา: ชีตไม่มีคอลัมน์ "เสร็จเมื่อไหร่" (col S = paidAt ไม่ใช่เวลาเสร็จ)
+  //   ⇒ จอจดเองว่า "เห็นใบนี้เป็น completed ครั้งแรกตอนกี่โมง" แล้วนับถอยหลังจากตรงนั้น
+  //     จอ poll ทุก 20 วิ ⇒ คลาดจากเวลาจริงไม่เกิน 1 รอบ · เก็บลง localStorage จะได้รอดตอนรีเฟรช
+  //   ⚠️ ใบที่จอ "ไม่เคยเห็น" วันนี้ (ไม่มีเลขคิว) จะไม่ขึ้นเลนนี้เลย
+  //      ไม่งั้นเปิดจอตอนบ่ายจะมีรถเช้าทั้งกองโผล่มา + ได้เลขคิวมั่วเพราะเพิ่งจองเลขให้ตอนนั้น
+  // ═══════════════════════════════════════════════════════════
+  var DONE = { day: '', map: {} };
+  try {
+    var rawD = localStorage.getItem(DONE_KEY);
+    if (rawD) { var dd = JSON.parse(rawD); if (dd && dd.day === todayStr()) DONE = dd; }
+  } catch (e) {}
+  function saveDone() { try { localStorage.setItem(DONE_KEY, JSON.stringify(DONE)); } catch (e) {} }
+  /** จองเวลา "เห็นว่าเสร็จ" ครั้งแรก แล้วจำไว้ — คืนค่า timestamp */
+  function markDone(bid) {
+    var t = todayStr();
+    if (DONE.day !== t) { DONE = { day: t, map: {} }; }
+    if (!DONE.map[bid]) { DONE.map[bid] = Date.now(); saveDone(); }
+    return DONE.map[bid];
+  }
+  /** ใบที่ถอยกลับไปสถานะอื่น (แอดมินกดผิดแล้วแก้) ต้องลืมเวลาเดิม ไม่งั้นเสร็จรอบ 2 จะหายทันที */
+  function clearDone(bid) { if (DONE.map[bid]) { delete DONE.map[bid]; saveDone(); } }
+  function pickupMs() { return Math.max(1, Math.min(240, Number(CFG.pickupMin) || 20)) * 60000; }
 
   // ═══════════════════════════════════════════════════════════
   // 🔊 เสียง — กระดิ่ง (WebAudio สร้างเอง ไม่ต้องมีไฟล์) + เสียงพูด
@@ -374,12 +422,52 @@
    */
   function politeWord() { return CFG.polite === 'ค่ะ' ? 'ค่ะ' : 'ครับ'; }
 
+  // ═══════════════════════════════════════════════════════════
+  // 🗣️ D207.1 — ทำความสะอาดข้อความก่อนส่งให้เสียงพูด
+  //   ปัญหาจริงหน้างาน 31/7: ชื่อบริการในชีตมีทั้งอีโมจิและอังกฤษปนกัน เช่น
+  //     "⚡SHINE Express ล้างด่วน7min  + ➕ด่วนล้างอัดฉีดช่วงล่าง Suspension Clean"
+  //   เสียงไทยของ Windows อ่านอีโมจิเป็นชื่อรูป และอ่านอังกฤษเพี้ยน ⇒ ฟังไม่รู้เรื่อง
+  //   ⇒ ตัดทิ้งให้เหลือแต่ **ไทย + ตัวเลข** · ส่วนบนจอยังโชว์ครบเหมือนเดิม (ตาอ่านได้ ไม่ต้องตัด)
+  //   🔑 ทิศทางที่เลือก: "ตัดอังกฤษทิ้ง" ไม่ใช่ "แปลอังกฤษเป็นไทย"
+  //      เพราะชื่อบริการเขียนไทยครบอยู่แล้ว การแปลจะได้ความซ้ำ เช่น "ช่วงล่าง ช่วงล่าง"
+  // ═══════════════════════════════════════════════════════════
+  var SAY_UNITS = [
+    [/(\d+)\s*(?:mins?|minutes?|min\.)/gi, '$1 นาที'],
+    [/(\d+)\s*(?:hrs?|hours?)/gi,           '$1 ชั่วโมง'],
+    [/(\d+)\s*(?:kgs?)/gi,                  '$1 กิโลกรัม'],
+    [/(\d+)\s*(?:ml)/gi,                    '$1 มิลลิลิตร'],
+    [/(\d+)\s*%/g,                          '$1 เปอร์เซ็นต์']
+  ];
+  function sayable(t) {
+    var s = String(t === null || t === undefined ? '' : t);
+    if (!CFG.thaiOnly) return s.replace(/\s+/g, ' ').trim();
+    SAY_UNITS.forEach(function (r) { s = s.replace(r[0], r[1]); });   // แปลงหน่วยก่อนตัดอังกฤษ
+    s = s.replace(/\s*\+\s*/g, ' และ ');                             // หลายบริการในใบเดียว
+    s = s.replace(/[A-Za-z]+/g, ' ');                                 // ตัดคำอังกฤษ
+    s = s.replace(/[^\u0E00-\u0E7F0-9\s]/g, ' ');                     // เหลือแต่ไทย + ตัวเลข (อีโมจิหลุดตรงนี้)
+    s = s.replace(/([\u0E00-\u0E7F])(\d)/g, '$1 $2')                  // เว้นวรรครอบตัวเลข
+         .replace(/(\d)([\u0E00-\u0E7F])/g, '$1 $2');
+    s = s.replace(/\s+/g, ' ').trim();
+    s = s.replace(/(?:และ\s+)+/g, 'และ ');                            // "และ" ซ้อนกันหลังตัดคำ
+    s = s.replace(/^(?:และ\s*)+/, '').replace(/(?:\s*และ)+$/, '').trim();
+    return s;
+  }
+
   function speechFor(laneKey, b) {
     var no = b.qno, P = politeWord();
     if (laneKey === 'waiting') {
       return 'คิวที่ ' + no + ' เชิญจอดรอคิวได้เลย' + P;
     }
-    var t = 'คิวที่ ' + no + ' ใช้บริการ ' + (b.serviceText || 'ล้างรถ') + ' เริ่มให้บริการแล้ว' + P;
+    if (laneKey === 'done') {
+      var d = 'คิวที่ ' + no + ' ล้างเสร็จแล้ว เชิญรับรถ' + P;
+      // 🚨 ยังห้ามพูดว่า "ยังไม่ชำระเงิน" — ใช้ประโยคเชิญเคาน์เตอร์แบบเดียวกับเลนบริการ
+      if (!isPaid(b)) d += ' รบกวนเชิญที่เคาน์เตอร์ด้วย' + P;
+      return d;
+    }
+    // ชื่อบริการที่เป็นอังกฤษล้วนจะเหลือว่างหลังทำความสะอาด ⇒ ตัดวรรค "ใช้บริการ …" ทิ้งไปเลย
+    //   ดีกว่าพูดค้างว่า "ใช้บริการ  เริ่มให้บริการแล้ว"
+    var svc = sayable(b.serviceText);
+    var t = 'คิวที่ ' + no + (svc ? (' ใช้บริการ ' + svc) : '') + ' เริ่มให้บริการแล้ว' + P;
     if (!isPaid(b)) t += ' รบกวนเชิญที่เคาน์เตอร์ด้วย' + P;
     return t;
   }
@@ -416,13 +504,25 @@
     '</div>';
   }
 
+  /** เลน "เสร็จแล้ว" ปิดได้ในตั้งค่า · ปิดแล้วจอกลับเป็น 3 คอลัมน์เต็มความกว้างเหมือนเดิม */
+  function syncLaneVisibility() {
+    var on = !!CFG.showDone;
+    var lane = $('lane-done');
+    if (lane) lane.classList.toggle('off', !on);
+    var wrap = document.querySelector('.lanes');
+    if (wrap) wrap.classList.toggle('n4', on);
+  }
+
   function render(groups) {
+    syncLaneVisibility();
     LANES.forEach(function (l) {
       var list = groups[l.key] || [];
       $('c-' + l.key).textContent = list.length;
       $('l-' + l.key).innerHTML = list.length
         ? list.map(function (b) { return cardHtml(b, l.key); }).join('')
-        : '<div class="empty">— ไม่มีรถในสถานะนี้ —</div>';
+        : '<div class="empty">' + (l.key === 'done' && !doneSupported
+            ? '— เลนนี้ต้อง deploy backend ตัวใหม่ก่อน —'
+            : '— ไม่มีรถในสถานะนี้ —') + '</div>';
     });
   }
 
@@ -432,6 +532,19 @@
   var prevLane = {};          // bookingId → lane key รอบก่อน
   var firstLoad = true;       // 🛡️ รอบแรกหลังเปิดจอ "ห้ามประกาศ" ไม่งั้นจะร้องรัวทั้งกระดาน
   var timer = null;
+
+  // 🆕 D207: endpoint ใหม่ `getQueueBoard` ส่ง completed มาด้วย
+  //   🛡️ ถ้า CEO ยังไม่ได้ deploy backend จะได้ error "ไม่พบคำสั่ง …"
+  //      ⇒ ถอยไปใช้ getAdminData อัตโนมัติ จอ 3 เลนยังทำงานปกติ ไม่ค้างจอเปล่า
+  //      (31/7 เจอเคสลืม deploy มาแล้ว — อาการคือ backend ตอบว่าไม่รู้จัก action)
+  var ACTION = 'getQueueBoard';
+  var doneSupported = true;
+  function setInfo(msg) {
+    var bar = $('infoBar');
+    if (!bar) return;
+    if (msg) { bar.textContent = 'ℹ️ ' + msg; bar.classList.add('on'); }
+    else { bar.classList.remove('on'); }
+  }
 
   function token() { try { return localStorage.getItem('admin_token') || ''; } catch (e) { return ''; } }
 
@@ -447,22 +560,60 @@
       setErr('เครื่องนี้ยังไม่ได้ใส่รหัสแอดมิน — เปิดหน้า admin.html บนเครื่องนี้แล้วใส่รหัสก่อน 1 ครั้ง');
       return;
     }
-    var body = new URLSearchParams({ action: 'getAdminData', adminToken: tk, t: String(Date.now()) });
+    var body = new URLSearchParams({ action: ACTION, adminToken: tk, t: String(Date.now()) });
     fetch(API_URL, { method: 'POST', body: body })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (!res || res.status !== 'success') {
-          setErr((res && res.message) ? res.message : 'โหลดข้อมูลไม่สำเร็จ');
+          var msg = (res && res.message) ? String(res.message) : '';
+          // backend ยังไม่มี action นี้ (ยังไม่ deploy) → ถอยไปตัวเก่าแล้วยิงใหม่ทันที
+          if (ACTION === 'getQueueBoard' && /ไม่พบคำสั่ง|Unknown action/i.test(msg)) {
+            ACTION = 'getAdminData';
+            doneSupported = false;
+            setInfo('ยังไม่ได้ deploy backend ตัวใหม่ — จอทำงานปกติ 3 เลน แต่เลน "เสร็จแล้ว รอรับรถ" จะยังว่าง');
+            load();
+            return;
+          }
+          setErr(msg || 'โหลดข้อมูลไม่สำเร็จ');
           return;
         }
+        if (ACTION === 'getQueueBoard') { doneSupported = true; setInfo(''); }
         setErr('');
         var rows = Array.isArray(res.data) ? res.data : [];
-        var groups = { checkin: [], waiting: [], service: [] };
+        var groups = { checkin: [], waiting: [], service: [], done: [] };
         var seen = {}, newFlash = {};
+
+        function announce(lane, b) {
+          newFlash[b.bookingId] = true;
+          enqueue({
+            no: b.qno,
+            title: lane === 'service' ? 'เชิญเข้ารับบริการ'
+                 : lane === 'done'    ? 'ล้างเสร็จแล้ว เชิญรับรถ'
+                 : 'เชิญจอดรอคิว',
+            service: b.serviceText || '',
+            plate: maskPlate(b.plate),
+            speech: speechFor(lane, b)
+          });
+        }
 
         rows.forEach(function (b) {
           var lane = STATUS2LANE[String(b.status || '').trim()];
           if (!lane) return;                                  // สถานะอื่นไม่ขึ้นจอนี้
+
+          // ── ✅ เลน "เสร็จแล้ว รอรับรถ" มีกติกาของตัวเอง ──
+          if (lane === 'done') {
+            if (!CFG.showDone) return;                        // ปิดเลนนี้ = ไม่แสดง ไม่ประกาศ
+            var known = NUM.map[b.bookingId];
+            if (!known) return;                               // จอไม่เคยเห็นใบนี้วันนี้ → ไม่รู้เลขคิว → ไม่ขึ้น
+            b.qno = known;
+            seen[b.bookingId] = 'done';
+            var firstSeen = markDone(b.bookingId);
+            if (!firstLoad && prevLane[b.bookingId] !== 'done' && CFG.annDone) announce('done', b);
+            if (Date.now() - firstSeen <= pickupMs()) groups.done.push(b);   // เกินเวลา = ปลดออกจากจอเอง
+            return;
+          }
+
+          clearDone(b.bookingId);                             // ถอยกลับมาสถานะอื่น → ลืมเวลาเสร็จเดิม
           b.qno = queueNo(b.bookingId);
           groups[lane].push(b);
           seen[b.bookingId] = lane;
@@ -470,22 +621,14 @@
           var before = prevLane[b.bookingId];
           if (!firstLoad && before !== lane) {
             var wantAnn = (lane === 'waiting' && CFG.annWaiting) || (lane === 'service' && CFG.annService);
-            if (wantAnn) {
-              newFlash[b.bookingId] = true;
-              enqueue({
-                no: b.qno,
-                title: lane === 'service' ? 'เชิญเข้ารับบริการ' : 'เชิญจอดรอคิว',
-                service: b.serviceText || '',
-                plate: maskPlate(b.plate),
-                speech: speechFor(lane, b)
-              });
-            }
+            if (wantAnn) announce(lane, b);
           }
         });
 
         prevLane = seen;
         flashSet = newFlash;
-        groups.checkin.sort(byQno); groups.waiting.sort(byQno); groups.service.sort(byQno);
+        groups.checkin.sort(byQno); groups.waiting.sort(byQno);
+        groups.service.sort(byQno); groups.done.sort(byQno);
         render(groups);
         $('upd').textContent = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         firstLoad = false;
@@ -516,6 +659,10 @@
     paintSwitch($('swMask'), CFG.maskPlate);
     paintSwitch($('swAnnWait'), CFG.annWaiting);
     paintSwitch($('swAnnSvc'), CFG.annService);
+    paintSwitch($('swThai'), CFG.thaiOnly);
+    paintSwitch($('swShowDone'), CFG.showDone);
+    paintSwitch($('swAnnDone'), CFG.annDone);
+    $('inPickup').value = CFG.pickupMin;
     $('inRate').value = CFG.rate;
     $('inSec').value = CFG.sec;
     $('selPolite').value = politeWord();
@@ -530,6 +677,13 @@
   bindSwitch('swMask', 'maskPlate', function () { firstLoad = true; load(); });
   bindSwitch('swAnnWait', 'annWaiting');
   bindSwitch('swAnnSvc', 'annService');
+  bindSwitch('swThai', 'thaiOnly');
+  // เปิดเลนกลับมากลางวัน = ต้องรีเซ็ต firstLoad ไม่งั้นรถที่เสร็จค้างอยู่จะประกาศพรวดทีเดียว
+  bindSwitch('swShowDone', 'showDone', function () { firstLoad = true; syncLaneVisibility(); load(); });
+  bindSwitch('swAnnDone', 'annDone');
+  $('inPickup').addEventListener('change', function () {
+    CFG.pickupMin = Math.max(1, Math.min(240, Number(this.value) || 20)); saveCfg(); this.value = CFG.pickupMin; load();
+  });
   $('inRate').addEventListener('change', function () { CFG.rate = Number(this.value) || 0.95; saveCfg(); });
   $('inSec').addEventListener('change', function () { CFG.sec = Number(this.value) || 20; saveCfg(); restartTimer(); });
   $('selVoice').addEventListener('change', function () { CFG.voiceURI = this.value; saveCfg(); loadVoices(); });
@@ -539,8 +693,15 @@
   $('btnCfgClose').addEventListener('click', function () { $('cfgOv').classList.remove('on'); });
   $('btnTest').addEventListener('click', function () {
     initAudio();
-    enqueue({ no: 99, title: 'ทดสอบเสียง', service: 'ล้างสีดูดฝุ่น', plate: maskPlate('กก1234'),
-              speech: 'คิวที่ 99 ใช้บริการ ล้างสีดูดฝุ่น เริ่มให้บริการแล้ว' + politeWord() });
+    // ใช้ชื่อบริการรกๆ แบบที่อยู่ในชีตจริง เพื่อให้ได้ยินผลของการ "อ่านเฉพาะไทย" ทันที
+    var demo = '⚡SHINE Express ล้างด่วน7min + ➕Suspension Clean ล้างอัดฉีดช่วงล่าง';
+    enqueue({ no: 99, title: 'ทดสอบเสียง', service: demo, plate: maskPlate('กก1234'),
+              speech: speechFor('service', { qno: 99, serviceText: demo, paymentStatus: 'paid' }) });
+  });
+  $('btnTestDone').addEventListener('click', function () {
+    initAudio();
+    enqueue({ no: 99, title: 'ล้างเสร็จแล้ว เชิญรับรถ', service: 'ล้างสีดูดฝุ่น', plate: maskPlate('กก1234'),
+              speech: 'คิวที่ 99 ล้างเสร็จแล้ว เชิญรับรถ' + politeWord() });
   });
   $('btnFs').addEventListener('click', function () {
     try {
@@ -563,9 +724,12 @@
   setInterval(function () { if (NUM.day !== todayStr()) { NUM = { day: todayStr(), map: {}, next: 1 }; firstLoad = true; load(); } }, 60000);
 
   // เปิดให้เทสเรียกได้ (ไม่กระทบการใช้งานจริง)
-  window.__q = { load: load, politeWord: politeWord, LANES: LANES, cfg: CFG, queueNo: queueNo, speechFor: speechFor,
-                 maskPlate: maskPlate, isPaid: isPaid, start: start,
-                 state: function () { return { prevLane: prevLane, firstLoad: firstLoad, annQ: annQ.slice() }; } };
+  syncLaneVisibility();
+  window.__q = { load: load, politeWord: politeWord, sayable: sayable, LANES: LANES, cfg: CFG, queueNo: queueNo, speechFor: speechFor,
+                 maskPlate: maskPlate, isPaid: isPaid, start: start, markDone: markDone,
+                 state: function () { return { prevLane: prevLane, firstLoad: firstLoad, annQ: annQ.slice(),
+                                               action: ACTION, doneSupported: doneSupported,
+                                               num: NUM.map, done: DONE.map }; } };
 })();
 </script>
 </body>
