@@ -440,7 +440,7 @@
             <label class="text-[10px] font-bold text-gray-500 uppercase">เวลา</label>
             <div onclick="openWiSlotModal()" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 bg-gray-50 cursor-pointer text-center active:bg-gray-100 transition">
               <span id="wiTimeDisplay" class="font-bold text-gray-700">- - : - -</span>
-              <span class="text-[9px] text-gray-400 block mt-0.5">กดเพื่อเลือก</span>
+              <span id="wiTimeHint" class="text-[9px] text-gray-400 block mt-0.5">กดเพื่อเลือก</span>
             </div>
             <input type="hidden" id="wiTime">
           </div>
@@ -4471,6 +4471,8 @@
 
       // refresh slot info
       if (typeof updateWiSlotInfo === 'function') updateWiSlotInfo();
+      // ⏱️ D208.6: บริการเปลี่ยน = ระยะเวลา/ช่องล้างเปลี่ยน → หาช่องว่างใหม่ให้
+      if (typeof _wiAutoSlot === 'function') _wiAutoSlot();
     }
 
     // ═══ 💰 D208: รับเงินเลยตอนลงคิว walk-in ═══
@@ -5084,6 +5086,11 @@
     //   - skipMinStart = true (เห็น slot ตอนนี้+ใกล้นี้)
     //   - allowPast    = true (เห็น slot ในอดีต — สำหรับ back-fill)
     async function openWiSlotModal() {
+      // ⏱️ D208.6: พนักงานเลือกเวลาเอง → หยุดเติมอัตโนมัติ (ห้ามทับสิ่งที่คนเลือก)
+      const _tEl0 = document.getElementById('wiTime');
+      if (_tEl0) _tEl0.dataset.manual = '1';
+      const _hint0 = document.getElementById('wiTimeHint');
+      if (_hint0) _hint0.textContent = 'เลือกเอง';
       const date = document.getElementById('wiDate').value;
       const totalT = _wiGetTotalTime();
       const type = document.getElementById('wiLine').value;
@@ -5552,6 +5559,7 @@
             document.getElementById('walkInForm').dataset.vid = '';
             document.getElementById('walkInForm').dataset.uid = '';
             document.getElementById('wiTime').value = '';
+            document.getElementById('wiTime').dataset.manual = '0';
             document.getElementById('wiTimeDisplay').innerText = '- - : - -';
             document.getElementById('wiStatusBadge').classList.add('hidden');
             // 💰 D208: reset ช่องรับเงิน (form.reset() ไม่ซ่อนกล่องให้)
@@ -5576,6 +5584,50 @@
     function initWalkInForm() {
       const dEl = document.getElementById('wiDate');
       if (dEl && !dEl.value) dEl.value = new Date().toISOString().split('T')[0];
+      const tEl = document.getElementById('wiTime');
+      if (tEl) tEl.dataset.manual = '0';       // เปิดหน้าใหม่ = ให้ระบบเติมเวลาให้ได้อีก
+      _wiAutoSlot();
+    }
+
+    // ═══ ⏱️ D208.6: เติมเวลาให้เอง = ช่องว่างเร็วที่สุด (ลดเวลากรอกของพนักงาน) ═══
+    //   ไม่ทับถ้าพนักงานกดเลือกเวลาเองแล้ว (dataset.manual === '1')
+    let _wiSlotSeq = 0;
+    async function _wiAutoSlot(force) {
+      const tEl = document.getElementById('wiTime');
+      const dEl = document.getElementById('wiDate');
+      const disp = document.getElementById('wiTimeDisplay');
+      const hint = document.getElementById('wiTimeHint');
+      if (!tEl || !dEl || !disp) return;
+      if (!force && tEl.dataset.manual === '1') return;
+
+      const seq = ++_wiSlotSeq;                  // กันคำตอบเก่ามาทับคำตอบใหม่
+      if (hint) hint.textContent = 'กำลังหาช่องว่าง...';
+      try {
+        const branchId = window._wiBranchId
+                      || ((configData.branches && configData.branches[0])
+                          ? (configData.branches[0].branch_id || configData.branches[0].id) : 'BR-01');
+        const p = new URLSearchParams({
+          action: 'getNextFreeSlot',
+          branchId: branchId,
+          lineType: (document.getElementById('wiLine') || {}).value || 'LINE1',
+          serviceIds: (document.getElementById('wiService') || {}).value || ''
+        });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(p) }).then(r => r.json());
+        if (seq !== _wiSlotSeq) return;          // มีคำขอใหม่แซงไปแล้ว → ทิ้งอันนี้
+        if (!res || res.status !== 'success' || !res.data || !res.data.hhmm) {
+          if (hint) hint.textContent = 'กดเพื่อเลือก';
+          return;
+        }
+        const d = res.data;
+        if (tEl.dataset.manual === '1' && !force) { if (hint) hint.textContent = 'กดเพื่อเลือก'; return; }
+        dEl.value = String(d.iso || '').split('T')[0] || dEl.value;
+        tEl.value = d.hhmm;
+        disp.textContent = d.hhmm;
+        if (hint) hint.textContent = d.full ? '⚠️ วันนี้เต็ม — กดเลือกเวลาเอง' : '⚡ ช่องว่างเร็วสุด (กดเปลี่ยนได้)';
+        if (typeof updateWiSlotInfo === 'function') updateWiSlotInfo();
+      } catch (e) {
+        if (seq === _wiSlotSeq && hint) hint.textContent = 'กดเพื่อเลือก';
+      }
     }
 
     // 🏢 B2B Phase 2 (5/6/2026 — patch F1): cache + fetch B2B contracts → inject options
