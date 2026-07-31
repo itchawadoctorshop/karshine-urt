@@ -92,6 +92,14 @@
   .tag.paid{background:rgba(34,197,94,.16);color:#5ee08a}
   .tag.unpaid{background:rgba(249,115,22,.18);color:#ffab6b}
   .tag.line{background:rgba(255,255,255,.09);color:#c2d3ec}
+  /* 🚗 D208 ปุ่ม "รับรถแล้ว" — โผล่เฉพาะโหมดพนักงาน · เป้ากดใหญ่ (นิ้วเปียกน้ำ/ใส่ถุงมือ) */
+  .pkbtn{margin-top:11px;width:100%;min-height:52px;border:0;border-radius:11px;cursor:pointer;
+         font-family:inherit;font-size:clamp(14px,1.15vw,18px);font-weight:800;
+         background:rgba(34,197,94,.17);color:#5ee08a;border:1px solid rgba(34,197,94,.42);
+         transition:background .12s,color .12s}
+  .pkbtn:active{transform:scale(.97)}
+  .pkbtn.armed{background:rgba(249,115,22,.9);color:#1a1005;border-color:#ffab6b}
+  .pkbtn[disabled]{opacity:.5;cursor:default}
 
   /* ── overlay ประกาศ ── */
   #callOv{
@@ -208,13 +216,16 @@
     <div class="fld"><span>✅ แสดงเลน "เสร็จแล้ว รอรับรถ"</span><button class="sw" id="swShowDone"></button></div>
     <div class="fld"><span>ประกาศตอน "ล้างเสร็จ เชิญรับรถ"</span><button class="sw" id="swAnnDone"></button></div>
     <div class="fld"><span>รถที่เสร็จแล้วค้างบนจอกี่นาที</span><input type="number" id="inPickup" min="1" max="240" step="5"></div>
+    <div class="fld"><span>👷 โหมดพนักงาน — กดปุ่ม "รับรถแล้ว" ได้</span><button class="sw" id="swStaff"></button></div>
     <div class="fld"><span>รีเฟรชทุกกี่วินาที</span><input type="number" id="inSec" min="10" max="120" step="5"></div>
     <button class="btn sec" id="btnTest">🔔 ทดสอบเสียงเรียกคิว</button>
     <button class="btn sec" id="btnTestDone">🚗 ทดสอบเสียงเรียกรับรถ</button>
     <button class="btn" id="btnCfgClose" style="margin-top:9px">ปิด</button>
     <div class="warn">
       ℹ️ จอนี้ <b>ไม่ประกาศออกลำโพงว่าใครยังไม่ชำระเงิน</b> — แสดงเป็นป้ายสีบนการ์ดเท่านั้น
-      เสียงพูดจะเป็นประโยคเชิญชวนสุภาพ
+      เสียงพูดจะเป็นประโยคเชิญชวนสุภาพ<br><br>
+      👷 <b>โหมดพนักงาน</b> ให้เปิดเฉพาะเครื่องที่พนักงานถือ (มือถือ/แท็บเล็ต)
+      <b>อย่าเปิดบนจอทีวีหน้าร้าน</b> — ลูกค้าเดินมากดเองได้
     </div>
   </div>
 </div>
@@ -248,7 +259,8 @@
     polite: 'ครับ',                    // คำลงท้าย — เปลี่ยนได้ในตั้งค่า (ไม่ต้องแก้โค้ด)
     maskPlate: true, annWaiting: true, annService: true, sec: 20,
     showDone: true, annDone: true, pickupMin: 20,  // 🆕 D207 เลน "เสร็จแล้ว รอรับรถ"
-    thaiOnly: true                                 // 🆕 D207.1 อ่านเฉพาะไทย (ตัดอีโมจิ/อังกฤษ)
+    thaiOnly: true,                                // 🆕 D207.1 อ่านเฉพาะไทย (ตัดอีโมจิ/อังกฤษ)
+    staffMode: false                               // 🆕 D208 โหมดพนักงาน — ปิดไว้เป็นค่าเริ่มต้น (จอทีวีหน้าร้านห้ามกดได้)
   };
   try {
     var raw = localStorage.getItem(CFG_KEY);
@@ -489,6 +501,17 @@
   }
 
   var flashSet = {};
+  // 🚗 D208: ปุ่ม "รับรถแล้ว" — กด 2 จังหวะ (กันชนแขนโดนจอ) ไม่ใช้ confirm() เพราะบล็อกทั้งหน้า
+  var PK_ARM_MS = 4000;
+  var pkArmed = {};        // bookingId → timeout id
+  /** โชว์ปุ่มเฉพาะ: เลนเสร็จแล้ว + เปิดโหมดพนักงาน + backend รองรับ */
+  function pkButtonHtml(b, laneKey) {
+    if (laneKey !== 'done' || !CFG.staffMode || !pickupSupported) return '';
+    var armed = !!pkArmed[b.bookingId];
+    return '<button class="pkbtn' + (armed ? ' armed' : '') + '" data-pk="' + esc(b.bookingId) + '">' +
+             (armed ? 'แน่ใจ? กดอีกครั้ง' : '🚗 รับรถแล้ว') + '</button>';
+  }
+
   function cardHtml(b, laneKey) {
     var paid = isPaid(b);
     return '<div class="card' + (flashSet[b.bookingId] ? ' flash' : '') + '" data-bid="' + esc(b.bookingId) + '">' +
@@ -502,6 +525,7 @@
         '<span class="tag ' + (paid ? 'paid">🟢 ชำระแล้ว' : 'unpaid">🟠 ยังไม่ชำระ') + '</span>' +
         '<span class="tag line">' + esc(b.lineType || '') + '</span>' +
       '</div>' +
+      pkButtonHtml(b, laneKey) +
     '</div>';
   }
 
@@ -540,6 +564,7 @@
   //      (31/7 เจอเคสลืม deploy มาแล้ว — อาการคือ backend ตอบว่าไม่รู้จัก action)
   var ACTION = 'getQueueBoard';
   var doneSupported = true;
+  var pickupSupported = false;    // 🚗 D208 — backend บอกมาว่ารองรับปุ่ม "รับรถแล้ว" ไหม
   function setInfo(msg) {
     var bar = $('infoBar');
     if (!bar) return;
@@ -579,6 +604,7 @@
           return;
         }
         if (ACTION === 'getQueueBoard') { doneSupported = true; setInfo(''); }
+        pickupSupported = (ACTION === 'getQueueBoard') && (res.pickupSupported === true);
         setErr('');
         var rows = Array.isArray(res.data) ? res.data : [];
         var groups = { checkin: [], waiting: [], service: [], done: [] };
@@ -653,6 +679,58 @@
   }
   tick(); setInterval(tick, 15000);
 
+  // ═══════════════════════════════════════════════════════════
+  // 🚗 D208 — กด "รับรถแล้ว"
+  //   กด 2 จังหวะ: ครั้งแรก = ติดอาวุธ 4 วิ · ครั้งที่สอง = ส่งจริง
+  //   ไม่ใช้ confirm() เพราะ dialog บล็อกทั้งหน้า (จอต้องรีเฟรชเองตลอด)
+  // ═══════════════════════════════════════════════════════════
+  function pkDisarm(bid) {
+    if (pkArmed[bid]) { clearTimeout(pkArmed[bid]); delete pkArmed[bid]; }
+  }
+  function pkPaint(bid) {
+    var btn = document.querySelector('.pkbtn[data-pk="' + (window.CSS && CSS.escape ? CSS.escape(bid) : bid) + '"]');
+    if (!btn) return;
+    var armed = !!pkArmed[bid];
+    btn.classList.toggle('armed', armed);
+    btn.textContent = armed ? 'แน่ใจ? กดอีกครั้ง' : '🚗 รับรถแล้ว';
+  }
+  function pkSend(bid, btn) {
+    var tk = token();
+    if (!tk) { setErr('เครื่องนี้ยังไม่ได้ใส่รหัสแอดมิน'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; btn.classList.remove('armed'); }
+    var body = new URLSearchParams({ action: 'markCarPickedUp', adminToken: tk, bookingId: bid, by: 'queue-board' });
+    fetch(API_URL, { method: 'POST', body: body })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res && res.status === 'success') {
+          setErr('');
+          clearDone(bid);                       // ลืมเวลา "เห็นว่าเสร็จ" ในเครื่อง จะได้ไม่ค้าง
+          var card = document.querySelector('.card[data-bid="' + (window.CSS && CSS.escape ? CSS.escape(bid) : bid) + '"]');
+          if (card && card.parentNode) card.parentNode.removeChild(card);   // เอาออกทันที ไม่ต้องรอรอบถัดไป
+          load();
+        } else {
+          setErr((res && res.message) || 'บันทึกรับรถไม่สำเร็จ');
+          if (btn) { btn.disabled = false; }
+          pkPaint(bid);
+        }
+      })
+      .catch(function (e) {
+        setErr('บันทึกรับรถไม่สำเร็จ: ' + e.message);
+        if (btn) { btn.disabled = false; }
+        pkPaint(bid);
+      });
+  }
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('.pkbtn') : null;
+    if (!btn || btn.disabled) return;
+    ev.preventDefault();
+    var bid = btn.getAttribute('data-pk');
+    if (!bid) return;
+    if (pkArmed[bid]) { pkDisarm(bid); pkSend(bid, btn); return; }
+    pkArmed[bid] = setTimeout(function () { pkDisarm(bid); pkPaint(bid); }, PK_ARM_MS);
+    pkPaint(bid);
+  });
+
   function paintSwitch(el, on) { el.classList.toggle('on', !!on); }
   function syncCfgUi() {
     paintSwitch($('swVoice'), CFG.sound);
@@ -663,6 +741,7 @@
     paintSwitch($('swThai'), CFG.thaiOnly);
     paintSwitch($('swShowDone'), CFG.showDone);
     paintSwitch($('swAnnDone'), CFG.annDone);
+    paintSwitch($('swStaff'), CFG.staffMode);
     $('inPickup').value = CFG.pickupMin;
     $('inRate').value = CFG.rate;
     $('inSec').value = CFG.sec;
@@ -682,6 +761,8 @@
   // เปิดเลนกลับมากลางวัน = ต้องรีเซ็ต firstLoad ไม่งั้นรถที่เสร็จค้างอยู่จะประกาศพรวดทีเดียว
   bindSwitch('swShowDone', 'showDone', function () { firstLoad = true; syncLaneVisibility(); load(); });
   bindSwitch('swAnnDone', 'annDone');
+  // เปิด/ปิดโหมดพนักงาน = วาดการ์ดใหม่ให้ปุ่มโผล่/หายทันที (ไม่ต้องรอรอบรีเฟรช)
+  bindSwitch('swStaff', 'staffMode', function () { load(); });
   $('inPickup').addEventListener('change', function () {
     CFG.pickupMin = Math.max(1, Math.min(240, Number(this.value) || 20)); saveCfg(); this.value = CFG.pickupMin; load();
   });
