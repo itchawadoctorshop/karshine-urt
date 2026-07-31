@@ -195,7 +195,7 @@
     </div>
 
     <!-- 📊 F0.4 Mini Dashboard — สรุปยอดในช่วงเวลาที่เลือก -->
-    <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+    <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">📋 คิววันนี้</p>
         <p class="text-2xl font-bold text-gray-800 mt-1"><span id="dsQueueToday">-</span></p>
@@ -216,6 +216,18 @@
         <p class="text-2xl font-bold text-sky-600 mt-1"><span id="dsPosRevenue">-</span><span class="text-sm text-gray-400">.-</span></p>
         <p class="text-[10px] text-gray-500 mt-1"><span id="dsPosBills">-</span> บิล · <span id="dsPosItems">-</span> ชิ้น</p>
         <p class="text-[10px] text-gray-400 mt-1">กำไรขั้นต้น <span id="dsPosProfit" class="font-bold text-emerald-600">-</span>.- · ต่อบิล <span id="dsPosAvg">-</span>.-</p>
+      </div>
+      <!-- ⚖️ D205: ติดหนี้งานล้าง — ขายสิทธิ์ล่วงหน้าไปแล้ว ต้องล้างคืนกี่วัน -->
+      <!--    ตัวเลขนี้ไม่ใช่เงิน เป็น "จำนวนครั้งที่ค้างล้าง ÷ กำลังล้างจริงต่อวัน" -->
+      <div id="dsLiabCard" class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <p class="text-[10px] text-gray-400 font-bold uppercase">⚖️ ติดหนี้งานล้าง</p>
+        <p class="text-2xl font-bold mt-1">
+          <span id="dsLiabIcon"></span>
+          <span id="dsLiabDays" class="text-gray-800">-</span>
+          <span class="text-sm text-gray-400 font-normal">วัน</span>
+        </p>
+        <p class="text-[10px] text-gray-500 mt-1">สิทธิ์คงค้าง <span id="dsLiabRemaining" class="font-bold">-</span> ครั้ง · <span id="dsLiabOwners">-</span> คน</p>
+        <p class="text-[10px] text-gray-400 mt-1" id="dsLiabNote">ล้างเฉลี่ย <span id="dsLiabPerDay">-</span> ครั้ง/วัน (30 วัน)</p>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <p class="text-[10px] text-gray-400 font-bold uppercase">⏳ ค้างจ่าย + 📦 หักแพ็กเกจ</p>
@@ -2602,7 +2614,52 @@
       if (modal) modal.classList.add('hidden');
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ⚖️ D205 — ติดหนี้งานล้าง (package liability)
+    //   backend: getPackageLiability (Karshine_Package_Liability.js) · cache ฝั่ง server 30 นาที
+    //   🚨 ตัวเลขนี้ "ไม่ใช่เงิน" — เป็นจำนวนครั้งที่ขายสิทธิ์ไปแล้วยังไม่ได้ล้างคืน
+    //   ยิงแยกจาก getDashboardSummary เพื่อให้แดชบอร์ดไม่ช้าลง/ไม่พังตามกันถ้าอันนี้ล้ม
+    // ═══════════════════════════════════════════════════════════════
+    async function loadPackageLiability() {
+      const card = document.getElementById('dsLiabCard');
+      if (!card) return;
+      const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: withAuth(new URLSearchParams({ action: 'getPackageLiability', t: Date.now() }))
+        }).then(r => r.json());
+        if (!res || res.status !== 'success' || !res.data) {
+          setText('dsLiabDays', '-');
+          setText('dsLiabNote', 'โหลดไม่สำเร็จ');
+          return;
+        }
+        const d = res.data;
+        // debtDays = null แปลว่า 30 วันที่ผ่านมาไม่มีงานล้างเลย (หารไม่ได้) — ห้ามโชว์ 0 หรือ Infinity
+        setText('dsLiabDays', (d.debtDays === null || d.debtDays === undefined) ? '—' : d.debtDays);
+        setText('dsLiabIcon', d.levelIcon || '');
+        setText('dsLiabRemaining', (d.liability || 0).toLocaleString());
+        setText('dsLiabOwners', (d.ownerCount || 0).toLocaleString());
+        setText('dsLiabPerDay', d.washPerDay);
+        const note = document.getElementById('dsLiabNote');
+        if (note) {
+          note.innerHTML = (d.debtDays === null || d.debtDays === undefined)
+            ? '⚪ 30 วันที่ผ่านมาไม่มีงานล้าง — คำนวณไม่ได้'
+            : 'ล้างเฉลี่ย <span id="dsLiabPerDay">' + d.washPerDay + '</span> ครั้ง/วัน (' + (d.windowDays || 30) + ' วัน) · ' + esc(d.levelLabel || '');
+        }
+        const border = d.level === 'red' ? 'border-red-300' : (d.level === 'amber' ? 'border-amber-300' : 'border-gray-100');
+        card.className = 'bg-white rounded-2xl p-4 shadow-sm border ' + border;
+        const days = document.getElementById('dsLiabDays');
+        if (days) days.className = d.level === 'red' ? 'text-red-600' : (d.level === 'amber' ? 'text-amber-600' : 'text-gray-800');
+      } catch (e) {
+        setText('dsLiabDays', '-');
+        setText('dsLiabNote', 'โหลดไม่สำเร็จ');
+      }
+    }
+
     async function loadDashboardSummary() {
+      // ไม่ await — ไม่ให้การ์ดนี้ถ่วงแดชบอร์ดที่เหลือ
+      try { loadPackageLiability(); } catch (e) {}
       try {
         // 🆕 SPEC V.2: ส่ง startDate/endDate ตาม _currentRange (fallback = today ถ้ายังไม่ init)
         const sd = (_currentRange && _currentRange.startDate) ? _currentRange.startDate : '';
