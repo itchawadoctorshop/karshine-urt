@@ -459,6 +459,28 @@
         <!-- 🆕 Smart status badge — แสดงตามเวลาที่เลือก -->
         <div id="wiStatusBadge" class="hidden p-3 rounded-xl text-xs border"></div>
 
+        <!-- 💰 D208: รับเงินเลยตอนลงคิว — ใช้ตอนไม่มีคนรับรถ คีย์ครั้งเดียวจบ -->
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="wiPayNow" onchange="_wiTogglePayNow()" class="w-5 h-5 accent-amber-600">
+            <span class="text-sm font-bold text-amber-800">💰 รับเงินเลย</span>
+            <span class="text-[10px] text-amber-600 font-normal">(ไม่ต้องไปกดจ่ายที่การ์ดอีกรอบ)</span>
+          </label>
+          <div id="wiPayBox" class="hidden mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">ช่องทางรับเงิน</label>
+              <select id="wiPayMethod" class="w-full p-2 border border-amber-300 rounded-lg text-sm mt-1 bg-white"></select>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-gray-500 uppercase">จำนวนเงิน</label>
+              <input type="number" id="wiPayAmount" min="0" step="1" inputmode="numeric" class="w-full p-2 border border-amber-300 rounded-lg text-sm mt-1 font-bold" placeholder="0">
+            </div>
+            <p class="col-span-2 text-[10px] text-amber-700 leading-relaxed">
+              เติมยอดจาก "ราคารวม" ให้อัตโนมัติ แก้ได้ · <b>ใช้แพ็กเกจ / ส่วนลด / จ่ายบางส่วน</b> ให้กดจ่ายที่การ์ดในกระดานเหมือนเดิม
+            </p>
+          </div>
+        </div>
+
         <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition mt-4 text-lg"><i class="fa-solid fa-plus-circle mr-1"></i> ยืนยันสร้างคิว Walk-in</button>
       </form>
 
@@ -4433,11 +4455,75 @@
       const lEl = document.getElementById('wiAutoLine');
       if (sumWrap) sumWrap.classList.toggle('hidden', ids.length === 0);
       if (tEl) tEl.textContent = totalTime + ' นาที';
-      if (pEl) pEl.textContent = totalPrice.toLocaleString() + '.-';
+      if (pEl) { pEl.textContent = totalPrice.toLocaleString() + '.-'; pEl.dataset.total = String(totalPrice); }
+      // 💰 D208: ถ้าเปิดช่องรับเงินไว้อยู่ ให้ยอดตามบริการที่เลือกล่าสุด (เว้นแต่พนักงานพิมพ์ทับเอง)
+      try { if (typeof _wiSyncPayAmount === 'function') _wiSyncPayAmount(false); } catch (e) {}
       if (lEl) lEl.textContent = lineLabel;
 
       // refresh slot info
       if (typeof updateWiSlotInfo === 'function') updateWiSlotInfo();
+    }
+
+    // ═══ 💰 D208: รับเงินเลยตอนลงคิว walk-in ═══
+    //   ใช้ endpoint เดิมทั้งคู่: submitWalkIn (สร้างคิว) → recordPayment (ลงเงิน)
+    //   ไม่แตะ backend เลย ⇒ rollback = revert commit เดียว
+    function _wiPayTotal() {
+      const pEl = document.getElementById('wiTotalPrice');
+      const v = pEl && pEl.dataset ? Number(pEl.dataset.total) : 0;
+      return (isFinite(v) && v > 0) ? v : 0;
+    }
+
+    /** เติมยอดให้ช่องรับเงิน · force=true = ทับค่าที่พิมพ์ไว้ */
+    function _wiSyncPayAmount(force) {
+      const box = document.getElementById('wiPayBox');
+      const amt = document.getElementById('wiPayAmount');
+      if (!box || !amt || box.classList.contains('hidden')) return;
+      // ไม่ทับถ้าพนักงานพิมพ์เองแล้ว (dirty) — เว้นแต่สั่ง force
+      if (!force && amt.dataset.dirty === '1') return;
+      amt.value = _wiPayTotal() || '';
+      amt.dataset.dirty = '0';
+    }
+
+    function _wiTogglePayNow() {
+      const on  = document.getElementById('wiPayNow').checked;
+      const box = document.getElementById('wiPayBox');
+      const sel = document.getElementById('wiPayMethod');
+      const amt = document.getElementById('wiPayAmount');
+      if (!box) return;
+      box.classList.toggle('hidden', !on);
+      if (!on) return;
+
+      // เติมรายชื่อช่องทางรับเงินจาก config (แพทเทิร์นเดียวกับ Backfill modal)
+      if (sel && !sel.options.length) {
+        const methods = (typeof configData !== 'undefined' && configData && configData.payments) || [];
+        sel.innerHTML = methods.length
+          ? methods.map(m => `<option value="${esc(m.pay_id || m.id)}">${esc(m.pay_name || m.name)}</option>`).join('')
+          : '<option value="cash">💵 เงินสด</option><option value="promptpay">📱 PromptPay</option>';
+      }
+      if (amt) { amt.dataset.dirty = '0'; amt.oninput = () => { amt.dataset.dirty = '1'; }; }
+      _wiSyncPayAmount(true);
+    }
+
+    /** ลงเงินให้คิวที่เพิ่งสร้าง — คืน {ok, message} ไม่ throw (คิวสร้างไปแล้ว ห้ามทำ UX พัง) */
+    async function _wiRecordPaymentAfterSubmit(bookingId, method, amount) {
+      try {
+        const p = new URLSearchParams({
+          action: 'recordPayment',
+          bookingId: bookingId,
+          method: method,
+          amount: String(amount),
+          status: 'paid',
+          discountAmount: '0',
+          discountReason: ''
+        });
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(p) });
+        const j = await r.json();
+        return (j && j.status === 'success')
+          ? { ok: true }
+          : { ok: false, message: (j && j.message) || 'บันทึกเงินไม่สำเร็จ' };
+      } catch (err) {
+        return { ok: false, message: err.message || 'เชื่อมต่อไม่ได้' };
+      }
     }
 
     // 🆕 F2.5f: kept-for-compat (เผื่อมี code อื่นเรียก setWiLine) — เป็น no-op
@@ -5327,6 +5413,16 @@
         if (!confirmRes.isConfirmed) return;
       }
 
+      // 💰 D208: ถ้าติ๊ก "รับเงินเลย" ต้องมีช่องทาง + ยอด > 0 ก่อนถึงจะสร้างคิว
+      const _payNow = !!(document.getElementById('wiPayNow') || {}).checked;
+      let _payMethod = '', _payAmount = 0;
+      if (_payNow) {
+        _payMethod = (document.getElementById('wiPayMethod') || {}).value || '';
+        _payAmount = Number((document.getElementById('wiPayAmount') || {}).value) || 0;
+        if (!_payMethod) return Swal.fire('แจ้งเตือน', 'เลือกช่องทางรับเงินก่อนครับ', 'warning');
+        if (!(_payAmount > 0)) return Swal.fire('แจ้งเตือน', 'ใส่จำนวนเงินที่รับมาก่อนครับ (ถ้ายังไม่เก็บเงิน ให้เอาติ๊ก "รับเงินเลย" ออก)', 'warning');
+      }
+
       const bookingDateTime = date + 'T' + time;
       const status = (document.getElementById('wiStatusBadge').dataset.status) || '';
 
@@ -5372,13 +5468,35 @@
             }
           } catch (e) { console.warn('[B2B] post-submit hook err:', e); }
 
-          Swal.fire('สำเร็จ!', `สร้างคิว Walk-in เรียบร้อย — สถานะ: ${result.finalStatus}`, 'success').then(() => {
+          // 💰 D208: ลงเงินต่อทันที (คิวสร้างแล้ว — ถ้าขั้นนี้พัง ต้องบอกให้ชัดว่าไปกดจ่ายที่การ์ด)
+          let _payMsg = '';
+          if (_payNow) {
+            const _bid = result.bookingId || '';
+            if (!_bid) {
+              _payMsg = '<br><br><b class="text-red-600">⚠️ ยังไม่ได้ลงเงิน</b> — ระบบไม่ได้ส่งเลขคิวกลับมา<br>กดจ่ายที่การ์ดในกระดานแทนครับ';
+            } else {
+              Swal.update({ title: 'กำลังบันทึกเงิน...' });
+              const _pr = await _wiRecordPaymentAfterSubmit(_bid, _payMethod, _payAmount);
+              _payMsg = _pr.ok
+                ? `<br><br>💰 รับเงินแล้ว <b>${_payAmount.toLocaleString()}.-</b>`
+                : `<br><br><b class="text-red-600">⚠️ คิวสร้างแล้ว แต่ลงเงินไม่สำเร็จ</b><br>${esc(_pr.message || '')}<br>กดจ่ายที่การ์ด <b>${esc(_bid)}</b> ในกระดานแทนครับ`;
+            }
+          }
+
+          Swal.fire({ icon: 'success', title: 'สำเร็จ!',
+            html: `สร้างคิว Walk-in เรียบร้อย — สถานะ: ${esc(String(result.finalStatus || ''))}` + _payMsg
+          }).then(() => {
             document.getElementById('walkInForm').reset();
             document.getElementById('walkInForm').dataset.vid = '';
             document.getElementById('walkInForm').dataset.uid = '';
             document.getElementById('wiTime').value = '';
             document.getElementById('wiTimeDisplay').innerText = '- - : - -';
             document.getElementById('wiStatusBadge').classList.add('hidden');
+            // 💰 D208: reset ช่องรับเงิน (form.reset() ไม่ซ่อนกล่องให้)
+            const _pb = document.getElementById('wiPayBox');
+            if (_pb) _pb.classList.add('hidden');
+            const _pa = document.getElementById('wiPayAmount');
+            if (_pa) { _pa.value = ''; _pa.dataset.dirty = '0'; }
             // reset B2B dropdown → "— Walk-in ปกติ —"
             const _b2bSelReset = document.getElementById('b2bContractSel');
             if (_b2bSelReset) _b2bSelReset.selectedIndex = 0;
