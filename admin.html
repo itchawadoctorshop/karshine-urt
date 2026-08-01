@@ -89,7 +89,7 @@
       <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-3 shadow-sm">
         <div class="flex items-center justify-between mb-2">
           <div class="font-bold text-amber-900 text-sm">
-            🔎 คิวที่ลูกค้าสแกนเอง — ยัง<u>ไม่มีใครยืนยันบริการ</u>
+            💰 คิววันนี้ที่<u>เงินไม่ตรงกับบริการที่บันทึก</u>
             <span id="unfixedSvcCount" class="bg-amber-600 text-white px-2 py-0.5 rounded-full text-[11px] ml-1">0</span>
             <span id="unfixedSvcName" class="text-[11px] font-normal text-amber-700 ml-1"></span>
           </div>
@@ -5527,12 +5527,16 @@
     //   🟡 เหลือง = ยังรอคิว → ยังทัน
     //   พังเมื่อไหร่ = แค่ไม่โชว์แถบ ห้ามทำให้กระดานล่ม
     // ══════════════════════════════════════════════════════════
-    window.unfixedSvcCache = { late: [], early: [] };
+    // 💰 D209 (แก้รอบ 2 ตามที่ CEO บอก 1/8 สามทุ่ม)
+    //   เกณฑ์เดิม "ยังเป็นบริการเริ่มต้น" ติดธง 16 ใบ แต่พลาดจริงแค่ 2-3
+    //   เพราะล้างด่วนคือบริการหลักของร้านจริงๆ ⇒ เกณฑ์เดิมเดา "เจตนา" ซึ่งเดาไม่ได้
+    //   เกณฑ์ใหม่ใช้หลักฐานที่เถียงไม่ได้: **เงินที่เก็บได้ ≠ ราคาบริการที่บันทึก**
+    window.unfixedSvcCache = { over: [], under: [] };
     async function loadUnfixedServices() {
       const bar = document.getElementById('unfixedSvcBar');
       if (!bar) return;
       try {
-        const payload = new URLSearchParams({ action: 'getUnfixedServiceQueues', t: Date.now() });
+        const payload = new URLSearchParams({ action: 'getPriceMismatchQueues', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
         const result = await res.json();
         if (result.status !== 'success' || !result.data) { bar.classList.add('hidden'); return; }
@@ -5551,36 +5555,38 @@
       const nm    = document.getElementById('unfixedSvcName');
       if (!bar || !chips || !cnt) return;
 
-      const late  = (d && d.late)  || [];
-      const early = (d && d.early) || [];
-      const total = late.length + early.length;
+      const over  = (d && d.over)  || [];   // เก็บเงินมากกว่าราคาที่บันทึก = บริการที่ลงไม่ครบ
+      const under = (d && d.under) || [];   // เก็บน้อยกว่า = ลดราคาโดยไม่บันทึก
+      const total = over.length + under.length;
       if (!total) { bar.classList.add('hidden'); chips.innerHTML = ''; return; }
 
       bar.classList.remove('hidden');
       cnt.textContent = total;
-      // 🚦 D209 (แก้เย็น 1/8): บอกบริบทให้พนักงานตัดสินเองได้ ไม่ใช่ฟันธงว่าผิด
-      //   ถ้าวันนี้พนักงาน "ติ๊กบริการนี้เอง" หลายคิว = บริการนี้ขายจริง
-      //   ⇒ คิวสแกนที่เป็นบริการนี้ก็น่าจะถูกอยู่แล้ว ไม่ต้องตกใจ
       if (nm) {
-        let t = d.defaultServiceName ? ('ยังเป็น "' + d.defaultServiceName + '"') : '';
-        if (d.chosenByStaff > 0) t += ' · วันนี้พนักงานเลือกบริการนี้เอง ' + d.chosenByStaff + ' คิว';
+        let t = 'ตรวจแล้ว ' + (d.checked || 0) + ' คิว';
+        if (d.unpaid)  t += ' · ยังไม่จ่าย ' + d.unpaid;
+        if (d.skipped) t += ' · เทียบไม่ได้ ' + d.skipped;
         nm.textContent = t;
       }
 
       const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-      const chip = (x, urgent) => {
-        const cls = urgent
+      const chip = (x, isOver) => {
+        const cls = isOver
           ? 'bg-red-600 text-white border-red-700'
-          : 'bg-white text-amber-900 border-amber-400';
-        const tip = urgent
-          ? 'ลูกค้าสแกนเอง ระบบใส่บริการเริ่มต้นให้ · ตอนนี้ล้างไปแล้ว — เช็คว่าบริการตรงกับที่ทำจริงไหม'
-          : 'ลูกค้าสแกนเอง ยังรอคิว — ยืนยันบริการได้ทัน';
+          : 'bg-white text-orange-800 border-orange-400';
+        const sign = x.diff > 0 ? '+' : '';
+        const tip = (isOver
+          ? 'เก็บเงินได้มากกว่าราคาบริการที่บันทึก — แปลว่าบริการที่ลงไว้ยังไม่ครบ'
+          : 'เก็บเงินได้น้อยกว่าราคาบริการ — อาจลดราคาโดยไม่ได้บันทึกส่วนลด')
+          + '\nบันทึกไว้: ' + x.serviceText + ' (' + x.size + ') = ' + x.expected + '฿'
+          + '\nเก็บจริง: ' + x.paid + '฿';
         return '<button type="button" title="' + esc(tip) + '" onclick="openEditServiceFor(\'' + esc(x.bookingId) + '\')" ' +
                'class="px-2.5 py-1 rounded-full border text-[12px] font-semibold hover:opacity-80 ' + cls + '">' +
-               (urgent ? '🔴 ' : '🟡 ') + esc(x.time) + ' · ' + esc(x.plate) + '</button>';
+               (isOver ? '🔴 ' : '🟠 ') + esc(x.time) + ' · ' + esc(x.plate) +
+               ' <span class="opacity-90">(' + sign + x.diff + '฿)</span></button>';
       };
-      chips.innerHTML = late.map(x => chip(x, true)).join('') + early.map(x => chip(x, false)).join('');
+      chips.innerHTML = over.map(x => chip(x, true)).join('') + under.map(x => chip(x, false)).join('');
     }
 
     // กดชิป → เปิดการ์ดคิวนั้นให้แก้บริการ (ใช้ทางเดิมของหน้า ไม่สร้างทางใหม่)
