@@ -82,6 +82,25 @@
     <!-- 💰 C4 v1.2 D136 (7/6/2026): + Lane 0 "รอชำระ" → 6 lanes total -->
     <!-- 📤 v1.3 Fix #3 (9/6/2026): + Lane 0.5 "รอ Verify" → 7 lanes total -->
 
+    <!-- 🔎 D209: คิววันนี้ที่ยังถือ "บริการเริ่มต้น" อยู่ = พนักงานยังไม่ได้กดแก้บริการ
+         ทำไมต้องเตือน: flow สแกน = ได้คิวทันทีโดยใส่บริการเริ่มต้นให้ก่อน
+         ถ้าลืมแก้ → เก็บเงินขาด + AOV ของร้านเพี้ยน -->
+    <div id="unfixedSvcBar" class="hidden mb-4">
+      <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-3 shadow-sm">
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-bold text-amber-900 text-sm">
+            🔎 คิววันนี้ที่ยัง<u>ไม่ได้แก้บริการ</u>
+            <span id="unfixedSvcCount" class="bg-amber-600 text-white px-2 py-0.5 rounded-full text-[11px] ml-1">0</span>
+            <span id="unfixedSvcName" class="text-[11px] font-normal text-amber-700 ml-1"></span>
+          </div>
+          <button type="button" onclick="loadUnfixedServices()" class="text-[11px] text-amber-800 hover:underline">
+            <i class="fa-solid fa-arrows-rotate"></i> รีเฟรช
+          </button>
+        </div>
+        <div id="unfixedSvcChips" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+
     <!-- 🙋 Walk-in LINE Capture v1.0 (D190 — 26/7/2026): ถาดลูกค้าที่สแกนแล้วระบบจับคู่อัตโนมัติไม่ได้
          ⚠️ PRESERVE: ห้ามลบ — เป็นทางเดียวที่พนักงานเชื่อมลูกค้าเข้าคิวเมื่อพิมพ์ทะเบียนไม่ตรง -->
     <div id="walkinPendingBar" class="hidden mb-4">
@@ -1486,6 +1505,146 @@
       payload.append('adminToken', getAdminToken());
       return payload;
     }
+
+    // ══════════════════════════════════════════════════════════════════
+    // ⚡ D209 — ชั้นกันสะดุด (Karshine Net Layer)
+    //   ทำไมต้องมี: หน้านี้ยิง fetch ดิบ 70+ จุด ไม่มี timeout ไม่มี retry
+    //   ไม่ตรวจว่าคำตอบเป็น JSON จริงไหม ⇒ พอ Apps Script คืนหน้า HTML แจ้ง error
+    //   (โควตาเต็ม / รันนานเกิน / เน็ตกระตุก) จะเด้งเป็น
+    //     · "Failed to fetch"
+    //     · "Unexpected token '<' ... is not valid JSON"
+    //   ซึ่งคือ 2 ข้อความที่ CEO เจอหน้าร้านวันที่ 1/8
+    //
+    //   ชั้นนี้ห่อ fetch เฉพาะที่ยิงไป API_URL (ที่อื่นไม่แตะ) แล้วเพิ่ม
+    //     ① timeout 25 วิ — ไม่ปล่อยให้ค้างจนพนักงานกดซ้ำ
+    //     ② retry อัตโนมัติ 2 ครั้ง เฉพาะ "คำสั่งอ่าน" — คำสั่งเขียนห้าม retry เด็ดขาด
+    //        (retry คำสั่งเขียน = จ่ายเงินซ้ำ / คิวซ้ำ)
+    //     ③ ถ้าคำตอบไม่ใช่ JSON → บอกเป็นภาษาคน ไม่ใช่ Unexpected token
+    //     ④ รวมคำขอซ้ำ (คำสั่งอ่านเดียวกันที่กำลังวิ่งอยู่ ใช้คำตอบร่วมกัน)
+    //        ⇒ กดรัวๆ / auto-refresh ชนกัน ไม่ทับกันเป็นสิบ request
+    // ══════════════════════════════════════════════════════════════════
+    (function () {
+      if (window.__kNetInstalled) return;
+      window.__kNetInstalled = true;
+
+      var _rawFetch = window.fetch.bind(window);
+      var TIMEOUT_MS = 25000;
+      var RETRY_MAX  = 2;
+      var inflight   = {};
+
+      // คำสั่งที่ "อ่านอย่างเดียว" — ปลอดภัยที่จะ retry และรวมคำขอ
+      var READ_ONLY = {
+        getAdminData:1, getQueueBoard:1, getWalkinPending:1, getDashboardSummary:1,
+        getSegmentSummary:1, getDailySalesList:1, getDailyReconciliation:1,
+        getAdminSettings:1, getUserCrmData:1, getEligiblePackages:1,
+        getEligiblePackagesGrouped:1, getUsersBySegment:1, getSalesTrackerData:1,
+        getRewardRules:1, getAllEmployeesStatus:1, getEmployeeReport:1,
+        getNextFreeSlot:1, searchUser:1, searchWalkInVehicle:1, searchPackageOwner:1,
+        getB2BContracts:1, getPickupConfig:1, getMyCredits:1
+      };
+
+      function readAction(body) {
+        try {
+          if (body && typeof body.get === 'function') return String(body.get('action') || '');
+          if (typeof body === 'string') {
+            var m = body.match(/(?:^|&)action=([^&]*)/);
+            return m ? decodeURIComponent(m[1]) : '';
+          }
+        } catch (e) {}
+        return '';
+      }
+
+      // คีย์รวมคำขอ: action + พารามิเตอร์ (ตัด t= ที่เป็น timestamp กันแคชออก)
+      function dedupeKey(body) {
+        try {
+          if (!body || typeof body.forEach !== 'function') return '';
+          var parts = [];
+          body.forEach(function (v, k) { if (k !== 't' && k !== 'adminToken') parts.push(k + '=' + v); });
+          return parts.sort().join('&');
+        } catch (e) { return ''; }
+      }
+
+      function friendly(err, action) {
+        var m = String((err && err.message) || err || '');
+        if (/aborted|timeout|เกินเวลา/i.test(m))
+          return 'เซิร์ฟเวอร์ตอบช้าเกิน 25 วินาที — ลองกดใหม่อีกครั้งครับ';
+        if (/Failed to fetch|NetworkError|Load failed/i.test(m))
+          return 'ต่อเน็ตไม่ติดชั่วคราว — เช็คสัญญาณแล้วกดใหม่อีกครั้งครับ';
+        if (/Unexpected token|not valid JSON|JSON\.parse|<!DOCTYPE|<html/i.test(m))
+          return 'เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ (มักเกิดตอนระบบแน่น) — รอ 5 วินาทีแล้วกดใหม่ครับ';
+        return m || 'เชื่อมต่อไม่สำเร็จ';
+      }
+
+      function once(url, opts, action) {
+        var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timer = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, TIMEOUT_MS);
+        var o = {}; for (var k in opts) o[k] = opts[k];
+        if (ctrl) o.signal = ctrl.signal;
+        return _rawFetch(url, o).then(function (r) {
+          clearTimeout(timer);
+          return r.text().then(function (txt) {
+            var data, parseErr = null;
+            try { data = JSON.parse(txt); } catch (e) { parseErr = e; }
+            if (parseErr) {
+              var head = String(txt || '').slice(0, 120).replace(/\s+/g, ' ');
+              var err = new Error('เซิร์ฟเวอร์ตอบไม่ใช่ JSON: ' + head);
+              err.__notJson = true;
+              throw err;
+            }
+            return { ok: r.ok, status: r.status, __data: data,
+                     json: function () { return Promise.resolve(data); },
+                     text: function () { return Promise.resolve(txt); } };
+          });
+        }, function (e) { clearTimeout(timer); throw e; });
+      }
+
+      function withRetry(url, opts, action, attempt) {
+        attempt = attempt || 0;
+        return once(url, opts, action).catch(function (e) {
+          var canRetry = READ_ONLY[action] && attempt < RETRY_MAX;
+          if (!canRetry) { e.message = friendly(e, action); throw e; }
+          var wait = 600 * Math.pow(2, attempt);          // 600ms → 1.2s
+          return new Promise(function (res) { setTimeout(res, wait); })
+                 .then(function () { return withRetry(url, opts, action, attempt + 1); });
+        });
+      }
+
+      window.fetch = function (url, opts) {
+        if (String(url) !== String(API_URL)) return _rawFetch(url, opts);
+        opts = opts || {};
+        var action = readAction(opts.body);
+
+        // ④ รวมคำขออ่านที่ซ้ำกันและกำลังวิ่งอยู่
+        if (READ_ONLY[action]) {
+          var key = action + '|' + dedupeKey(opts.body);
+          if (inflight[key]) return inflight[key];
+          var p = withRetry(url, opts, action).then(
+            function (r) { delete inflight[key]; return r; },
+            function (e) { delete inflight[key]; throw e; });
+          inflight[key] = p;
+          return p;
+        }
+        return withRetry(url, opts, action);
+      };
+
+      // แถบบางๆ ด้านบนแทนการหรี่ทั้งกระดาน — "รู้ว่ากำลังโหลด" โดยไม่ต้องกระพริบ
+      var busy = 0;
+      window.kBusy = function (on) {
+        busy = Math.max(0, busy + (on ? 1 : -1));
+        var el = document.getElementById('kNetBar');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'kNetBar';
+          el.style.cssText = 'position:fixed;top:0;left:0;height:3px;width:0;z-index:99999;' +
+            'background:linear-gradient(90deg,#2563eb,#38bdf8);transition:width .35s ease,opacity .35s ease;opacity:0';
+          document.body.appendChild(el);
+        }
+        if (busy > 0) { el.style.opacity = '1'; el.style.width = '70%'; }
+        else { el.style.width = '100%'; el.style.opacity = '0';
+               setTimeout(function () { el.style.width = '0'; }, 400); }
+      };
+    })();
+
     // เช็คคำตอบจาก server ว่าโดน Unauthorized มั้ย — ถ้าใช่ เคลียร์รหัสแล้วถามใหม่
     function handleAuthError(result) {
       if (result && result.status === 'error' && /Unauthorized/i.test(result.message || '')) {
@@ -2540,11 +2699,17 @@
     async function loadAdminData(opts) {
       opts = opts || {};
       const loading = document.getElementById('loading'); const board = document.getElementById('board');
-      if(loading && board) { loading.classList.remove('hidden'); board.style.opacity = '0.5'; }
+      // ⚡ D209: รีเฟรชเบื้องหลัง (auto-refresh / หลังกดปุ่ม) ห้ามหรี่กระดาน
+      //   การหรี่ + ขึ้น "กำลังโหลด" ทุก 30 วิ คือสาเหตุที่รู้สึกว่า "ต้องโหลดตลอด"
+      //   ของจริงข้อมูลมาไวอยู่แล้ว — แค่ UI ทำให้รู้สึกช้า
+      const _bg = !!(opts.silent || opts.boardOnly) && !!window._lastBoardData;
+      if (_bg) { if (typeof kBusy === 'function') kBusy(true); }
+      else if (loading && board) { loading.classList.remove('hidden'); board.style.opacity = '0.5'; }
       try {
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
         if (result.status === 'success') {
+          window._lastBoardData = result.data;      // ⚡ D209: ไว้ให้ optimistic UI ใช้
           renderBoard(result.data);
           _cacheAdminBookings(result.data);
           if(result.services) { adminServices = result.services; renderWiServices(); }
@@ -2554,11 +2719,24 @@
             _hydrateKanbanTiers(result.data);   // fire-and-forget
           }
         }
-      } catch (e) { console.error(e); }
-      finally { if(loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; } }
+      } catch (e) {
+        console.error(e);
+        // ⚡ D209: เน็ตสะดุดตอนรีเฟรชเบื้องหลัง = เงียบไว้ (กระดานเดิมยังอยู่ ใช้งานต่อได้)
+        //   แต่ถ้าเป็นการโหลดครั้งแรก ต้องบอก ไม่งั้นพนักงานนั่งมองหน้าจอว่าง
+        if (!_bg) {
+          try { Swal.fire({ icon:'warning', title:'โหลดกระดานไม่สำเร็จ', text: e.message || 'เชื่อมต่อไม่ได้',
+                            confirmButtonText:'ลองใหม่' }).then(function(r){ if(r.isConfirmed) loadAdminData(opts); }); } catch(_) {}
+        }
+      }
+      finally {
+        if (_bg) { if (typeof kBusy === 'function') kBusy(false); }
+        else if (loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; }
+      }
 
       // 🙋 Walk-in Capture v1.0 (D190): โหลดถาดรอเชื่อมคู่กัน (ไม่ block board)
       loadWalkinPending();
+      // 🔎 D209: เช็คคิวที่ยังไม่แก้บริการคู่กันไปเลย (ไม่ block board)
+      loadUnfixedServices();
 
       // ⚡ PERF v3.0 (D197): จบตรงนี้ถ้าขอแค่กระดาน — ประหยัด 4-5 requests ต่อครั้ง
       //    ตัวเลขใน dashboard/รายงาน จะรีเฟรชเองตอนสลับไปแท็บนั้น (showSection)
@@ -3280,12 +3458,34 @@
       let confirmText = confirmTexts[newStatus] || 'ยืนยันการทำรายการใช่ไหม?';
       const res = await Swal.fire({ title: 'ยืนยันสถานะ', text: confirmText, icon: 'question', showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก', customClass: { confirmButton: 'bg-blue-600', cancelButton: 'bg-gray-400' }});
       if(res.isConfirmed) {
-        Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
+        // ⚡ D209 — ขยับการ์ดก่อน ค่อยคุยกับเซิร์ฟเวอร์ (optimistic UI)
+        //   เดิม: กด → modal "กำลังอัปเดต..." บังทั้งจอ → รอ 2-4 วิ → โหลดกระดานใหม่ทั้งใบ
+        //   ใหม่: การ์ดกระโดดเลนทันที · พลาดเมื่อไหร่ค่อยเด้งกลับ + บอกเหตุผล
+        //   ⚠️ ห้าม retry คำสั่งนี้อัตโนมัติ (เป็นคำสั่งเขียน) — Net Layer กันไว้แล้ว
+        const _snapshot = (window._lastBoardData || []).map(function (x) { return { bookingId: x.bookingId, status: x.status }; });
+        let _reverted = false;
+        function _revert() {
+          if (_reverted) return; _reverted = true;
+          const cur = window._lastBoardData || [];
+          _snapshot.forEach(function (s) {
+            const it = cur.find(function (x) { return x.bookingId === s.bookingId; });
+            if (it) it.status = s.status;
+          });
+          try { renderBoard(cur); } catch (e) {}
+        }
         try {
+          const _it = (window._lastBoardData || []).find(function (x) { return x.bookingId === bookingId; });
+          if (_it) { _it.status = newStatus; renderBoard(window._lastBoardData); }
+          if (typeof kBusy === 'function') kBusy(true);
           const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: newStatus });
           const response = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await response.json();
-          if(result.status === 'success') { Swal.close(); loadAdminData({ boardOnly: true }); } else throw new Error(result.message);
-        } catch(e) { Swal.fire('Error', e.message, 'error'); }
+          if(result.status !== 'success') throw new Error(result.message);
+          loadAdminData({ boardOnly: true, silent: true });
+        } catch(e) {
+          _revert();
+          Swal.fire({ icon: 'error', title: 'อัปเดตไม่สำเร็จ', text: e.message,
+                      footer: 'การ์ดถูกย้อนกลับที่เดิมแล้ว — ข้อมูลในระบบไม่ได้เปลี่ยน' });
+        } finally { if (typeof kBusy === 'function') kBusy(false); }
       }
     }
 
@@ -5319,6 +5519,76 @@
         if (m < 60) return m + ' นาทีที่แล้ว';
         return Math.floor(m / 60) + ' ชม.ที่แล้ว';
       } catch (e) { return ''; }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // 🔎 D209 — คิววันนี้ที่ยังไม่ได้แก้บริการ
+    //   🔴 แดง = กำลังล้าง/ล้างเสร็จแล้ว → ราคาผิดแน่ ต้องรีบแก้
+    //   🟡 เหลือง = ยังรอคิว → ยังทัน
+    //   พังเมื่อไหร่ = แค่ไม่โชว์แถบ ห้ามทำให้กระดานล่ม
+    // ══════════════════════════════════════════════════════════
+    window.unfixedSvcCache = { late: [], early: [] };
+    async function loadUnfixedServices() {
+      const bar = document.getElementById('unfixedSvcBar');
+      if (!bar) return;
+      try {
+        const payload = new URLSearchParams({ action: 'getUnfixedServiceQueues', t: Date.now() });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+        const result = await res.json();
+        if (result.status !== 'success' || !result.data) { bar.classList.add('hidden'); return; }
+        window.unfixedSvcCache = result.data;
+        renderUnfixedServices(result.data);
+      } catch (e) {
+        console.error('loadUnfixedServices', e);
+        bar.classList.add('hidden');
+      }
+    }
+
+    function renderUnfixedServices(d) {
+      const bar   = document.getElementById('unfixedSvcBar');
+      const chips = document.getElementById('unfixedSvcChips');
+      const cnt   = document.getElementById('unfixedSvcCount');
+      const nm    = document.getElementById('unfixedSvcName');
+      if (!bar || !chips || !cnt) return;
+
+      const late  = (d && d.late)  || [];
+      const early = (d && d.early) || [];
+      const total = late.length + early.length;
+      if (!total) { bar.classList.add('hidden'); chips.innerHTML = ''; return; }
+
+      bar.classList.remove('hidden');
+      cnt.textContent = total;
+      if (nm) nm.textContent = d.defaultServiceName ? ('ยังเป็น "' + d.defaultServiceName + '"') : '';
+
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const chip = (x, urgent) => {
+        const cls = urgent
+          ? 'bg-red-600 text-white border-red-700'
+          : 'bg-white text-amber-900 border-amber-400';
+        const tip = urgent ? 'กำลังล้าง/ล้างเสร็จแล้ว — ราคายังเป็นบริการเริ่มต้น' : 'ยังรอคิว — แก้ได้ทัน';
+        return '<button type="button" title="' + esc(tip) + '" onclick="openEditServiceFor(\'' + esc(x.bookingId) + '\')" ' +
+               'class="px-2.5 py-1 rounded-full border text-[12px] font-semibold hover:opacity-80 ' + cls + '">' +
+               (urgent ? '🔴 ' : '🟡 ') + esc(x.time) + ' · ' + esc(x.plate) + '</button>';
+      };
+      chips.innerHTML = late.map(x => chip(x, true)).join('') + early.map(x => chip(x, false)).join('');
+    }
+
+    // กดชิป → เปิดการ์ดคิวนั้นให้แก้บริการ (ใช้ทางเดิมของหน้า ไม่สร้างทางใหม่)
+    function openEditServiceFor(bookingId) {
+      try {
+        if (typeof openEditBookingModal === 'function') return openEditBookingModal(bookingId);
+        if (typeof openEditServiceModal === 'function') return openEditServiceModal(bookingId);
+      } catch (e) {}
+      const el = document.querySelector('[data-booking-id="' + bookingId + '"]');
+      if (el && el.scrollIntoView) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.outline = '3px solid #dc2626';
+        setTimeout(() => { el.style.outline = ''; }, 2500);
+        return;
+      }
+      Swal.fire({ icon: 'info', title: 'คิว ' + bookingId,
+                  text: 'เลื่อนหาการ์ดคิวนี้บนกระดาน แล้วกด "แก้บริการ" ครับ' });
     }
 
     async function loadWalkinPending() {

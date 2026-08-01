@@ -238,6 +238,145 @@
   // ตั้งค่า
   // ═══════════════════════════════════════════════════════════
   var API_URL = "https://script.google.com/macros/s/AKfycbx-lKOiMMp2enXoijV6rLpqoG-UQzjgamF_QUVS9d9QHGi_ouY7k8hIZya91PPBiwan/exec";
+    // ══════════════════════════════════════════════════════════════════
+  // ⚡ D209 — ชั้นกันสะดุด (Karshine Net Layer)
+  //   ทำไมต้องมี: หน้านี้ยิง fetch ดิบ 70+ จุด ไม่มี timeout ไม่มี retry
+  //   ไม่ตรวจว่าคำตอบเป็น JSON จริงไหม ⇒ พอ Apps Script คืนหน้า HTML แจ้ง error
+  //   (โควตาเต็ม / รันนานเกิน / เน็ตกระตุก) จะเด้งเป็น
+  //     · "Failed to fetch"
+  //     · "Unexpected token '<' ... is not valid JSON"
+  //   ซึ่งคือ 2 ข้อความที่ CEO เจอหน้าร้านวันที่ 1/8
+  //
+  //   ชั้นนี้ห่อ fetch เฉพาะที่ยิงไป API_URL (ที่อื่นไม่แตะ) แล้วเพิ่ม
+  //     ① timeout 25 วิ — ไม่ปล่อยให้ค้างจนพนักงานกดซ้ำ
+  //     ② retry อัตโนมัติ 2 ครั้ง เฉพาะ "คำสั่งอ่าน" — คำสั่งเขียนห้าม retry เด็ดขาด
+  //        (retry คำสั่งเขียน = จ่ายเงินซ้ำ / คิวซ้ำ)
+  //     ③ ถ้าคำตอบไม่ใช่ JSON → บอกเป็นภาษาคน ไม่ใช่ Unexpected token
+  //     ④ รวมคำขอซ้ำ (คำสั่งอ่านเดียวกันที่กำลังวิ่งอยู่ ใช้คำตอบร่วมกัน)
+  //        ⇒ กดรัวๆ / auto-refresh ชนกัน ไม่ทับกันเป็นสิบ request
+  // ══════════════════════════════════════════════════════════════════
+  (function () {
+    if (window.__kNetInstalled) return;
+    window.__kNetInstalled = true;
+
+    var _rawFetch = window.fetch.bind(window);
+    var TIMEOUT_MS = 25000;
+    var RETRY_MAX  = 2;
+    var inflight   = {};
+
+    // คำสั่งที่ "อ่านอย่างเดียว" — ปลอดภัยที่จะ retry และรวมคำขอ
+    var READ_ONLY = {
+      getAdminData:1, getQueueBoard:1, getWalkinPending:1, getDashboardSummary:1,
+      getSegmentSummary:1, getDailySalesList:1, getDailyReconciliation:1,
+      getAdminSettings:1, getUserCrmData:1, getEligiblePackages:1,
+      getEligiblePackagesGrouped:1, getUsersBySegment:1, getSalesTrackerData:1,
+      getRewardRules:1, getAllEmployeesStatus:1, getEmployeeReport:1,
+      getNextFreeSlot:1, searchUser:1, searchWalkInVehicle:1, searchPackageOwner:1,
+      getB2BContracts:1, getPickupConfig:1, getMyCredits:1
+    };
+
+    function readAction(body) {
+      try {
+        if (body && typeof body.get === 'function') return String(body.get('action') || '');
+        if (typeof body === 'string') {
+          var m = body.match(/(?:^|&)action=([^&]*)/);
+          return m ? decodeURIComponent(m[1]) : '';
+        }
+      } catch (e) {}
+      return '';
+    }
+
+    // คีย์รวมคำขอ: action + พารามิเตอร์ (ตัด t= ที่เป็น timestamp กันแคชออก)
+    function dedupeKey(body) {
+      try {
+        if (!body || typeof body.forEach !== 'function') return '';
+        var parts = [];
+        body.forEach(function (v, k) { if (k !== 't' && k !== 'adminToken') parts.push(k + '=' + v); });
+        return parts.sort().join('&');
+      } catch (e) { return ''; }
+    }
+
+    function friendly(err, action) {
+      var m = String((err && err.message) || err || '');
+      if (/aborted|timeout|เกินเวลา/i.test(m))
+        return 'เซิร์ฟเวอร์ตอบช้าเกิน 25 วินาที — ลองกดใหม่อีกครั้งครับ';
+      if (/Failed to fetch|NetworkError|Load failed/i.test(m))
+        return 'ต่อเน็ตไม่ติดชั่วคราว — เช็คสัญญาณแล้วกดใหม่อีกครั้งครับ';
+      if (/Unexpected token|not valid JSON|JSON\.parse|<!DOCTYPE|<html/i.test(m))
+        return 'เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ (มักเกิดตอนระบบแน่น) — รอ 5 วินาทีแล้วกดใหม่ครับ';
+      return m || 'เชื่อมต่อไม่สำเร็จ';
+    }
+
+    function once(url, opts, action) {
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, TIMEOUT_MS);
+      var o = {}; for (var k in opts) o[k] = opts[k];
+      if (ctrl) o.signal = ctrl.signal;
+      return _rawFetch(url, o).then(function (r) {
+        clearTimeout(timer);
+        return r.text().then(function (txt) {
+          var data, parseErr = null;
+          try { data = JSON.parse(txt); } catch (e) { parseErr = e; }
+          if (parseErr) {
+            var head = String(txt || '').slice(0, 120).replace(/\s+/g, ' ');
+            var err = new Error('เซิร์ฟเวอร์ตอบไม่ใช่ JSON: ' + head);
+            err.__notJson = true;
+            throw err;
+          }
+          return { ok: r.ok, status: r.status, __data: data,
+                   json: function () { return Promise.resolve(data); },
+                   text: function () { return Promise.resolve(txt); } };
+        });
+      }, function (e) { clearTimeout(timer); throw e; });
+    }
+
+    function withRetry(url, opts, action, attempt) {
+      attempt = attempt || 0;
+      return once(url, opts, action).catch(function (e) {
+        var canRetry = READ_ONLY[action] && attempt < RETRY_MAX;
+        if (!canRetry) { e.message = friendly(e, action); throw e; }
+        var wait = 600 * Math.pow(2, attempt);          // 600ms → 1.2s
+        return new Promise(function (res) { setTimeout(res, wait); })
+               .then(function () { return withRetry(url, opts, action, attempt + 1); });
+      });
+    }
+
+    window.fetch = function (url, opts) {
+      if (String(url) !== String(API_URL)) return _rawFetch(url, opts);
+      opts = opts || {};
+      var action = readAction(opts.body);
+
+      // ④ รวมคำขออ่านที่ซ้ำกันและกำลังวิ่งอยู่
+      if (READ_ONLY[action]) {
+        var key = action + '|' + dedupeKey(opts.body);
+        if (inflight[key]) return inflight[key];
+        var p = withRetry(url, opts, action).then(
+          function (r) { delete inflight[key]; return r; },
+          function (e) { delete inflight[key]; throw e; });
+        inflight[key] = p;
+        return p;
+      }
+      return withRetry(url, opts, action);
+    };
+
+    // แถบบางๆ ด้านบนแทนการหรี่ทั้งกระดาน — "รู้ว่ากำลังโหลด" โดยไม่ต้องกระพริบ
+    var busy = 0;
+    window.kBusy = function (on) {
+      busy = Math.max(0, busy + (on ? 1 : -1));
+      var el = document.getElementById('kNetBar');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'kNetBar';
+        el.style.cssText = 'position:fixed;top:0;left:0;height:3px;width:0;z-index:99999;' +
+          'background:linear-gradient(90deg,#2563eb,#38bdf8);transition:width .35s ease,opacity .35s ease;opacity:0';
+        document.body.appendChild(el);
+      }
+      if (busy > 0) { el.style.opacity = '1'; el.style.width = '70%'; }
+      else { el.style.width = '100%'; el.style.opacity = '0';
+             setTimeout(function () { el.style.width = '0'; }, 400); }
+    };
+  })();
+
 
   // 3 เลนที่ CEO เคาะ — map ตรงกับ Kanban ในหน้า admin (ห้ามประดิษฐ์สถานะใหม่)
   var LANES = [
