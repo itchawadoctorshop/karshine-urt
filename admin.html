@@ -89,7 +89,7 @@
       <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-3 shadow-sm">
         <div class="flex items-center justify-between mb-2">
           <div class="font-bold text-amber-900 text-sm">
-            🔎 คิววันนี้ที่ยัง<u>ไม่ได้แก้บริการ</u>
+            🔎 คิวที่ลูกค้าสแกนเอง — ยัง<u>ไม่มีใครยืนยันบริการ</u>
             <span id="unfixedSvcCount" class="bg-amber-600 text-white px-2 py-0.5 rounded-full text-[11px] ml-1">0</span>
             <span id="unfixedSvcName" class="text-[11px] font-normal text-amber-700 ml-1"></span>
           </div>
@@ -5558,7 +5558,14 @@
 
       bar.classList.remove('hidden');
       cnt.textContent = total;
-      if (nm) nm.textContent = d.defaultServiceName ? ('ยังเป็น "' + d.defaultServiceName + '"') : '';
+      // 🚦 D209 (แก้เย็น 1/8): บอกบริบทให้พนักงานตัดสินเองได้ ไม่ใช่ฟันธงว่าผิด
+      //   ถ้าวันนี้พนักงาน "ติ๊กบริการนี้เอง" หลายคิว = บริการนี้ขายจริง
+      //   ⇒ คิวสแกนที่เป็นบริการนี้ก็น่าจะถูกอยู่แล้ว ไม่ต้องตกใจ
+      if (nm) {
+        let t = d.defaultServiceName ? ('ยังเป็น "' + d.defaultServiceName + '"') : '';
+        if (d.chosenByStaff > 0) t += ' · วันนี้พนักงานเลือกบริการนี้เอง ' + d.chosenByStaff + ' คิว';
+        nm.textContent = t;
+      }
 
       const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -5566,7 +5573,9 @@
         const cls = urgent
           ? 'bg-red-600 text-white border-red-700'
           : 'bg-white text-amber-900 border-amber-400';
-        const tip = urgent ? 'กำลังล้าง/ล้างเสร็จแล้ว — ราคายังเป็นบริการเริ่มต้น' : 'ยังรอคิว — แก้ได้ทัน';
+        const tip = urgent
+          ? 'ลูกค้าสแกนเอง ระบบใส่บริการเริ่มต้นให้ · ตอนนี้ล้างไปแล้ว — เช็คว่าบริการตรงกับที่ทำจริงไหม'
+          : 'ลูกค้าสแกนเอง ยังรอคิว — ยืนยันบริการได้ทัน';
         return '<button type="button" title="' + esc(tip) + '" onclick="openEditServiceFor(\'' + esc(x.bookingId) + '\')" ' +
                'class="px-2.5 py-1 rounded-full border text-[12px] font-semibold hover:opacity-80 ' + cls + '">' +
                (urgent ? '🔴 ' : '🟡 ') + esc(x.time) + ' · ' + esc(x.plate) + '</button>';
