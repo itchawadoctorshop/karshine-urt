@@ -1568,6 +1568,16 @@
         } catch (e) { return ''; }
       }
 
+      // 🆕 D211-A: แยก "client ยอมแพ้เพราะรอนาน" ออกจาก "server ปฏิเสธ"
+      //   AbortError คือ DOMException ⇒ .message เป็น getter อย่างเดียว เขียนทับไม่ได้
+      //   ⇒ ห้ามเช็คด้วยการอ่าน message ที่ถูก assign ทับ ต้องดู .name เป็นหลัก
+      function _isAbortErr(err) {
+        if (!err) return false;
+        if (err.__aborted) return true;
+        if (err.name === 'AbortError' || err.name === 'TimeoutError') return true;
+        return /aborted|timeout|เกินเวลา/i.test(String(err.message || ''));
+      }
+
       function friendly(err, action) {
         var m = String((err && err.message) || err || '');
         if (/aborted|timeout|เกินเวลา/i.test(m))
@@ -1606,7 +1616,16 @@
         attempt = attempt || 0;
         return once(url, opts, action).catch(function (e) {
           var canRetry = READ_ONLY[action] && attempt < RETRY_MAX;
-          if (!canRetry) { e.message = friendly(e, action); throw e; }
+          if (!canRetry) {
+            // 🆕 D211-A: ห้าม `e.message = ...` — DOMException.message เป็น readonly getter
+            //   sloppy mode = assign เงียบๆ ไม่ติด ⇒ ผู้ใช้เห็น 'signal is aborted without reason'
+            //   strict mode  = throw TypeError ทับ ⇒ error ตัวจริงหายไปเลย
+            var _ab = _isAbortErr(e);
+            var ne = new Error(friendly(e, action));
+            ne.__orig = e; ne.__aborted = _ab; ne.__action = action;
+            ne.__notJson = !!e.__notJson;
+            throw ne;
+          }
           var wait = 600 * Math.pow(2, attempt);          // 600ms → 1.2s
           return new Promise(function (res) { setTimeout(res, wait); })
                  .then(function () { return withRetry(url, opts, action, attempt + 1); });
@@ -3498,11 +3517,94 @@
           if(result.status !== 'success') throw new Error(result.message);
           loadAdminData({ boardOnly: true, silent: true });
         } catch(e) {
-          _revert();
-          Swal.fire({ icon: 'error', title: 'อัปเดตไม่สำเร็จ', text: e.message,
-                      footer: 'การ์ดถูกย้อนกลับที่เดิมแล้ว — ข้อมูลในระบบไม่ได้เปลี่ยน' });
+          // 🆕 D211-B: timeout ≠ ล้มเหลว — เซิร์ฟเวอร์อาจเขียนสำเร็จไปแล้ว
+          //   เดิม: revert + บอก "ข้อมูลในระบบไม่ได้เปลี่ยน" ⇒ โกหก ⇒ คนกดซ้ำ ⇒ คิวซ้ำ/ตัดแพ็กเกจซ้ำ
+          if (e && e.__aborted) {
+            await _kVerifyStatusAfterTimeout(bookingId, newStatus);   // อ่านซ้ำแล้วค่อยตัดสิน (ไม่ revert มั่ว)
+          } else {
+            _revert();
+            Swal.fire({ icon: 'error', title: 'อัปเดตไม่สำเร็จ', text: e.message,
+                        footer: 'เซิร์ฟเวอร์ปฏิเสธคำสั่ง — การ์ดถูกย้อนกลับที่เดิมแล้ว ข้อมูลในระบบไม่ได้เปลี่ยน' });
+          }
         } finally { if (typeof kBusy === 'function') kBusy(false); }
       }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🆕 D211-B: คำสั่งเขียนที่ timeout — ต้อง "อ่านซ้ำ" ก่อนตัดสินว่าพลาด
+    // ══════════════════════════════════════════════════════════════════
+    //   Apps Script ไม่หยุดทำงานเมื่อ client abort ที่ 25 วิ ⇒ ส่วนใหญ่เขียนสำเร็จไปแล้ว
+    //   ถ้าบอกผู้ใช้ว่า "ไม่สำเร็จ / ข้อมูลไม่เปลี่ยน" เขาจะกดซ้ำ
+    //   ⇒ จ่ายเงินซ้ำ / คิวซ้ำ / ตัดแพ็กเกจซ้ำ  ← นี่คือความเสี่ยงเรื่องเงินตัวจริง
+    //   ⚠️ ห้ามเรียกใช้ loadAdminData() มาตรวจ — มันกลืน error เงียบๆ (แยกไม่ออกว่าอ่านสำเร็จไหม)
+    //   ⚠️ ต้องใส่ _vfy กันไป dedupe กับ getAdminData ที่ auto-refresh ยิงค้างไว้ (= ข้อมูลเก่า)
+
+    // กระดานมี 7 เลน — ไม่มี completed / cancelled ⇒ 2 สถานะนี้ทำให้การ์ดหายจากกระดาน
+    const _K_OFFBOARD_STATUS = { completed: 1, cancelled: 1 };
+
+    async function _kVerifyStatusAfterTimeout(bookingId, newStatus) {
+      Swal.fire({
+        icon: 'info',
+        title: 'เซิร์ฟเวอร์ตอบช้า',
+        html: 'กำลังตรวจสอบว่าบันทึกเข้าระบบแล้วหรือยัง<br>' +
+              '<b style="color:#dc2626">อย่าเพิ่งกดซ้ำครับ</b><br>' +
+              '<span style="font-size:12px;color:#6b7280">อาจใช้เวลาถึง 1 นาที</span>',
+        allowOutsideClick: false, allowEscapeKey: false,
+        didOpen: function () { try { Swal.showLoading(); } catch (e) {} }
+      });
+
+      let board = null;
+      try {
+        const p = new URLSearchParams({
+          action: 'getAdminData',
+          t: Date.now(),
+          _vfy: String(bookingId) + '-' + Date.now()   // กัน dedupe กับคำขอที่ค้างอยู่
+        });
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(p) });
+        const result = await res.json();
+        if (result && result.status === 'success' && Array.isArray(result.data)) {
+          board = result.data;
+          // อ่านมาแล้วก็ใช้เลย — หน้าจอจะตรงกับของจริงทันที
+          window._lastBoardData = board;
+          try { renderBoard(board); } catch (e) {}
+          try { _cacheAdminBookings(board); } catch (e) {}
+        }
+      } catch (e) { board = null; }
+
+      // อ่านซ้ำไม่สำเร็จ = ไม่รู้ผล ⇒ ห้ามเดาทั้ง 2 ทาง
+      if (!board) {
+        Swal.fire({
+          icon: 'warning', title: 'ยังไม่รู้ผล',
+          html: 'เซิร์ฟเวอร์ช้าจนตรวจซ้ำไม่ได้<br><b style="color:#dc2626">อย่ากดซ้ำ</b> — กด F5 แล้วดูว่าการ์ดย้ายแล้วหรือยัง',
+          footer: 'ย้ายแล้ว = สำเร็จ · ยังไม่ย้าย ค่อยกดใหม่'
+        });
+        return 'unknown';
+      }
+
+      const item = board.find(function (x) { return x.bookingId === bookingId; });
+
+      if (item && String(item.status) === String(newStatus)) {
+        Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จแล้ว', timer: 2200, showConfirmButton: false,
+                    text: 'เซิร์ฟเวอร์แค่ตอบช้า — ข้อมูลเข้าระบบเรียบร้อย' });
+        return 'ok';
+      }
+      if (!item && _K_OFFBOARD_STATUS[newStatus]) {
+        Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จแล้ว', timer: 2200, showConfirmButton: false,
+                    text: 'การ์ดออกจากกระดานแล้ว — เซิร์ฟเวอร์แค่ตอบช้า' });
+        return 'ok';
+      }
+      if (!item) {
+        Swal.fire({ icon: 'warning', title: 'ไม่พบคิวนี้บนกระดาน',
+                    text: 'ตรวจซ้ำแล้วไม่เจอคิวนี้ — กด F5 แล้วเช็คอีกครั้งก่อนกดใหม่ครับ' });
+        return 'unknown';
+      }
+      // เจอ และสถานะยังเป็นของเดิม = เซิร์ฟเวอร์ไม่ได้เขียนจริง (กระดานที่ render ไปคือของจริงแล้ว)
+      Swal.fire({
+        icon: 'error', title: 'อัปเดตไม่สำเร็จ',
+        text: 'ตรวจซ้ำแล้วสถานะยังเป็น "' + (item.status || '-') + '" — เซิร์ฟเวอร์ไม่ได้บันทึก',
+        footer: 'กระดานอัปเดตเป็นของจริงแล้ว — กดใหม่ได้ปลอดภัย'
+      });
+      return 'failed';
     }
 
     // ==============================================
