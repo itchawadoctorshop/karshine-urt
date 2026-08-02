@@ -1615,7 +1615,11 @@
       function withRetry(url, opts, action, attempt) {
         attempt = attempt || 0;
         return once(url, opts, action).catch(function (e) {
-          var canRetry = READ_ONLY[action] && attempt < RETRY_MAX;
+          // 🆕 D211-C: "เซิร์ฟเวอร์ตอบช้าเกิน 25 วิ" แล้วห้าม retry
+          //   เดิม: อ่านข้อมูลที่ช้า = 25 + 25 + 25 วิ ⇒ ผู้ใช้รอ ~77 วิ ก่อนเห็นข้อความ
+          //   แถมยิงซ้ำใส่เซิร์ฟเวอร์ที่กำลังแน่นอยู่แล้ว = ยิ่งแน่น
+          //   ⚠️ "เน็ตสะดุด" (พังเร็ว) ยัง retry เหมือนเดิม — คนละเรื่องกัน
+          var canRetry = READ_ONLY[action] && attempt < RETRY_MAX && !_isAbortErr(e);
           if (!canRetry) {
             // 🆕 D211-A: ห้าม `e.message = ...` — DOMException.message เป็น readonly getter
             //   sloppy mode = assign เงียบๆ ไม่ติด ⇒ ผู้ใช้เห็น 'signal is aborted without reason'
@@ -1632,22 +1636,58 @@
         });
       }
 
+      // ══════════════════════════════════════════════════════════════
+      // 🆕 D211-C: จับเวลาที่ "ผู้ใช้รอจริง" ทุกคำขอ
+      //   Apps Script → Executions บอกแค่ "เวลาที่โค้ดรัน" ไม่ได้บอก "เวลาที่คนรอ"
+      //   ถ้าเครื่องนี้วัดได้ 24 วิ แต่ Executions บอก 2 วิ
+      //     ⇒ เวลาหายไปที่คิว/เน็ต ไม่ใช่โค้ด ⇒ ไปยุบโค้ดก็ไม่หาย
+      //   เก็บใน localStorage เครื่องละชุด · หมุนทิ้งเองที่ 300 รายการ
+      // ══════════════════════════════════════════════════════════════
+      var PERF_KEY = 'karshine_perf_v1', PERF_MAX = 300, PERF_SLOW_MS = 8000;
+      function _perfLoad() {
+        try { var a = JSON.parse(localStorage.getItem(PERF_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+        catch (e) { return []; }
+      }
+      function _perfAdd(action, ms, res) {
+        var a = _perfLoad();
+        a.push({ t: Date.now(), a: action || '?', ms: ms, r: res });
+        try { localStorage.setItem(PERF_KEY, JSON.stringify(a.slice(-PERF_MAX))); } catch (e) {}
+        try { _perfBadge(); } catch (e) {}
+      }
+      function _perfWrap(action, t0, p) {
+        return p.then(
+          function (r) { _perfAdd(action, Date.now() - t0, 'ok'); return r; },
+          function (e) {
+            _perfAdd(action, Date.now() - t0,
+                     (e && e.__aborted) ? 'ช้าเกิน' : (e && e.__notJson) ? 'ตอบเพี้ยน' : 'พลาด');
+            throw e;
+          });
+      }
+      window._perfAll = _perfLoad;
+      window._PERF_SLOW_MS = PERF_SLOW_MS;
+      window._perfClear = function () {
+        try { localStorage.removeItem(PERF_KEY); } catch (e) {}
+        try { _perfBadge(); } catch (e) {}
+      };
+
       window.fetch = function (url, opts) {
         if (String(url) !== String(API_URL)) return _rawFetch(url, opts);
         opts = opts || {};
         var action = readAction(opts.body);
+        var _t0 = Date.now();                        // 🆕 D211-C: เริ่มจับเวลาฝั่งผู้ใช้
 
         // ④ รวมคำขออ่านที่ซ้ำกันและกำลังวิ่งอยู่
+        //   ⚠️ ตัวที่มาเกาะคำขอเดิมจะไม่ถูกจับเวลาแยก — สถิติจึงนับ "คำขอที่ยิงจริง" เท่านั้น
         if (READ_ONLY[action]) {
           var key = action + '|' + dedupeKey(opts.body);
           if (inflight[key]) return inflight[key];
-          var p = withRetry(url, opts, action).then(
+          var p = _perfWrap(action, _t0, withRetry(url, opts, action)).then(
             function (r) { delete inflight[key]; return r; },
             function (e) { delete inflight[key]; throw e; });
           inflight[key] = p;
           return p;
         }
-        return withRetry(url, opts, action);
+        return _perfWrap(action, _t0, withRetry(url, opts, action));
       };
 
       // แถบบางๆ ด้านบนแทนการหรี่ทั้งกระดาน — "รู้ว่ากำลังโหลด" โดยไม่ต้องกระพริบ
@@ -3605,6 +3645,111 @@
         footer: 'กระดานอัปเดตเป็นของจริงแล้ว — กดใหม่ได้ปลอดภัย'
       });
       return 'failed';
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🆕 D211-C: ป้าย 🩺 + หน้าสรุปความเร็ว (โผล่เฉพาะตอนมีของช้าจริง)
+    // ══════════════════════════════════════════════════════════════════
+    //   ไม่มีของช้า = ไม่มีป้าย = ไม่รกจอ
+    //   กดแล้วได้ตาราง + ปุ่มคัดลอกไปส่งให้ทีมดู
+
+    function _perfSlowList() {
+      var all = (typeof window._perfAll === 'function') ? window._perfAll() : [];
+      var lim = window._PERF_SLOW_MS || 8000;
+      return all.filter(function (x) { return x && x.ms >= lim; });
+    }
+
+    function _perfBadge() {
+      var slow = _perfSlowList();
+      var el = document.getElementById('kPerfBadge');
+      if (!slow.length) { if (el && el.parentNode) el.parentNode.removeChild(el); return; }
+      if (!el) {
+        el = document.createElement('button');
+        el.id = 'kPerfBadge';
+        el.type = 'button';
+        el.onclick = function () { try { kPerfPanel(); } catch (e) {} };
+        el.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:99998;background:#f59e0b;color:#fff;' +
+          'border:none;border-radius:9999px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;' +
+          'box-shadow:0 2px 8px rgba(0,0,0,.25)';
+        document.body.appendChild(el);
+      }
+      el.textContent = '🩺 ช้า ' + slow.length + ' ครั้ง';
+    }
+
+    function _perfSec(ms) { return (ms / 1000).toFixed(1) + 's'; }
+    function _perfClock(t) {
+      var d = new Date(t), p = function (n) { return ('0' + n).slice(-2); };
+      return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+
+    function kPerfPanel() {
+      var all = (typeof window._perfAll === 'function') ? window._perfAll() : [];
+      if (!all.length) return Swal.fire('ยังไม่มีข้อมูล', 'ยังไม่ได้เก็บสถิติความเร็วบนเครื่องนี้', 'info');
+      var SLOW = window._PERF_SLOW_MS || 8000;
+
+      var by = {};
+      all.forEach(function (x) {
+        var g = by[x.a] || (by[x.a] = { ms: [], slow: 0 });
+        g.ms.push(x.ms);
+        if (x.ms >= SLOW) g.slow++;
+      });
+      var rows = Object.keys(by).map(function (k) {
+        var m = by[k].ms.slice().sort(function (a, b) { return a - b; });
+        return { k: k, n: m.length, mid: m[Math.floor(m.length / 2)], max: m[m.length - 1], slow: by[k].slow };
+      }).sort(function (a, b) { return b.max - a.max; });
+
+      var worst = all.slice().sort(function (a, b) { return b.ms - a.ms; }).slice(0, 15);
+
+      var t1 = '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">คำสั่ง</th>' +
+        '<th>ครั้ง</th><th>กลาง</th><th>ช้าสุด</th><th>เกิน 8 วิ</th></tr>' +
+        rows.map(function (r) {
+          return '<tr style="border-top:1px solid #eee"><td style="padding:4px">' + r.k + '</td>' +
+            '<td align="center">' + r.n + '</td>' +
+            '<td align="center">' + _perfSec(r.mid) + '</td>' +
+            '<td align="center"' + (r.max >= SLOW ? ' style="color:#dc2626;font-weight:700"' : '') + '>' + _perfSec(r.max) + '</td>' +
+            '<td align="center">' + (r.slow || '-') + '</td></tr>';
+        }).join('') + '</table>';
+
+      var t2 = '<div style="margin-top:12px;font-weight:700;font-size:12px">15 ครั้งที่ช้าที่สุด</div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:11px">' +
+        worst.map(function (x) {
+          return '<tr style="border-top:1px solid #eee"><td style="padding:3px">' + _perfClock(x.t) + '</td>' +
+            '<td>' + x.a + '</td>' +
+            '<td align="right"' + (x.ms >= SLOW ? ' style="color:#dc2626;font-weight:700"' : '') + '>' + _perfSec(x.ms) + '</td>' +
+            '<td align="center">' + x.r + '</td></tr>';
+        }).join('') + '</table>';
+
+      var txt = 'Karshine perf — ' + all.length + ' คำขอ (เกิน 8 วิ ' + _perfSlowList().length + ')\n' +
+        rows.map(function (r) { return r.k + '  n=' + r.n + '  กลาง=' + _perfSec(r.mid) + '  ช้าสุด=' + _perfSec(r.max) + '  เกิน8วิ=' + r.slow; }).join('\n') +
+        '\n--- 15 ครั้งที่ช้าสุด ---\n' +
+        worst.map(function (x) { return _perfClock(x.t) + '  ' + x.a + '  ' + _perfSec(x.ms) + '  ' + x.r; }).join('\n');
+
+      Swal.fire({
+        title: '🩺 สถิติความเร็ว (เครื่องนี้)',
+        html: '<div style="text-align:left">' + t1 + t2 +
+              '<p style="margin-top:10px;font-size:11px;color:#6b7280">นี่คือเวลาที่<b>คนรอจริง</b> — เอาไปเทียบกับ Duration ใน Apps Script Executions ' +
+              'ถ้าตัวเลขต่างกันมาก แปลว่าเวลาหายไปที่คิว/เน็ต ไม่ใช่ที่โค้ด</p></div>',
+        width: 720,
+        showDenyButton: true, showCancelButton: true,
+        confirmButtonText: '📋 คัดลอกไปส่งให้ทีม',
+        denyButtonText: '🗑️ ล้างสถิติ',
+        cancelButtonText: 'ปิด'
+      }).then(function (r) {
+        if (r.isConfirmed) {
+          var done = function () { Swal.fire({ icon: 'success', title: 'คัดลอกแล้ว', timer: 1500, showConfirmButton: false }); };
+          var manual = function () {
+            Swal.fire({ title: 'คัดลอกเอง', html: '<textarea style="width:100%;height:240px;font-size:11px">' + txt + '</textarea>' });
+          };
+          try {
+            var pr = navigator.clipboard && navigator.clipboard.writeText(txt);
+            if (pr && pr.then) pr.then(done, manual); else manual();
+          } catch (e) { manual(); }
+        } else if (r.isDenied) {
+          window._perfClear();
+          Swal.fire({ icon: 'success', title: 'ล้างแล้ว', timer: 1200, showConfirmButton: false });
+        }
+      });
     }
 
     // ==============================================
