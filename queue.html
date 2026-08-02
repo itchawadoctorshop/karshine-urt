@@ -296,6 +296,16 @@
       } catch (e) { return ''; }
     }
 
+    // 🆕 D211-A: แยก "client ยอมแพ้เพราะรอนาน" ออกจาก "server ปฏิเสธ"
+    //   AbortError คือ DOMException ⇒ .message เป็น getter อย่างเดียว เขียนทับไม่ได้
+    //   ⇒ ห้ามเช็คด้วยการอ่าน message ที่ถูก assign ทับ ต้องดู .name เป็นหลัก
+    function _isAbortErr(err) {
+      if (!err) return false;
+      if (err.__aborted) return true;
+      if (err.name === 'AbortError' || err.name === 'TimeoutError') return true;
+      return /aborted|timeout|เกินเวลา/i.test(String(err.message || ''));
+    }
+
     function friendly(err, action) {
       var m = String((err && err.message) || err || '');
       if (/aborted|timeout|เกินเวลา/i.test(m))
@@ -334,7 +344,16 @@
       attempt = attempt || 0;
       return once(url, opts, action).catch(function (e) {
         var canRetry = READ_ONLY[action] && attempt < RETRY_MAX;
-        if (!canRetry) { e.message = friendly(e, action); throw e; }
+        if (!canRetry) {
+          // 🆕 D211-A: ห้าม `e.message = ...` — DOMException.message เป็น readonly getter
+          //   sloppy mode = assign เงียบๆ ไม่ติด ⇒ ผู้ใช้เห็น 'signal is aborted without reason'
+          //   strict mode  = throw TypeError ทับ ⇒ error ตัวจริงหายไปเลย
+          var _ab = _isAbortErr(e);
+          var ne = new Error(friendly(e, action));
+          ne.__orig = e; ne.__aborted = _ab; ne.__action = action;
+          ne.__notJson = !!e.__notJson;
+          throw ne;
+        }
         var wait = 600 * Math.pow(2, attempt);          // 600ms → 1.2s
         return new Promise(function (res) { setTimeout(res, wait); })
                .then(function () { return withRetry(url, opts, action, attempt + 1); });
