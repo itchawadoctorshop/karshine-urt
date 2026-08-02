@@ -343,7 +343,11 @@
     function withRetry(url, opts, action, attempt) {
       attempt = attempt || 0;
       return once(url, opts, action).catch(function (e) {
-        var canRetry = READ_ONLY[action] && attempt < RETRY_MAX;
+        // 🆕 D211-C: "เซิร์ฟเวอร์ตอบช้าเกิน 25 วิ" แล้วห้าม retry
+        //   เดิม: อ่านข้อมูลที่ช้า = 25 + 25 + 25 วิ ⇒ ผู้ใช้รอ ~77 วิ ก่อนเห็นข้อความ
+        //   แถมยิงซ้ำใส่เซิร์ฟเวอร์ที่กำลังแน่นอยู่แล้ว = ยิ่งแน่น
+        //   ⚠️ "เน็ตสะดุด" (พังเร็ว) ยัง retry เหมือนเดิม — คนละเรื่องกัน
+        var canRetry = READ_ONLY[action] && attempt < RETRY_MAX && !_isAbortErr(e);
         if (!canRetry) {
           // 🆕 D211-A: ห้าม `e.message = ...` — DOMException.message เป็น readonly getter
           //   sloppy mode = assign เงียบๆ ไม่ติด ⇒ ผู้ใช้เห็น 'signal is aborted without reason'
