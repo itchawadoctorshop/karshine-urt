@@ -879,7 +879,10 @@
       </div>
 
       <div id="content-services" class="config-content block">
-         <button onclick="openConfigModal('service', 'add')" class="mb-4 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95"><i class="fa-solid fa-plus mr-1"></i> เพิ่มบริการล้างรถใหม่</button>
+         <div class="flex flex-wrap gap-2 mb-4">
+           <button onclick="openConfigModal('service', 'add')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95"><i class="fa-solid fa-plus mr-1"></i> เพิ่มบริการล้างรถใหม่</button>
+           <button onclick="openQuickAddSettings()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow transition active:scale-95" title="ปุ่มกดครั้งเดียวเพื่อต่อท้ายบริการบนการ์ดคิว"><i class="fa-solid fa-bolt mr-1"></i> ปุ่มลัดบนการ์ดคิว</button>
+         </div>
          <div id="configServicesList" class="space-y-3"><div class="text-center py-6 text-gray-400 text-sm">กำลังโหลดข้อมูล...</div></div>
       </div>
 
@@ -1540,7 +1543,8 @@
         getEligiblePackagesGrouped:1, getUsersBySegment:1, getSalesTrackerData:1,
         getRewardRules:1, getAllEmployeesStatus:1, getEmployeeReport:1,
         getNextFreeSlot:1, searchUser:1, searchWalkInVehicle:1, searchPackageOwner:1,
-        getB2BContracts:1, getPickupConfig:1, getMyCredits:1
+        getB2BContracts:1, getPickupConfig:1, getMyCredits:1,
+        getQuickAddConfig:1
       };
 
       function readAction(body) {
@@ -2712,7 +2716,12 @@
           window._lastBoardData = result.data;      // ⚡ D209: ไว้ให้ optimistic UI ใช้
           renderBoard(result.data);
           _cacheAdminBookings(result.data);
-          if(result.services) { adminServices = result.services; renderWiServices(); }
+          if(result.services) {
+            adminServices = result.services;
+            window.adminServices = adminServices;      // ⚡ D210 โมดัลตั้งค่าปุ่มลัดอ่านตัวนี้
+            renderWiServices();
+            if (!window._kqaFetchedOnce) { window._kqaFetchedOnce = true; _kqaFetchConfig(); }
+          }
           // 🆕 CRM Enhancement v1.5 (10/6/2026 Patch 4): tier hydration background (non-blocking)
           //   Re-renders Kanban with tier badges once data arrives (~2s for 200 users via v1.4.1 preload)
           if (typeof _hydrateKanbanTiers === 'function') {
@@ -3173,6 +3182,9 @@
           'pending_payment', 'slip_submitted',
           'pending', 'confirmed',
           'checked_in', 'in_progress',
+          // 🚗 D210: backend (D209b) ปลด 'completed' ให้แก้บริการได้แล้ว แต่ปุ่มฝั่งหน้าเว็บยังไม่โผล่
+          //   พนักงานมักนึกออกว่าลงบริการผิด "หลังกดล้างเสร็จ" — ถ้ากดไม่ได้ก็ต้องลบคิวทำใหม่
+          'completed',
           'valet_pickup_pending'
         ].includes(b.status);
         const canCancel = !['completed', 'cancelled', 'cancelled_noshow'].includes(b.status);
@@ -3196,6 +3208,9 @@
             ${canPayBefore ? `<button onclick="openPaymentBeforeService_('${esc(b.bookingId)}', false)" class="flex-1 text-[10px] py-1.5 bg-emerald-50 text-emerald-700 rounded-md hover:bg-emerald-100 transition font-bold"><i class="fa-solid fa-money-bill-wave"></i> รับเงิน</button>` : ''}
             ${canSellPackage ? `<button onclick="openSellPackageFromCard_('${esc(b.lineUid)}','${esc(b.plate)}')" class="flex-1 text-[10px] py-1.5 bg-orange-50 text-orange-700 rounded-md hover:bg-orange-100 transition font-bold"><i class="fa-solid fa-box-open"></i> ขายแพ็กเกจ</button>` : ''}
           </div>` : '';
+
+        // ⚡ D210 — ชิปปุ่มลัด "เพิ่มบริการ" (โผล่เฉพาะคิวที่แก้บริการได้ + ยังไม่ได้จ่ายด้วยแพ็กเกจ)
+        const quickAddRow = (canEditService && !isPackagePaid) ? _kqaChipsHtml(b) : '';
 
         const adminActionBtns = (canReschedule || canCancel || canEdit || canEditService) ? `
           <div class="flex gap-1 mt-2 pt-2 border-t border-gray-100">
@@ -3273,6 +3288,7 @@
             ${paymentBadge}
             ${getActionButton(b, isPreorder)}
             ${upsellBtns}
+            ${quickAddRow}
             ${adminActionBtns}
           </div>`;
 
@@ -5083,6 +5099,150 @@
       recompute();
     }
 
+
+    // ==================================================================
+    // ⚡ D210 — ปุ่มลัดเพิ่มบริการบนการ์ดคิว
+    //   ทำไม: "ล้างด่วน + อัดฉีด" หลุดบ่อย เพราะจะแก้บริการต้องเปิดโมดัล เลื่อนหา
+    //         checkbox แล้วกดบันทึก ⇒ กดยาก ⇒ ลืม ⇒ เก็บเงินขาด
+    //   ตัวเพิ่มจริงยังเป็น editBookingFields ตัวเดิม ⇒ ด่านทุกชั้นยังทำงานครบ
+    //         (package lock · status lock · price recalc · D209b ข้ามเช็ค bay)
+    //   🚨 ไม่ hard-code service_id — CEO ตั้งเองใน ⚙ ตั้งค่า > บริการ
+    // ==================================================================
+    var KQA_LS_KEY = 'karshine_quickadd_v1';
+    window._kqaItems = [];
+    window._kqaMax = 3;
+    window._kqaStale = [];
+
+    // อ่านจาก localStorage ก่อน = ชิปโผล่ทันทีตอนเปิดหน้า ไม่ต้องรอเน็ต
+    try {
+      var _kqaRaw = localStorage.getItem(KQA_LS_KEY);
+      if (_kqaRaw) window._kqaItems = JSON.parse(_kqaRaw) || [];
+    } catch (e) { window._kqaItems = []; }
+
+    // fail-soft: เน็ตสะดุด → ใช้ค่าที่ cache ไว้ต่อ ชิปไม่หาย
+    async function _kqaFetchConfig() {
+      try {
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'getQuickAddConfig' })) });
+        const j = await r.json();
+        if (j && j.status === 'success') {
+          window._kqaItems = j.items || [];
+          window._kqaStale = j.stale || [];
+          window._kqaMax = j.max || 3;
+          try { localStorage.setItem(KQA_LS_KEY, JSON.stringify(window._kqaItems)); } catch (e) {}
+          // กระดานถูกวาดไปแล้วก่อน config มาถึง ⇒ ต้องวาดใหม่ ไม่งั้นชิปโผล่ตอนรีเฟรชรอบหน้า
+          try {
+            if (window._lastBoardData && typeof renderBoard === 'function') renderBoard(window._lastBoardData);
+          } catch (e) {}
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    function _kqaChipsHtml(b) {
+      const items = window._kqaItems || [];
+      if (!items.length) return '';
+      const cur = String(b.serviceIds || '').split(',').map(s => s.trim()).filter(Boolean);
+      const todo = items.filter(x => cur.indexOf(String(x.service_id)) === -1);
+      if (!todo.length) return '';        // มีครบแล้ว = ไม่ต้องรก
+      return '<div class="flex gap-1 mt-2 flex-wrap">' + todo.map(x =>
+        `<button onclick="_kqaAdd('${esc(b.bookingId)}','${esc(x.service_id)}')" title="${esc(x.service_name)}"
+          class="flex-1 min-w-[72px] text-[10px] py-1.5 px-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-md hover:bg-amber-100 transition font-bold truncate">
+          <i class="fa-solid fa-plus"></i> ${esc(x.label)}</button>`
+      ).join('') + '</div>';
+    }
+
+    async function _kqaAdd(bookingId, serviceId) {
+      const b = (window.adminBookingsCache || []).find(x => String(x.bookingId) === String(bookingId));
+      if (!b) return Swal.fire('ไม่พบคิว', 'กระดานอาจเพิ่งรีเฟรช ลองกดใหม่อีกครั้ง', 'warning');
+      const cur = String(b.serviceIds || '').split(',').map(s => s.trim()).filter(Boolean);
+      // กันกดรัว/กดซ้ำ — เพิ่มบริการเดิมซ้ำ = ราคาบาน
+      if (cur.indexOf(String(serviceId)) !== -1) {
+        return Swal.fire('มีอยู่แล้ว', 'คิวนี้มีบริการนี้อยู่แล้ว', 'info');
+      }
+      const item = (window._kqaItems || []).find(x => String(x.service_id) === String(serviceId));
+      const name = item ? item.service_name : String(serviceId);
+      const ok = await Swal.fire({
+        title: '➕ เพิ่มบริการ',
+        html: `<div class="text-left text-sm">
+                 <p class="text-gray-600">ทะเบียน <b>${esc(b.plate || '-')}</b></p>
+                 <p class="mt-2">เพิ่ม <b class="text-amber-700">${esc(name)}</b> ต่อท้ายบริการเดิม</p>
+                 <p class="text-[11px] text-gray-500 mt-2">ระบบคิดราคาใหม่ให้อัตโนมัติ · ถ้ารับเงินไปแล้วจะบอกว่าต้องเก็บเพิ่มเท่าไหร่</p>
+               </div>`,
+        icon: 'question', showCancelButton: true,
+        confirmButtonText: '➕ เพิ่มเลย', cancelButtonText: 'ยกเลิก', confirmButtonColor: '#d97706'
+      });
+      if (!ok.isConfirmed) return;
+      _doEditBookingFields(bookingId, { services: cur.concat([String(serviceId)]).join(',') });
+    }
+
+    // ⚙ ตั้งค่าว่าจะให้ปุ่มไหนโผล่บนการ์ด (สูงสุด 3)
+    async function openQuickAddSettings() {
+      if (!(window.adminServices || []).length) {
+        return Swal.fire('ยังไม่มีข้อมูลบริการ', 'เปิดหน้ากระดานคิวสักครั้งให้ระบบโหลดรายการบริการก่อน', 'info');
+      }
+      await _kqaFetchConfig();
+      const chosen = {};
+      (window._kqaItems || []).forEach(x => { chosen[String(x.service_id)] = x.label || ''; });
+      const max = window._kqaMax || 3;
+
+      const staleWarn = (window._kqaStale || []).length
+        ? `<div class="mb-2 p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 text-left">
+             ⚠️ รหัสที่ตั้งไว้แต่หาไม่เจอในชีต Services แล้ว: <b>${esc((window._kqaStale || []).join(', '))}</b><br>
+             กดบันทึกใหม่เพื่อล้างทิ้ง</div>` : '';
+
+      const rows = (window.adminServices || []).map(sv => {
+        const id = String(sv.service_id || sv.id || '');
+        const nm = String(sv.service_name || sv.name || '-');
+        const on = Object.prototype.hasOwnProperty.call(chosen, id);
+        return `<label class="flex items-center gap-2 p-2 border rounded-lg mb-1 text-xs ${on ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'}">
+            <input type="checkbox" class="kqa-cb" value="${esc(id)}" ${on ? 'checked' : ''}>
+            <span class="flex-1 text-left truncate" title="${esc(nm)}">${esc(nm)}</span>
+            <input type="text" class="kqa-lb w-24 shrink-0 border border-gray-200 rounded px-1 py-0.5 text-[11px]"
+                   data-id="${esc(id)}" placeholder="ชื่อบนปุ่ม" maxlength="16" value="${esc(chosen[id] || '')}">
+          </label>`;
+      }).join('');
+
+      const res = await Swal.fire({
+        title: '⚡ ปุ่มลัดบนการ์ดคิว',
+        html: `<div class="text-left">
+                 ${staleWarn}
+                 <p class="text-[11px] text-gray-500 mb-2">เลือกได้สูงสุด <b>${max}</b> บริการ — ปุ่มจะโผล่บนการ์ดคิวให้กดเพิ่มได้ครั้งเดียวจบ<br>
+                 ช่อง "ชื่อบนปุ่ม" ปล่อยว่างได้ (จะใช้ชื่อเต็ม) แต่ชื่อสั้นอ่านง่ายกว่าบนมือถือ</p>
+                 <div class="max-h-72 overflow-y-auto pr-1">${rows}</div>
+               </div>`,
+        width: 560, showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึก',
+        cancelButtonText: 'ยกเลิก', confirmButtonColor: '#d97706'
+      });
+      if (!res.isConfirmed) return;
+
+      const picked = Array.from(document.querySelectorAll('.kqa-cb:checked')).map(el => el.value);
+      if (picked.length > max) {
+        return Swal.fire('เลือกเกิน', 'เลือกได้สูงสุด ' + max + ' บริการ (เลือกมา ' + picked.length + ')', 'warning');
+      }
+      const labelOf = {};
+      document.querySelectorAll('.kqa-lb').forEach(el => { labelOf[el.getAttribute('data-id')] = String(el.value || '').trim(); });
+      // ห้ามมี ',' หรือ '::' ในชื่อสั้น — จะทำให้ค่าที่เก็บแตกโครง
+      const ids = picked.map(id => {
+        const lb = (labelOf[id] || '').replace(/[,:]/g, ' ').trim();
+        return lb ? (id + '::' + lb) : id;
+      }).join(',');
+
+      Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+      try {
+        const r = await fetch(API_URL, { method: 'POST', body: withAuth(new URLSearchParams({ action: 'setQuickAddConfig', ids: ids })) });
+        const j = await r.json();
+        if (j && j.status === 'success') {
+          await _kqaFetchConfig();
+          Swal.fire({ icon: 'success', title: 'บันทึกแล้ว', text: 'ตั้งปุ่มลัด ' + (j.saved || 0) + ' ปุ่ม', timer: 1800 });
+          if (typeof loadAdminData === 'function') loadAdminData({ boardOnly: true });
+        } else {
+          Swal.fire('ไม่สำเร็จ', (j && j.message) || 'บันทึกไม่ได้', 'warning');
+        }
+      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+    }
+
     // 🆕 BUG #2 FIX: ใช้ editBookingFields แทน editBookingByAdmin
     async function _doEditBookingFields(bookingId, fields) {
       Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
@@ -5591,9 +5751,16 @@
 
     // กดชิป → เปิดการ์ดคิวนั้นให้แก้บริการ (ใช้ทางเดิมของหน้า ไม่สร้างทางใหม่)
     function openEditServiceFor(bookingId) {
+      // 🐛 D210 fix: เดิมเรียก openEditBookingModal(bookingId) ตัวเดียว — แต่ฟังก์ชันรับ 3-7 ตัว
+      //   ⇒ โมดัลเปิดมาโดยไม่รู้ว่าคิวนี้มีบริการอะไรอยู่ (ติ๊กไม่ขึ้นสักอัน)
+      //   ตอนนี้ดึงข้อมูลคิวจาก cache มาส่งให้ครบก่อน
       try {
-        if (typeof openEditBookingModal === 'function') return openEditBookingModal(bookingId);
-        if (typeof openEditServiceModal === 'function') return openEditServiceModal(bookingId);
+        const b = (window.adminBookingsCache || []).find(x => String(x.bookingId) === String(bookingId));
+        if (b && typeof openEditServiceModal === 'function') {
+          return openEditServiceModal(bookingId, b.plate || '', b.serviceIds || '',
+                                      b.carSize || 'M', b.paymentAmount || 0,
+                                      b.paymentMethod || '', b.status || '');
+        }
       } catch (e) {}
       const el = document.querySelector('[data-booking-id="' + bookingId + '"]');
       if (el && el.scrollIntoView) {
