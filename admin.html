@@ -119,7 +119,7 @@
     </div>
 
     <div class="overflow-x-auto pb-2">
-      <div class="grid gap-4 items-start" style="grid-template-columns: repeat(7, minmax(220px, 1fr)); min-width: 1540px;" id="board">
+      <div class="grid gap-4 items-start" style="grid-template-columns: repeat(8, minmax(220px, 1fr)); min-width: 1760px;" id="board">
 
         <!-- Lane 0: 💰 รอชำระ (pending_payment) — C4 v1.2 D136 -->
         <div class="bg-amber-50 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-amber-400">
@@ -182,6 +182,17 @@
             <span id="countValetDropoff" class="bg-purple-200 text-purple-800 px-2 rounded-full text-xs py-1">0</span>
           </h2>
           <div id="colValetDropoff" class="space-y-3"></div>
+        </div>
+
+        <!-- 🆕 D212-B Lane 6: ✅ เสร็จแล้ววันนี้ (completed · เฉพาะวันนี้) -->
+        <!--   ไม่ใช่เลนทำงาน — เป็น "ตะกร้าแก้ทีหลัง" สำหรับคิวที่กดล้างเสร็จไปแล้ว
+               พนักงานมักนึกออกว่าลงบริการผิดหลังกดเสร็จ ⇒ เดิมต้องลบคิวทำใหม่ -->
+        <div class="bg-slate-100 rounded-2xl p-4 shadow-inner min-h-[500px] border-t-4 border-slate-400">
+          <h2 class="font-bold text-slate-700 mb-4 pb-2 border-b border-slate-300 flex justify-between items-center">
+            <span><i class="fa-solid fa-circle-check text-slate-500 mr-1"></i> เสร็จแล้ววันนี้</span>
+            <span id="countCompletedToday" class="bg-slate-300 text-slate-800 px-2 rounded-full text-xs py-1">0</span>
+          </h2>
+          <div id="colCompletedToday" class="space-y-3"></div>
         </div>
 
       </div>
@@ -1544,7 +1555,8 @@
         getRewardRules:1, getAllEmployeesStatus:1, getEmployeeReport:1,
         getNextFreeSlot:1, searchUser:1, searchWalkInVehicle:1, searchPackageOwner:1,
         getB2BContracts:1, getPickupConfig:1, getMyCredits:1,
-        getQuickAddConfig:1
+        getQuickAddConfig:1,
+        getSalesList:1                 // 🆕 D212-A: ตัวอ่านซ้ำของ sellPackage/voidSale
       };
 
       function readAction(body) {
@@ -2766,13 +2778,16 @@
       //   การหรี่ + ขึ้น "กำลังโหลด" ทุก 30 วิ คือสาเหตุที่รู้สึกว่า "ต้องโหลดตลอด"
       //   ของจริงข้อมูลมาไวอยู่แล้ว — แค่ UI ทำให้รู้สึกช้า
       const _bg = !!(opts.silent || opts.boardOnly) && !!window._lastBoardData;
+      let _amResult = null;                 // 🆕 D212.1: ผลของคำขอรวม — ใช้ต่อหลัง try/catch
       if (_bg) { if (typeof kBusy === 'function') kBusy(true); }
       else if (loading && board) { loading.classList.remove('hidden'); board.style.opacity = '0.5'; }
       try {
         const payload = new URLSearchParams({ action: 'getAdminData', t: Date.now() });
         const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await res.json();
+        _amResult = result;                       // 🆕 D212.1
         if (result.status === 'success') {
           window._lastBoardData = result.data;      // ⚡ D209: ไว้ให้ optimistic UI ใช้
+          window._completedToday = result.completedToday || [];   // 🆕 D212-B เลน "เสร็จแล้ววันนี้"
           renderBoard(result.data);
           _cacheAdminBookings(result.data);
           if(result.services) {
@@ -2801,10 +2816,24 @@
         else if (loading && board) { loading.classList.add('hidden'); board.style.opacity = '1'; }
       }
 
-      // 🙋 Walk-in Capture v1.0 (D190): โหลดถาดรอเชื่อมคู่กัน (ไม่ block board)
-      loadWalkinPending();
-      // 🔎 D209: เช็คคิวที่ยังไม่แก้บริการคู่กันไปเลย (ไม่ block board)
-      loadUnfixedServices();
+      // ⚡ D212.1 (4/8/2026): 3 คำขอ → 1
+      //   วัดจริงจากป้าย 🩺 (300 คำขอ/46 นาที): getWalkinPending 89 + getPriceMismatchQueues 57
+      //   + getAdminData 47 = 193 คำขอ = **64% ของทั้งหมด** ทั้งที่ทั้ง 3 ตัวมาคู่กันเสมอ
+      //   ค่ากลางที่เครื่องรอ 5-13 วิ แต่ Executions บอกเซิร์ฟเวอร์รันจริง 2.6 วิ
+      //   ⇒ เวลาหายที่ "คิว" ไม่ใช่ที่โค้ด ⇒ ลดจำนวนคำขอคือทางแก้ที่ตรงจุด
+      //   ⚠️ ยังเก็บตัวยิงเดี่ยวไว้ — ใช้ตอน backend ยังไม่ deploy + ตอนกดปุ่มรีเฟรชเอง
+      if (_amResult && _amResult.walkinPending !== undefined && _amResult.walkinPending !== null) {
+        window.walkinPendingCache = _amResult.walkinPending || [];
+        try { renderWalkinPending(window.walkinPendingCache); } catch (e) {}
+      } else {
+        loadWalkinPending();          // backend เก่า → ยิงเองเหมือนเดิม
+      }
+      if (_amResult && _amResult.priceMismatch !== undefined && _amResult.priceMismatch !== null) {
+        window.unfixedSvcCache = _amResult.priceMismatch;
+        try { renderUnfixedServices(_amResult.priceMismatch); } catch (e) {}
+      } else {
+        loadUnfixedServices();        // backend เก่า → ยิงเองเหมือนเดิม
+      }
 
       // ⚡ PERF v3.0 (D197): จบตรงนี้ถ้าขอแค่กระดาน — ประหยัด 4-5 requests ต่อครั้ง
       //    ตัวเลขใน dashboard/รายงาน จะรีเฟรชเองตอนสลับไปแท็บนั้น (showSection)
@@ -3177,6 +3206,65 @@
       } catch (e) { Swal.fire('Error', e.message, 'error'); }
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // 🆕 D212-B (4/8/2026): เลน "เสร็จแล้ววันนี้"
+    // ══════════════════════════════════════════════════════════════════
+    //   ทำไมต้องมี: กด "ล้างเสร็จ" ปุ๊บการ์ดหายจากกระดานทันที (กระดานมีแต่เลนที่ยัง active)
+    //   พนักงานมักนึกออกทีหลังว่า "ลืมลงอัดฉีด" ⇒ เดิมต้องลบคิวแล้วทำใหม่ (เสียประวัติ + เลขคิวเฟ้อ)
+    //   D209b ปลด backend ให้ `editBookingFields` แก้คิว completed ได้แล้ว — ตรงนี้แค่เติมปุ่มให้กด
+    //
+    //   🛡️ การ์ดเลนนี้ตั้งใจให้ปุ่มน้อย: มีแค่ "แก้บริการ" + ปุ่มลัดเพิ่มบริการ
+    //      ไม่ใส่ "ลบคิว" (งานจบไปแล้ว ลบ = ยอดขายหาย) · ไม่ใส่ "เลื่อนเวลา" (ไม่มีความหมาย)
+    function _renderCompletedLane(items) {
+      const col = document.getElementById('colCompletedToday');
+      const cnt = document.getElementById('countCompletedToday');
+      if (!col) return;
+      const list = Array.isArray(items) ? items : [];
+      if (cnt) cnt.innerText = list.length;
+      if (!list.length) {
+        col.innerHTML = '<div class="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-300 rounded-xl">ยังไม่มีคิวที่เสร็จวันนี้</div>';
+        return;
+      }
+      // ใหม่สุดอยู่บน — คิวที่เพิ่งกดเสร็จคือตัวที่มีโอกาสต้องแก้มากที่สุด
+      const sorted = list.slice().sort(function (a, b) {
+        return new Date(b.bookingDate || 0) - new Date(a.bookingDate || 0);
+      });
+      col.innerHTML = sorted.map(_completedCardHtml).join('');
+    }
+
+    function _completedCardHtml(b) {
+      let timeStr = b.bookingDate || '';
+      if (timeStr && String(timeStr).includes('T')) {
+        const d = new Date(timeStr);
+        if (!isNaN(d.getTime())) timeStr = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      }
+      const isPaid = (b.paymentStatus === 'paid');
+      const isPackagePaid = (isPaid && b.paymentMethod === 'package');
+      const payLine = isPaid
+        ? `<span class="text-[10px] text-green-700">${isPackagePaid ? '📦 หักแพ็กเกจ' : '💰 ' + _methodLabel(b.paymentMethod || '-')}${b.paymentAmount > 0 ? ' · ' + Number(b.paymentAmount).toLocaleString() + '.-' : ''}</span>`
+        : `<span class="text-[10px] text-red-600 font-bold">⚠️ ยังไม่ได้รับเงิน</span>`;
+
+      // ⚡ ปุ่มลัดเพิ่มบริการ (D210) — ใช้ได้เฉพาะคิวที่ไม่ได้จ่ายด้วยแพ็กเกจ
+      const quickAddRow = !isPackagePaid ? (typeof _kqaChipsHtml === 'function' ? _kqaChipsHtml(b) : '') : '';
+
+      return `
+        <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-200 opacity-90 hover:opacity-100 transition">
+          <div class="flex justify-between items-start mb-1">
+            <span class="font-bold text-sm text-slate-700">${esc(b.plate || 'ไม่ระบุ')}</span>
+            <span class="text-[10px] text-slate-400">${esc(timeStr)}</span>
+          </div>
+          <div class="text-[11px] text-gray-500 truncate mb-1" title="${esc(b.model || '')}">${esc(b.model || '')}</div>
+          <div class="text-[11px] text-gray-600 mb-1">${esc(b.customerName || '')}</div>
+          <div class="text-[11px] text-teal-700 mb-2">${esc(b.serviceText || 'ไม่ระบุบริการ')}</div>
+          <div class="mb-2">${payLine}</div>
+          ${quickAddRow}
+          <button onclick="openEditServiceModal('${esc(b.bookingId)}','${esc(b.plate)}','${esc(b.serviceIds)}','${esc(b.carSize || 'M')}','${b.paymentAmount || 0}','${esc(b.paymentMethod || '')}','completed')"
+                  class="w-full text-[10px] py-1.5 mt-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 transition font-bold">
+            <i class="fa-solid fa-screwdriver-wrench"></i> แก้บริการ
+          </button>
+        </div>`;
+    }
+
     function renderBoard(bookings) {
       const colValetPickup  = document.getElementById('colValetPickup');
       const colPending      = document.getElementById('colPending');
@@ -3381,6 +3469,9 @@
       colCheckedIn.innerHTML    = _buf.checkedIn.normal.join('')    + _buf.checkedIn.preorder.join('');
       colInProgress.innerHTML   = _buf.inProgress.normal.join('')   + _buf.inProgress.preorder.join('');
       colValetDropoff.innerHTML = _buf.valetDropoff.normal.join('') + _buf.valetDropoff.preorder.join('');
+      // 🆕 D212-B: เลน "เสร็จแล้ววันนี้" — ข้อมูลมาคนละ array (backend ส่ง completedToday แยก)
+      //   ⚠️ ห้ามเอาไปยัดรวมใน bookings — renderBoard เดินตาม status ⇒ completed จะไม่เข้าเลนไหนเลย
+      try { _renderCompletedLane(window._completedToday || []); } catch (e) {}
 
       if (colPendingPayment && cPendPay === 0) colPendingPayment.innerHTML = '<div class="text-center text-amber-300 text-sm py-8 border-2 border-dashed border-amber-200 rounded-xl">ว่าง</div>';
       if (colSlipSubmitted  && cSlipSub === 0) colSlipSubmitted.innerHTML  = '<div class="text-center text-cyan-300 text-sm py-8 border-2 border-dashed border-cyan-200 rounded-xl">ว่าง</div>';
@@ -3606,6 +3697,7 @@
           board = result.data;
           // อ่านมาแล้วก็ใช้เลย — หน้าจอจะตรงกับของจริงทันที
           window._lastBoardData = board;
+          window._completedToday = result.completedToday || [];   // 🆕 D212-B
           try { renderBoard(board); } catch (e) {}
           try { _cacheAdminBookings(board); } catch (e) {}
         }
@@ -3643,6 +3735,188 @@
         icon: 'error', title: 'อัปเดตไม่สำเร็จ',
         text: 'ตรวจซ้ำแล้วสถานะยังเป็น "' + (item.status || '-') + '" — เซิร์ฟเวอร์ไม่ได้บันทึก',
         footer: 'กระดานอัปเดตเป็นของจริงแล้ว — กดใหม่ได้ปลอดภัย'
+      });
+      return 'failed';
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🆕 D212-A (4/8/2026): คำสั่งที่ "แตะเงิน" timeout — ต้องอ่านซ้ำก่อนตัดสิน
+    // ══════════════════════════════════════════════════════════════════
+    //   D211-B ปิดไปแล้ว 1 จุด (ปุ่มเปลี่ยนสถานะบนกระดาน) แต่ 3 จุดนี้เสี่ยง "เงิน" ตรงๆ:
+    //     · recordPayment  — จ่ายซ้ำ / ตัดสิทธิ์แพ็กเกจซ้ำ
+    //     · sellPackage    — ลูกค้าโดนเรียกเก็บ 2 ใบ
+    //     · voidSale       — ยกเลิกซ้ำ (คืนสต็อกซ้ำ)
+    //   ของเดิม catch แล้วเด้ง `e.message` ซึ่งพอ timeout จะเป็น
+    //     "เซิร์ฟเวอร์ตอบช้าเกิน 25 วินาที — ลองกดใหม่อีกครั้งครับ"
+    //   ⇒ **ข้อความสั่งให้กดซ้ำ ทั้งที่เซิร์ฟเวอร์อาจบันทึกไปแล้ว** ← ต้นตอเงินซ้ำตัวจริง
+    //
+    //   ⚠️ กฎที่ยึด (จาก D211):
+    //     · แต่ละ endpoint ต้องมี "ตัวอ่านซ้ำ" ของตัวเอง — getAdminData เช็คได้แค่บางเรื่อง
+    //     · คำขอตรวจซ้ำต้องมี `_vfy` ค่าไม่ซ้ำ ไม่งั้นโดน dedupe เอาคำตอบเก่ามาใช้
+    //     · อ่านซ้ำไม่ได้ = **บอกว่าไม่รู้** ห้ามเดาทั้ง 2 ทาง
+    //     · ห้ามใช้ loader ปกติ (loadAdminData / loadPOSSales) มาตรวจ — มันกลืน error เงียบๆ
+
+    /** เด้งกล่อง "กำลังตรวจสอบ อย่าเพิ่งกดซ้ำ" — ใช้ร่วมกันทุกตัวตรวจ */
+    function _kMoneyCheckingModal(what) {
+      Swal.fire({
+        icon: 'info',
+        title: 'เซิร์ฟเวอร์ตอบช้า',
+        html: 'กำลังตรวจว่า' + what + 'เข้าระบบแล้วหรือยัง<br>' +
+              '<b style="color:#dc2626">อย่าเพิ่งกดซ้ำครับ</b><br>' +
+              '<span style="font-size:12px;color:#6b7280">อาจใช้เวลาถึง 1 นาที</span>',
+        allowOutsideClick: false, allowEscapeKey: false,
+        didOpen: function () { try { Swal.showLoading(); } catch (e) {} }
+      });
+    }
+
+    /** ยิงคำสั่งอ่านแบบ "ตรวจซ้ำ" — ใส่ _vfy กัน dedupe · คืน null ถ้าอ่านไม่สำเร็จ */
+    async function _kVerifyFetch(action, extra) {
+      try {
+        const p = new URLSearchParams(Object.assign(
+          { action: action, t: Date.now(), _vfy: action + '-' + Date.now() + '-' + Math.random() },
+          extra || {}
+        ));
+        const res = await fetch(API_URL, { method: 'POST', body: withAuth(p) });
+        const j = await res.json();
+        return (j && j.status === 'success') ? j : null;
+      } catch (e) { return null; }
+    }
+
+    /** กล่อง "ไม่รู้ผล" — ใช้ตอนอ่านซ้ำไม่สำเร็จ · ห้ามเดาว่าสำเร็จหรือพลาด */
+    function _kUnknownResult(where) {
+      Swal.fire({
+        icon: 'warning', title: 'ยังไม่รู้ผล',
+        html: 'เซิร์ฟเวอร์ช้าจนตรวจซ้ำไม่ได้<br><b style="color:#dc2626">อย่ากดซ้ำ</b> — ' +
+              'กด F5 แล้วเปิด' + where + 'ดูก่อนว่าเข้าระบบแล้วหรือยัง',
+        footer: 'เข้าแล้ว = สำเร็จ · ยังไม่เข้า ค่อยกดใหม่'
+      });
+      return 'unknown';
+    }
+
+    // ── A1. recordPayment ────────────────────────────────────────────
+    //   ตัวอ่านซ้ำ = getAdminData → `paymentStatus` ของคิวนั้น (คอลัมน์ R ของชีต Bookings)
+    //   ✅ getAdminData คืน paymentStatus/paymentAmount มาด้วยจริง (ตรวจโค้ด backend แล้ว 4/8)
+    //   ⚠️ ข้อจำกัด: กระดานไม่โชว์คิว completed/cancelled ⇒ ถ้าการ์ดหายไปเลย = ตัดสินไม่ได้
+    async function _kVerifyPaymentAfterTimeout(bookingId, expectStatus) {
+      _kMoneyCheckingModal('การรับเงิน');
+      const j = await _kVerifyFetch('getAdminData', {});
+      if (!j || !Array.isArray(j.data)) return _kUnknownResult('หน้ากระดานคิว');
+
+      // อ่านมาแล้วใช้เลย — จอจะตรงกับของจริงทันที
+      window._lastBoardData = j.data;
+      window._completedToday = j.completedToday || [];            // 🆕 D212-B
+      try { renderBoard(j.data); } catch (e) {}
+      try { _cacheAdminBookings(j.data); } catch (e) {}
+
+      const it = j.data.find(function (x) { return String(x.bookingId) === String(bookingId); });
+      if (!it) {
+        // ไม่เจอบนกระดาน = อาจถูกปิดงานไปแล้ว (completed) หรือถูกยกเลิก — เดาไม่ได้
+        Swal.fire({
+          icon: 'warning', title: 'ไม่พบคิวนี้บนกระดาน',
+          html: 'คิวนี้อาจถูกปิดงานไปแล้ว<br><b style="color:#dc2626">อย่ากดรับเงินซ้ำ</b> — ' +
+                'เช็คที่หน้า "ยอดขายวันนี้" ก่อนครับ'
+        });
+        return 'unknown';
+      }
+
+      const ps = String(it.paymentStatus || '').toLowerCase();
+      const want = String(expectStatus || 'paid').toLowerCase();
+      if (ps === want || ps === 'paid' || ps === 'partial') {
+        Swal.fire({
+          icon: 'success', title: 'บันทึกสำเร็จแล้ว', timer: 2600, showConfirmButton: false,
+          html: 'เซิร์ฟเวอร์แค่ตอบช้า — เงินเข้าระบบเรียบร้อย<br>' +
+                '<span style="font-size:12px;color:#6b7280">สถานะ: ' + (it.paymentStatus || '-') +
+                (it.paymentAmount > 0 ? ' · ' + Number(it.paymentAmount).toLocaleString() + '.-' : '') + '</span>'
+        });
+        return 'ok';
+      }
+
+      Swal.fire({
+        icon: 'error', title: 'ยังไม่ได้บันทึกเงิน',
+        text: 'ตรวจซ้ำแล้วคิวนี้ยังไม่มีการรับเงิน — เซิร์ฟเวอร์ไม่ได้เขียน',
+        footer: 'กระดานอัปเดตเป็นของจริงแล้ว — กดรับเงินใหม่ได้ปลอดภัย'
+      });
+      return 'failed';
+    }
+
+    // ── A2. sellPackage ──────────────────────────────────────────────
+    //   ตัวอ่านซ้ำ = getSalesList (วันนี้) → หาบิล `PS-` ของ uid นี้ ที่มีชื่อแพ็กเกจตรงกัน
+    //   ⚠️ ไม่มี idempotency key ฝั่งเซิร์ฟเวอร์ ⇒ ถ้าลูกค้ารายนี้ซื้อแพ็กเกจเดียวกันไปแล้ว
+    //      "วันนี้" ตัวตรวจจะเห็นหลายใบ — จึงรายงานจำนวนใบ + เลขที่ใบเสร็จให้คนตัดสิน
+    //      ไม่ยืนยันเองว่า "ใบไหนคือของคลิกนี้" (เดาไม่ได้ ก็ไม่เดา)
+    async function _kVerifyPackageSaleAfterTimeout(uid, pkgName) {
+      _kMoneyCheckingModal('การขายแพ็กเกจ');
+      const today = new Date();
+      const dStr = today.getFullYear() + '-' +
+                   String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                   String(today.getDate()).padStart(2, '0');
+      const j = await _kVerifyFetch('getSalesList', { date: dStr });
+      const sales = (j && j.data && Array.isArray(j.data.sales)) ? j.data.sales : null;
+      if (!sales) return _kUnknownResult('หน้า "ยอดขายวันนี้"');
+
+      const nm = String(pkgName || '').trim();
+      const hits = sales.filter(function (x) {
+        if (!x || x.voided) return false;
+        if (String(x.saleId || '').indexOf('PS-') !== 0) return false;
+        if (String(x.lineUid || '') !== String(uid)) return false;
+        if (!nm) return true;
+        return (x.items || []).some(function (it) {
+          return String(it && it.name || '').indexOf(nm) >= 0;
+        });
+      });
+
+      if (!hits.length) {
+        Swal.fire({
+          icon: 'error', title: 'ยังไม่ได้บันทึกการขาย',
+          text: 'ตรวจซ้ำแล้วไม่พบบิลขายแพ็กเกจนี้ของลูกค้ารายนี้วันนี้',
+          footer: 'ขายใหม่ได้ปลอดภัย'
+        });
+        return 'failed';
+      }
+
+      const rcpts = hits.map(function (x) { return x.receiptNo || x.saleId; }).join(', ');
+      if (hits.length > 1) {
+        Swal.fire({
+          icon: 'warning', title: 'พบ ' + hits.length + ' ใบ — อาจซ้ำ',
+          html: 'ลูกค้ารายนี้มีบิลแพ็กเกจนี้วันนี้ <b>' + hits.length + ' ใบ</b><br>' +
+                '<span style="font-size:12px">' + esc(rcpts) + '</span><br>' +
+                '<b style="color:#dc2626">อย่าขายซ้ำ</b> — เปิดหน้ายอดขายเช็คแล้วยกเลิกใบเกินครับ'
+        });
+        return 'dup';
+      }
+      Swal.fire({
+        icon: 'success', title: 'ขายสำเร็จแล้ว', timer: 3000, showConfirmButton: false,
+        html: 'เซิร์ฟเวอร์แค่ตอบช้า — บิลเข้าระบบเรียบร้อย<br>' +
+              '<span style="font-size:12px;color:#6b7280">ใบเสร็จ ' + esc(rcpts) + '</span>'
+      });
+      return 'ok';
+    }
+
+    // ── A3. voidSale ─────────────────────────────────────────────────
+    //   ตัวอ่านซ้ำ = getSalesList → saleId เดิม `voided === true` ⇒ ชัดเจน 100% (มี id ให้เทียบตรงๆ)
+    async function _kVerifyVoidAfterTimeout(saleId, dateStr) {
+      _kMoneyCheckingModal('การยกเลิกบิล');
+      const j = await _kVerifyFetch('getSalesList', { date: dateStr });
+      const sales = (j && j.data && Array.isArray(j.data.sales)) ? j.data.sales : null;
+      if (!sales) return _kUnknownResult('หน้า "ยอดขายวันนี้"');
+
+      const it = sales.find(function (x) { return String(x && x.saleId) === String(saleId); });
+      if (!it) {
+        Swal.fire({
+          icon: 'warning', title: 'ไม่พบบิลนี้',
+          text: 'ตรวจซ้ำแล้วไม่เจอบิล ' + saleId + ' ในวันที่เลือก — กด F5 แล้วเช็คอีกครั้งก่อนกดใหม่ครับ'
+        });
+        return 'unknown';
+      }
+      if (it.voided) {
+        Swal.fire({ icon: 'success', title: 'ยกเลิกบิลแล้ว', timer: 2400, showConfirmButton: false,
+                    text: 'เซิร์ฟเวอร์แค่ตอบช้า — บิลถูกยกเลิกและคืนสต็อกเรียบร้อย' });
+        return 'ok';
+      }
+      Swal.fire({
+        icon: 'error', title: 'ยังไม่ได้ยกเลิก',
+        text: 'ตรวจซ้ำแล้วบิลนี้ยังไม่ถูกยกเลิก — เซิร์ฟเวอร์ไม่ได้เขียน',
+        footer: 'กดยกเลิกใหม่ได้ปลอดภัย'
       });
       return 'failed';
     }
@@ -4822,7 +5096,17 @@
             successMsg = `บันทึกการจ่าย ${amount.toLocaleString()}.- (${method})${tail}`;
           }
           Swal.fire({ icon: 'success', title: 'สำเร็จ!', html: successMsg, timer: 2500 }).then(() => loadAdminData({ boardOnly: true }));
-        } catch (e) { Swal.fire('Error', e.message, 'error'); }
+        } catch (e) {
+          // 🆕 D212-A: timeout ≠ ล้มเหลว — Apps Script ทำงานต่อจนจบแม้ client ยกเลิกที่ 25 วิ
+          //   เดิม: เด้ง e.message = "เซิร์ฟเวอร์ตอบช้าเกิน 25 วินาที — ลองกดใหม่อีกครั้งครับ"
+          //   ⇒ พนักงานกดซ้ำ ⇒ รับเงินซ้ำ / ตัดสิทธิ์แพ็กเกจซ้ำ
+          if (e && e.__aborted) {
+            await _kVerifyPaymentAfterTimeout(bookingId, payStatus);
+            try { loadAdminData({ boardOnly: true, silent: true }); } catch (e2) {}
+          } else {
+            Swal.fire('Error', e.message, 'error');
+          }
+        }
       } else if (res.isDenied) {
         // ข้าม payment — complete อย่างเดียว
         Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
@@ -5049,6 +5333,13 @@
           ? { ok: true }
           : { ok: false, message: (j && j.message) || 'บันทึกเงินไม่สำเร็จ' };
       } catch (err) {
+        // 🆕 D212-A: timeout = "ไม่รู้ผล" ไม่ใช่ "ไม่สำเร็จ" — คิวสร้างไปแล้ว
+        //   เงินอาจลงไปแล้วก็ได้ ⇒ ห้ามบอกให้กดรับเงินซ้ำ
+        if (err && err.__aborted) {
+          return { ok: false, aborted: true,
+                   message: 'เซิร์ฟเวอร์ตอบช้า — ยังไม่รู้ว่าเงินลงหรือยัง อย่าเพิ่งกดรับเงินซ้ำ ' +
+                            'ให้เปิดการ์ดคิวนี้ดูว่ามีป้าย "จ่ายแล้ว" หรือยัง' };
+        }
         return { ok: false, message: err.message || 'เชื่อมต่อไม่ได้' };
       }
     }
@@ -6122,11 +6413,12 @@
       }
     }
 
-    // โหลดซ้ำทุก 60 วินาที (เบามาก — คืนแค่รายการที่ยัง open)
-    setInterval(function () {
-      const sec = document.getElementById('board-section');
-      if (sec && sec.classList.contains('active')) loadWalkinPending();
-    }, 60000);
+    // ⚡ D212.1 (4/8/2026): ถอดตัวจับเวลา 60 วิ ที่ยิง getWalkinPending ซ้ำออก
+    //   เหตุผล 1 — ซ้ำซ้อน: loadAdminData ยิง getWalkinPending ให้อยู่แล้วทุกรอบ (ตอนนี้แนบมาในคำขอเดียว)
+    //   เหตุผล 2 — ตัวนี้ **ไม่เช็ค document.hidden** ⇒ สลับไปแอปอื่นแล้วยังยิงต่อ
+    //     Chrome หน่วง setTimeout ในแท็บที่ถูกซ่อน ⇒ ตัวจับเวลา abort 25 วิ ไม่ทำงานตรงเวลา
+    //     ⇒ เป็นที่มาของ "ช้าสุด 149.6 วิ · ผล ok" ในสถิติ 4/8 (ไม่ใช่คนรอจริง 149 วิ)
+    //   🔙 อยากได้กลับ: ใส่ setInterval เดิมคืน + เพิ่ม `if (document.hidden) return;`
 
     function _cacheAdminBookings(bookings) {
       window.adminBookingsCache = bookings.map(b => ({
@@ -9612,7 +9904,16 @@
         try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
         try { if (typeof loadReconciliation === 'function') loadReconciliation(); } catch (e) {}
       } catch (e) {
-        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+        // 🆕 D212-A: timeout ตอนขายแพ็กเกจ = เสี่ยงลูกค้าโดนเก็บเงิน 2 ใบ
+        if (e && e.__aborted) {
+          await _kVerifyPackageSaleAfterTimeout(
+            (_posPkgCustomer && _posPkgCustomer.uid) || '',
+            (_posPkgSelected && _posPkgSelected.name) || ''
+          );
+          try { await loadPOSPackages(); } catch (e2) {}
+        } else {
+          Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+        }
       } finally {
         _posPkgBusy = false; posPkgRenderPicked();
       }
@@ -9771,7 +10072,14 @@
         try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
         try { if (typeof loadReconciliation === 'function') loadReconciliation(); } catch (e) {}
       } catch (e) {
-        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+        // 🆕 D212-A: timeout ตอนยกเลิกบิล — กดซ้ำ = คืนสต็อกซ้ำ
+        if (e && e.__aborted) {
+          await _kVerifyVoidAfterTimeout(s.saleId, (document.getElementById('posSalesDate')||{}).value || _posToday());
+          try { await loadPOSSales(); } catch (e2) {}
+          try { loadPOSCatalog(); } catch (e2) {}
+        } else {
+          Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: e.message });
+        }
       }
     }
     // ══ End POS Quick Sale ══
