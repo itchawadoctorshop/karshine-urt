@@ -1661,7 +1661,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D212.3 · 4 ส.ค. 2026';
+      window.K_BUILD = 'D212.4 · 4 ส.ค. 2026';
 
       var PERF_KEY = 'karshine_perf_v2', PERF_MAX = 300, PERF_SLOW_MS = 8000;
       //   ⚠️ bump key v1→v2 เพราะรูปแบบข้อมูลเพิ่มช่อง q/h — ของเก่าไม่มี จะทำให้ตารางเพี้ยน
@@ -3662,7 +3662,15 @@
             if (result.status === 'success') {
               Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ปิดงานเรียบร้อย', timer: 2000 }).then(() => loadAdminData({ boardOnly: true }));
             } else throw new Error(result.message);
-          } catch (e) { Swal.fire('Error', e.message, 'error'); }
+          } catch (e) {
+            // 🆕 D212.4: กดซ้ำที่ปุ่มนี้ = **บวกแต้มซ้ำ** ⇒ ต้องอ่านซ้ำก่อนตัดสิน
+            if (e && e.__aborted) {
+              await _kVerifyStatusAfterTimeout(bookingId, 'completed');
+              try { loadAdminData({ boardOnly: true, silent: true }); } catch (e2) {}
+            } else {
+              Swal.fire('Error', e.message, 'error');
+            }
+          }
           return;
         }
         return openPaymentModal_(bookingId);
@@ -5147,6 +5155,12 @@
         }
 
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+        // 🆕 D212.4: จำว่า timeout เกิดที่ขั้นไหน — ตัวตรวจของ 2 ขั้นนี้คนละตัวกัน
+        //   'pay'    → ตรวจว่าเงินเข้าหรือยัง
+        //   'status' → เงินเข้าไปแล้วแน่ๆ ที่ต้องตรวจคือ "งานถูกปิดหรือยัง"
+        //   ถ้าใช้ตัวตรวจของเงินตอน timeout ที่ขั้นปิดงาน จะขึ้น "เงินเข้าระบบเรียบร้อย"
+        //   ซึ่งจริงแต่ไม่ครบ — งานยังไม่ปิด การ์ดยังค้างบนกระดาน ⇒ พนักงานงง
+        let _payStep = 'pay';
         try {
           // 1. บันทึก payment (+ discount + package + borrowed)
           // 🔧 V2 Combo Lock (patch F7 — 5/6/2026): route to recordPaymentForCombo ถ้าเป็น combo group,
@@ -5193,6 +5207,7 @@
 
           // 2. 🆕 F2.5f: update status → completed เฉพาะ mode complete
           if (completeAfter) {
+            _payStep = 'status';        // 🆕 D212.4: ข้ามมาขั้นปิดงานแล้ว
             const statusPayload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: 'completed' });
             const statusRes = await fetch(API_URL, { method: 'POST', body: withAuth(statusPayload) });
             const statusResult = await statusRes.json();
@@ -5220,7 +5235,12 @@
           //   เดิม: เด้ง e.message = "เซิร์ฟเวอร์ตอบช้าเกิน 25 วินาที — ลองกดใหม่อีกครั้งครับ"
           //   ⇒ พนักงานกดซ้ำ ⇒ รับเงินซ้ำ / ตัดสิทธิ์แพ็กเกจซ้ำ
           if (e && e.__aborted) {
-            await _kVerifyPaymentAfterTimeout(bookingId, payStatus);
+            if (_payStep === 'status') {
+              // เงินลงไปแล้ว (ขั้น 1 ผ่าน) — ที่ค้างคือการปิดงาน
+              await _kVerifyStatusAfterTimeout(bookingId, 'completed');
+            } else {
+              await _kVerifyPaymentAfterTimeout(bookingId, payStatus);
+            }
             try { loadAdminData({ boardOnly: true, silent: true }); } catch (e2) {}
           } else {
             Swal.fire('Error', e.message, 'error');
@@ -5236,7 +5256,15 @@
           if (result.status === 'success') {
             Swal.fire('สำเร็จ', 'ล้างเสร็จ (ไม่ได้บันทึกการจ่าย — จะแสดงเป็น "ยังไม่จ่าย" ใน dashboard)', 'success').then(() => loadAdminData({ boardOnly: true }));
           } else throw new Error(result.message);
-        } catch (e) { Swal.fire('Error', e.message, 'error'); }
+        } catch (e) {
+          // 🆕 D212.4
+          if (e && e.__aborted) {
+            await _kVerifyStatusAfterTimeout(bookingId, 'completed');
+            try { loadAdminData({ boardOnly: true, silent: true }); } catch (e2) {}
+          } else {
+            Swal.fire('Error', e.message, 'error');
+          }
+        }
       }
     }
 
@@ -6080,7 +6108,15 @@
         } else {
           Swal.fire('ไม่สำเร็จ', result.message || 'เกิดข้อผิดพลาด', 'warning');
         }
-      } catch (e) { Swal.fire('Error', e.message, 'error'); }
+      } catch (e) {
+        // 🆕 D212.4: กดซ้ำ = ส่ง LINE แจ้งลูกค้าซ้ำอีกรอบ (กล่องยืนยันบอกเองว่าแจ้งทันที)
+        if (e && e.__aborted) {
+          await _kVerifyStatusAfterTimeout(bookingId, 'cancelled');
+          try { loadAdminData({ boardOnly: true, silent: true }); } catch (e2) {}
+        } else {
+          Swal.fire('Error', e.message, 'error');
+        }
+      }
     }
 
     // ==============================================
@@ -8880,7 +8916,15 @@
         Swal.close();
         loadAdminData({ boardOnly: true });
       } catch (e) {
-        Swal.fire('Error', e.message, 'error');
+        // 🆕 D212.4: กดซ้ำ = อัปรูปซ้ำเข้า Drive + ส่ง LINE ซ้ำ
+        //   ⚠️ ตรวจได้แค่ "สถานะเปลี่ยนหรือยัง" — รูปซ้ำตรวจจากตรงนี้ไม่ได้
+        //      สถานะเปลี่ยนแล้ว = อัปรูปผ่านไปแล้วแน่ (โค้ดอัปรูปก่อนเปลี่ยนสถานะ)
+        if (e && e.__aborted) {
+          await _kVerifyStatusAfterTimeout(_photoBookingId, _photoTargetStatus);
+          try { loadAdminData({ boardOnly: true, silent: true }); } catch (e2) {}
+        } else {
+          Swal.fire('Error', e.message, 'error');
+        }
       }
     }
     // ── End Photo Modal ───────────────────────────────────────────
