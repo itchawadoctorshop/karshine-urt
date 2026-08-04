@@ -1655,26 +1655,48 @@
       //     ⇒ เวลาหายไปที่คิว/เน็ต ไม่ใช่โค้ด ⇒ ไปยุบโค้ดก็ไม่หาย
       //   เก็บใน localStorage เครื่องละชุด · หมุนทิ้งเองที่ 300 รายการ
       // ══════════════════════════════════════════════════════════════
-      var PERF_KEY = 'karshine_perf_v1', PERF_MAX = 300, PERF_SLOW_MS = 8000;
+      // ══════════════════════════════════════════════════════════════
+      // 🆕 D212.2 (4/8/2026): เลขเวอร์ชันของหน้าเว็บ
+      // ══════════════════════════════════════════════════════════════
+      //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
+      //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
+      //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
+      window.K_BUILD = 'D212.3 · 4 ส.ค. 2026';
+
+      var PERF_KEY = 'karshine_perf_v2', PERF_MAX = 300, PERF_SLOW_MS = 8000;
+      //   ⚠️ bump key v1→v2 เพราะรูปแบบข้อมูลเพิ่มช่อง q/h — ของเก่าไม่มี จะทำให้ตารางเพี้ยน
       function _perfLoad() {
         try { var a = JSON.parse(localStorage.getItem(PERF_KEY) || '[]'); return Array.isArray(a) ? a : []; }
         catch (e) { return []; }
       }
-      function _perfAdd(action, ms, res) {
+      // 🆕 D212.2: นับคำขอที่ "กำลังวิ่งอยู่จริง" ณ ขณะนั้น
+      //   เบราว์เซอร์ต่อไปที่โดเมนเดียวได้พร้อมกันแค่ ~6 ช่อง
+      //   คำขอที่ 7 จะ **นั่งรอในคิวของเบราว์เซอร์** โดยที่ยังไม่ได้ออกไปไหนเลย
+      //   ⚠️ แต่ตัวจับเวลา 25 วิ เริ่มนับตั้งแต่ตอนเรียก fetch() ⇒ นับเวลานั่งรอด้วย
+      //   ⇒ คำขอที่ยังไม่เคยถึงเซิร์ฟเวอร์ ก็โดนตัดที่ 25 วิ ได้ (Executions จะไม่เห็นเลย)
+      var _netLive = 0;
+
+      function _perfAdd(action, ms, res, q, hid) {
         var a = _perfLoad();
-        a.push({ t: Date.now(), a: action || '?', ms: ms, r: res });
+        a.push({ t: Date.now(), a: action || '?', ms: ms, r: res, q: q, h: hid ? 1 : 0 });
         try { localStorage.setItem(PERF_KEY, JSON.stringify(a.slice(-PERF_MAX))); } catch (e) {}
         try { _perfBadge(); } catch (e) {}
       }
       function _perfWrap(action, t0, p) {
+        var q = _netLive;                                  // จำนวนที่ค้างอยู่ "ก่อน" ตัวนี้จะเริ่ม
+        var hid = !!(typeof document !== 'undefined' && document.hidden);
+        _netLive++;
+        var done = function () { _netLive = Math.max(0, _netLive - 1); };
         return p.then(
-          function (r) { _perfAdd(action, Date.now() - t0, 'ok'); return r; },
+          function (r) { done(); _perfAdd(action, Date.now() - t0, 'ok', q, hid); return r; },
           function (e) {
+            done();
             _perfAdd(action, Date.now() - t0,
-                     (e && e.__aborted) ? 'ช้าเกิน' : (e && e.__notJson) ? 'ตอบเพี้ยน' : 'พลาด');
+                     (e && e.__aborted) ? 'ช้าเกิน' : (e && e.__notJson) ? 'ตอบเพี้ยน' : 'พลาด', q, hid);
             throw e;
           });
       }
+      window._netLiveCount = function () { return _netLive; };
       window._perfAll = _perfLoad;
       window._PERF_SLOW_MS = PERF_SLOW_MS;
       window._perfClear = function () {
@@ -3220,6 +3242,11 @@
       const cnt = document.getElementById('countCompletedToday');
       if (!col) return;
       const list = Array.isArray(items) ? items : [];
+      // 🆕 D212.3: จำชุดล่าสุดที่วาดไว้ — ปุ่มย่อ/ขยายจะวาดใหม่จากตัวนี้
+      //   ⚠️ ห้ามให้ปุ่มไปอ่าน window._completedToday เอง
+      //      ถ้าตัวแปรนั้นไม่ตรงกับที่วาดอยู่ (เช่นถูกเคลียร์ระหว่างทาง) กดปุ่มแล้วเลนจะว่างเปล่า
+      //      ⇒ ผูกกับ "ข้อมูลที่วาดจริง" ปลอดภัยกว่าผูกกับ global
+      window._cmplLast = list;
       if (cnt) cnt.innerText = list.length;
       if (!list.length) {
         col.innerHTML = '<div class="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-300 rounded-xl">ยังไม่มีคิวที่เสร็จวันนี้</div>';
@@ -3229,7 +3256,36 @@
       const sorted = list.slice().sort(function (a, b) {
         return new Date(b.bookingDate || 0) - new Date(a.bookingDate || 0);
       });
-      col.innerHTML = sorted.map(_completedCardHtml).join('');
+
+      // 🆕 D212.3 (4/8/2026): ตัดให้เหลือ 10 ใบล่าสุด
+      //   ร้านล้าง ~39 คัน/วัน ⇒ ปล่อยไว้สิ้นวันเลนยาว 35-40 ใบ ต้องเลื่อนหายาว
+      //   แต่ที่ใช้จริงคือ "คิวที่เพิ่งกดเสร็จไม่กี่นาทีที่แล้ว" (ตอนนึกออกว่าลงบริการผิด)
+      //   ⚠️ ตัวเลขบนหัวเลนยังนับ "ทั้งหมด" ไม่ใช่ 10 — ไม่งั้นดูเหมือนวันนี้ล้างได้แค่ 10 คัน
+      //   ⚠️ ไม่ทิ้งข้อมูล — แค่ซ่อน · กดปุ่มแล้วเห็นครบทั้งวัน
+      const LIMIT = 10;
+      const showAll = !!window._cmplShowAll;
+      const shown = showAll ? sorted : sorted.slice(0, LIMIT);
+      const hidden = sorted.length - shown.length;
+
+      let html = shown.map(_completedCardHtml).join('');
+      if (hidden > 0) {
+        html += '<button type="button" onclick="_cmplToggleAll(true)" ' +
+          'class="w-full text-[11px] py-2 mt-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition font-bold">' +
+          '▾ ดูทั้งหมด (อีก ' + hidden + ' ใบ)</button>';
+      } else if (showAll && sorted.length > LIMIT) {
+        html += '<button type="button" onclick="_cmplToggleAll(false)" ' +
+          'class="w-full text-[11px] py-2 mt-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition font-bold">' +
+          '▴ ย่อกลับ (โชว์ ' + LIMIT + ' ใบล่าสุด)</button>';
+      }
+      col.innerHTML = html;
+    }
+
+    /** สลับย่อ/ขยายเลน "เสร็จแล้ววันนี้"
+     *  ⚠️ วาดใหม่จากข้อมูลเดิมในเครื่อง — ไม่ยิงคำขอใหม่
+     *     (D212.1 เพิ่งลดจำนวนคำขอไป จะให้ปุ่มนี้ยิงเพิ่มก็ขัดกันเอง) */
+    function _cmplToggleAll(on) {
+      window._cmplShowAll = !!on;
+      try { _renderCompletedLane(window._cmplLast || window._completedToday || []); } catch (e) {}
     }
 
     function _completedCardHtml(b) {
@@ -3974,6 +4030,41 @@
 
       var worst = all.slice().sort(function (a, b) { return b.ms - a.ms; }).slice(0, 15);
 
+      // ══════════════════════════════════════════════════════════════
+      // 🆕 D212.2: ตัวชี้ขาด — ช้าเพราะ "แย่งช่องกันเอง" หรือ "เซิร์ฟเวอร์ช้า"
+      // ══════════════════════════════════════════════════════════════
+      //   จัดกลุ่มตาม q = จำนวนคำขอที่กำลังวิ่งอยู่ตอนคำขอนี้เริ่ม
+      //     · ยิ่ง q สูงยิ่งช้า  ⇒ เราแย่งช่องกันเอง ⇒ แก้ด้วยการ**ลดจำนวนคำขอ**
+      //     · ช้าเท่ากันทุก q  ⇒ เซิร์ฟเวอร์ช้าจริง ⇒ ต้องไปยุบโค้ดฝั่ง Apps Script
+      //   ⚠️ ตัดตัวอย่างที่เก็บตอน "แท็บถูกซ่อน" ออก — Chrome หน่วงตัวจับเวลา
+      //      ทำให้ตัวเลขยาวเกินจริง (เคยเห็น 149 วิ ทั้งที่ไม่มีใครนั่งรอ)
+      var _visible = all.filter(function (x) { return !x.h; });
+      var _hiddenN = all.length - _visible.length;
+      var _withQ   = _visible.filter(function (x) { return typeof x.q === 'number'; });
+      var qb = {};
+      _withQ.forEach(function (x) {
+        var k = x.q >= 5 ? '5+' : String(x.q);
+        (qb[k] || (qb[k] = [])).push(x.ms);
+      });
+      var qOrder = ['0', '1', '2', '3', '4', '5+'].filter(function (k) { return qb[k]; });
+      var qRows = qOrder.map(function (k) {
+        var m = qb[k].slice().sort(function (a, b) { return a - b; });
+        return { k: k, n: m.length, mid: m[Math.floor(m.length / 2)],
+                 slow: m.filter(function (v) { return v >= SLOW; }).length };
+      });
+      // อ่านคำตอบให้เลย ไม่ต้องให้คนตีความเอง
+      var qVerdict = '';
+      if (qRows.length >= 2) {
+        var lo = qRows[0], hi = qRows[qRows.length - 1];
+        if (lo.n >= 3 && hi.n >= 3) {
+          qVerdict = (hi.mid >= lo.mid * 2)
+            ? '⇒ ยิ่งมีคำขอค้างเยอะยิ่งช้าชัดเจน — เราแย่งช่องต่อกันเอง ทางแก้คือ "ลดจำนวนคำขอ"'
+            : '⇒ ช้าพอๆ กันไม่ว่าจะค้างกี่ตัว — เป็นที่เซิร์ฟเวอร์ ไม่ใช่ที่จำนวนคำขอ';
+        } else {
+          qVerdict = '⇒ ตัวอย่างยังน้อยเกินไป ใช้งานอีกสักพักแล้วดูใหม่';
+        }
+      }
+
       var t1 = '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
         '<tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">คำสั่ง</th>' +
         '<th>ครั้ง</th><th>กลาง</th><th>ช้าสุด</th><th>เกิน 8 วิ</th></tr>' +
@@ -3985,6 +4076,23 @@
             '<td align="center">' + (r.slow || '-') + '</td></tr>';
         }).join('') + '</table>';
 
+      var t15 = qRows.length
+        ? '<div style="margin-top:14px;font-weight:700;font-size:12px">🔬 ช้าเพราะแย่งช่องกันเองหรือเปล่า</div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<tr style="background:#eef2ff"><th style="text-align:left;padding:4px">ตอนเริ่ม มีคำขอค้างอยู่</th>' +
+          '<th>ครั้ง</th><th>กลาง</th><th>เกิน 8 วิ</th></tr>' +
+          qRows.map(function (r) {
+            return '<tr style="border-top:1px solid #eee"><td style="padding:4px">' +
+              (r.k === '0' ? 'ไม่มีเลย (ว่าง)' : r.k + ' ตัว') + '</td>' +
+              '<td align="center">' + r.n + '</td>' +
+              '<td align="center"' + (r.mid >= SLOW ? ' style="color:#dc2626;font-weight:700"' : '') + '>' + _perfSec(r.mid) + '</td>' +
+              '<td align="center">' + (r.slow || '-') + '</td></tr>';
+          }).join('') + '</table>' +
+          (qVerdict ? '<p style="margin:6px 0 0;font-size:11px;color:#374151"><b>' + qVerdict + '</b></p>' : '') +
+          (_hiddenN ? '<p style="margin:4px 0 0;font-size:11px;color:#9ca3af">(ตัดออก ' + _hiddenN +
+                      ' ครั้งที่เก็บตอนแท็บถูกซ่อน — เวลาไม่น่าเชื่อถือ)</p>' : '')
+        : '';
+
       var t2 = '<div style="margin-top:12px;font-weight:700;font-size:12px">15 ครั้งที่ช้าที่สุด</div>' +
         '<table style="width:100%;border-collapse:collapse;font-size:11px">' +
         worst.map(function (x) {
@@ -3994,14 +4102,25 @@
             '<td align="center">' + x.r + '</td></tr>';
         }).join('') + '</table>';
 
-      var txt = 'Karshine perf — ' + all.length + ' คำขอ (เกิน 8 วิ ' + _perfSlowList().length + ')\n' +
+      var txt = 'Karshine perf [' + (window.K_BUILD || 'ไม่ระบุเวอร์ชัน') + '] — ' +
+          all.length + ' คำขอ (เกิน 8 วิ ' + _perfSlowList().length + ')\n' +
         rows.map(function (r) { return r.k + '  n=' + r.n + '  กลาง=' + _perfSec(r.mid) + '  ช้าสุด=' + _perfSec(r.max) + '  เกิน8วิ=' + r.slow; }).join('\n') +
+        (qRows.length
+          ? '\n--- ตอนเริ่ม มีคำขอค้างอยู่กี่ตัว ---\n' +
+            qRows.map(function (r) { return (r.k === '0' ? 'ว่าง' : r.k + ' ตัว') +
+              '  n=' + r.n + '  กลาง=' + _perfSec(r.mid) + '  เกิน8วิ=' + r.slow; }).join('\n') +
+            (qVerdict ? '\n' + qVerdict : '') +
+            (_hiddenN ? '\n(ตัดออก ' + _hiddenN + ' ครั้งที่เก็บตอนแท็บถูกซ่อน)' : '')
+          : '') +
         '\n--- 15 ครั้งที่ช้าสุด ---\n' +
-        worst.map(function (x) { return _perfClock(x.t) + '  ' + x.a + '  ' + _perfSec(x.ms) + '  ' + x.r; }).join('\n');
+        worst.map(function (x) { return _perfClock(x.t) + '  ' + x.a + '  ' + _perfSec(x.ms) + '  ' + x.r +
+          (typeof x.q === 'number' ? '  (ค้าง ' + x.q + ')' : '') + (x.h ? '  [แท็บซ่อน]' : ''); }).join('\n');
 
       Swal.fire({
         title: '🩺 สถิติความเร็ว (เครื่องนี้)',
-        html: '<div style="text-align:left">' + t1 + t2 +
+        html: '<div style="text-align:left">' +
+              '<p style="margin:0 0 8px;font-size:11px;color:#6b7280">หน้าเว็บเวอร์ชัน <b>' +
+              (window.K_BUILD || 'ไม่ระบุ') + '</b></p>' + t1 + t15 + t2 +
               '<p style="margin-top:10px;font-size:11px;color:#6b7280">นี่คือเวลาที่<b>คนรอจริง</b> — เอาไปเทียบกับ Duration ใน Apps Script Executions ' +
               'ถ้าตัวเลขต่างกันมาก แปลว่าเวลาหายไปที่คิว/เน็ต ไม่ใช่ที่โค้ด</p></div>',
         width: 720,
