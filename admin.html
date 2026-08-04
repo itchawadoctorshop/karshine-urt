@@ -224,6 +224,16 @@
       </div>
     </div>
 
+    <!-- 🆕 D213: ตัวเลขรายงานไม่ดึงเอง — กดเอาเมื่อจะดู (ลดคำขอ 62% ของเครื่องมือถือ) -->
+    <div id="rptRefreshBar" class="bg-amber-50 border border-amber-200 rounded-2xl mb-4 p-3 flex items-center gap-3 flex-wrap">
+      <button type="button" onclick="_rptRefreshNow()"
+              class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm active:scale-95 shadow-sm">
+        🔄 อัปเดตตัวเลข
+      </button>
+      <span id="rptStamp" class="text-xs text-gray-600">ยังไม่ได้ดึงตัวเลข — กดปุ่มเพื่อดู</span>
+      <span class="text-[11px] text-gray-400 ml-auto">ตัวเลขไม่ดึงเองอัตโนมัติ เพื่อให้กระดานหน้าร้านลื่น</span>
+    </div>
+
     <!-- 📊 F0.4 Mini Dashboard — สรุปยอดในช่วงเวลาที่เลือก -->
     <div id="dashboardSummary" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -1661,7 +1671,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D212.5 · 4 ส.ค. 2026';
+      window.K_BUILD = 'D213 · 4 ส.ค. 2026';
 
       var PERF_KEY = 'karshine_perf_v2', PERF_MAX = 300, PERF_SLOW_MS = 8000;
       //   ⚠️ bump key v1→v2 เพราะรูปแบบข้อมูลเพิ่มช่อง q/h — ของเก่าไม่มี จะทำให้ตารางเพี้ยน
@@ -1669,34 +1679,87 @@
         try { var a = JSON.parse(localStorage.getItem(PERF_KEY) || '[]'); return Array.isArray(a) ? a : []; }
         catch (e) { return []; }
       }
-      // 🆕 D212.2: นับคำขอที่ "กำลังวิ่งอยู่จริง" ณ ขณะนั้น
-      //   เบราว์เซอร์ต่อไปที่โดเมนเดียวได้พร้อมกันแค่ ~6 ช่อง
-      //   คำขอที่ 7 จะ **นั่งรอในคิวของเบราว์เซอร์** โดยที่ยังไม่ได้ออกไปไหนเลย
-      //   ⚠️ แต่ตัวจับเวลา 25 วิ เริ่มนับตั้งแต่ตอนเรียก fetch() ⇒ นับเวลานั่งรอด้วย
-      //   ⇒ คำขอที่ยังไม่เคยถึงเซิร์ฟเวอร์ ก็โดนตัดที่ 25 วิ ได้ (Executions จะไม่เห็นเลย)
-      var _netLive = 0;
+      // ══════════════════════════════════════════════════════════════
+      // 🚦 D213 (4/8/2026): คิวฝั่งเครื่อง — ยิงทีละ 1-2 คำขอ
+      // ══════════════════════════════════════════════════════════════
+      //   Apps Script ที่ deploy แบบ "execute as me" **รันทีละคำขอ**
+      //   ไม่ว่าจะเปิดกี่เครื่อง ⇒ ยิงพร้อมกัน 6 ตัวไม่ได้เร็วขึ้นเลยสักนิด
+      //   แต่ตัวจับเวลา 25 วิ ของทั้ง 6 ตัว **เริ่มนับพร้อมกัน**
+      //   ⇒ ตัวท้ายๆ หมดเวลาตั้งแต่ยังไม่ได้ออกจากเครื่องด้วยซ้ำ
+      //
+      //   หลักฐาน 4/8 (มือถือ): getDashboardSummary + getSegmentSummary +
+      //     getDailyReconciliation ประทับเวลา 17:55:46 เท่ากันเป๊ะทั้ง 3 ตัว
+      //     แล้วจบที่ 64.0 / 64.0 / 63.9 วิ — ตัวเลขเกาะกลุ่มกันขนาดนี้
+      //     ไม่ใช่ "โค้ดช้า" แต่คือ "นั่งต่อแถวเดียวกัน"
+      //
+      //   ⇒ ส่งทีละน้อย: ตัวแรกได้คำตอบเร็ว · ตัวหลังไม่โดนตัดทิ้งกลางทาง
+      //   ⚠️ คำสั่งที่เขียนข้อมูล/แตะเงิน ได้คิวก่อนเสมอ — พนักงานกับลูกค้ารออยู่
+      //   ⚠️ ตัวจับเวลา 25 วิ อยู่ใน once() ⇒ เริ่มนับตอน "ออกจากเครื่องจริง"
+      //      เวลานั่งรอในคิวของเราเอง ไม่นับเป็น timeout (แต่บันทึกไว้ในช่อง w)
+      var MAX_LIVE_IDLE = 2;      // ปกติ
+      var MAX_LIVE_BUSY = 1;      // ตอนระบบแน่น — ส่งทีละตัว ให้แต่ละตัวมีโอกาสจบ
+      var BUSY_MS = 15000;        // ช้ากว่านี้ = ถือว่าร้านกำลังแน่น
+      var _pend = [], _live = 0, _recent = [];
+      //   🔧 เปิดให้ปรับได้จากภายนอก — ใช้ทั้งตอนเทส และตอนอยากลองค่าอื่นโดยไม่ต้องอัปไฟล์
+      window._NET_BUSY_MS = BUSY_MS;
 
-      function _perfAdd(action, ms, res, q, hid) {
+      function _maxLive() {
+        if (_recent.length < 3) return MAX_LIVE_IDLE;
+        var lim = Number(window._NET_BUSY_MS);
+        if (!isFinite(lim) || lim <= 0) lim = BUSY_MS;
+        var a = _recent.slice().sort(function (x, y) { return x - y; });
+        return a[Math.floor(a.length / 2)] >= lim ? MAX_LIVE_BUSY : MAX_LIVE_IDLE;
+      }
+      window._netStats = function () {
+        return { live: _live, pend: _pend.length, max: _maxLive(), recent: _recent.slice() };
+      };
+      function _pump() {
+        while (_live < _maxLive() && _pend.length) {
+          var idx = 0;                                   // คำสั่งเขียนแซงคิวอ่านเสมอ
+          for (var i = 0; i < _pend.length; i++) { if (!_pend[i].ro) { idx = i; break; } }
+          var job = _pend.splice(idx, 1)[0];
+          _live++;
+          job.go();
+        }
+      }
+      function _schedule(ro, run) {
+        return new Promise(function (resolve, reject) {
+          _pend.push({ ro: ro, go: function () {
+            var t = Date.now();
+            var fin = function () {
+              _live = Math.max(0, _live - 1);
+              _recent.push(Date.now() - t); if (_recent.length > 5) _recent.shift();
+              _pump();
+            };
+            run().then(function (r) { fin(); resolve(r); },
+                       function (e) { fin(); reject(e); });
+          } });
+          _pump();
+        });
+      }
+
+      function _perfAdd(action, ms, res, q, hid, w) {
         var a = _perfLoad();
-        a.push({ t: Date.now(), a: action || '?', ms: ms, r: res, q: q, h: hid ? 1 : 0 });
+        a.push({ t: Date.now(), a: action || '?', ms: ms, r: res, q: q, h: hid ? 1 : 0, w: w || 0 });
         try { localStorage.setItem(PERF_KEY, JSON.stringify(a.slice(-PERF_MAX))); } catch (e) {}
         try { _perfBadge(); } catch (e) {}
       }
-      function _perfWrap(action, t0, p) {
-        var q = _netLive;                                  // จำนวนที่ค้างอยู่ "ก่อน" ตัวนี้จะเริ่ม
+      /** @param q  คำขอของเครื่องนี้ที่ยังไม่จบ ณ ตอน "สั่ง" (รวมตัวที่ยังรอคิวอยู่)
+       *  @param tGo เวลาที่ออกจากเครื่องจริง — ms - (tGo-t0) = เวลาที่เซิร์ฟเวอร์ใช้ */
+      function _perfWrap(action, t0, tGo, q, p) {
         var hid = !!(typeof document !== 'undefined' && document.hidden);
-        _netLive++;
-        var done = function () { _netLive = Math.max(0, _netLive - 1); };
+        var w = Math.max(0, tGo - t0);
         return p.then(
-          function (r) { done(); _perfAdd(action, Date.now() - t0, 'ok', q, hid); return r; },
+          function (r) { _perfAdd(action, Date.now() - t0, 'ok', q, hid, w); return r; },
           function (e) {
-            done();
             _perfAdd(action, Date.now() - t0,
-                     (e && e.__aborted) ? 'ช้าเกิน' : (e && e.__notJson) ? 'ตอบเพี้ยน' : 'พลาด', q, hid);
+                     (e && e.__aborted) ? 'ช้าเกิน' : (e && e.__notJson) ? 'ตอบเพี้ยน' : 'พลาด', q, hid, w);
             throw e;
           });
       }
-      window._netLiveCount = function () { return _netLive; };
+      // จำนวนคำขอของเครื่องนี้ที่ยังไม่จบ = กำลังวิ่ง + นั่งรอคิวอยู่
+      window._netLiveCount = function () { return _live + _pend.length; };
+      window._netPendingCount = function () { return _pend.length; };
       window._perfAll = _perfLoad;
       window._PERF_SLOW_MS = PERF_SLOW_MS;
       window._perfClear = function () {
@@ -1709,19 +1772,29 @@
         opts = opts || {};
         var action = readAction(opts.body);
         var _t0 = Date.now();                        // 🆕 D211-C: เริ่มจับเวลาฝั่งผู้ใช้
+        var ro  = !!READ_ONLY[action];
+        var q   = _live + _pend.length;              // 🆕 D213: ค้างอยู่กี่ตัวตอน "สั่ง"
+
+        // 🆕 D213: ผ่านคิวฝั่งเครื่องก่อนเสมอ
+        var start = function () {
+          return _schedule(ro, function () {
+            var _tGo = Date.now();                   // ออกจากเครื่องจริงตอนนี้
+            return _perfWrap(action, _t0, _tGo, q, withRetry(url, opts, action));
+          });
+        };
 
         // ④ รวมคำขออ่านที่ซ้ำกันและกำลังวิ่งอยู่
         //   ⚠️ ตัวที่มาเกาะคำขอเดิมจะไม่ถูกจับเวลาแยก — สถิติจึงนับ "คำขอที่ยิงจริง" เท่านั้น
-        if (READ_ONLY[action]) {
+        if (ro) {
           var key = action + '|' + dedupeKey(opts.body);
           if (inflight[key]) return inflight[key];
-          var p = _perfWrap(action, _t0, withRetry(url, opts, action)).then(
+          var p = start().then(
             function (r) { delete inflight[key]; return r; },
             function (e) { delete inflight[key]; throw e; });
           inflight[key] = p;
           return p;
         }
-        return _perfWrap(action, _t0, withRetry(url, opts, action));
+        return start();
       };
 
       // แถบบางๆ ด้านบนแทนการหรี่ทั้งกระดาน — "รู้ว่ากำลังโหลด" โดยไม่ต้องกระพริบ
@@ -1954,8 +2027,33 @@
       reloadDashboardWithRange();
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // 🆕 D213: ปุ่มอัปเดตตัวเลขรายงาน
+    // ══════════════════════════════════════════════════════════════
+    //   ⚠️ ตัวเลขที่ค้างอยู่บนจอ = ของจริงจากรอบที่แล้ว ไม่ใช่ของปลอม
+    //      แต่ต้องบอกให้ชัดว่า "ณ เวลาไหน" ไม่งั้นอ่านยอดเก่าแล้วเข้าใจว่าเป็นยอดตอนนี้
+    window._rptLoadedAt = window._rptLoadedAt || 0;
+    function _rptSyncBar() {
+      var el = document.getElementById('rptStamp');
+      if (!el) return;
+      if (!window._rptLoadedAt) { el.textContent = 'ยังไม่ได้ดึงตัวเลข — กดปุ่มเพื่อดู'; return; }
+      var d = new Date(window._rptLoadedAt);
+      var hh = ('0' + d.getHours()).slice(-2), mm = ('0' + d.getMinutes()).slice(-2);
+      var agoMin = Math.floor((Date.now() - window._rptLoadedAt) / 60000);
+      el.textContent = 'ตัวเลข ณ ' + hh + ':' + mm +
+                       (agoMin >= 1 ? ' (' + agoMin + ' นาทีที่แล้ว)' : ' (เมื่อครู่)');
+    }
+    function _rptRefreshNow() {
+      try { reloadDashboardWithRange(); } catch (e) {}
+    }
+    window._rptSyncBar = _rptSyncBar;
+    window._rptRefreshNow = _rptRefreshNow;
+
     // reload ทุกอย่างใน dashboard ตาม _currentRange ปัจจุบัน
     function reloadDashboardWithRange() {
+      // 🆕 D213: ทุกทางที่ดึงตัวเลขรายงานผ่านตรงนี้ ⇒ ประทับเวลาไว้ที่เดียวพอ
+      window._rptLoadedAt = Date.now();
+      try { _rptSyncBar(); } catch (e) {}
       loadDashboardSummary();           // ใช้ range
       loadSegmentSummary();             // 🔧 segment คงเดิม (ไม่ขึ้นกับ range)
       if (_currentRange.isSingleDay) {
@@ -2778,7 +2876,8 @@
       window.scrollTo(0,0);
       
       if(id === 'board-section') loadAdminData({ boardOnly: true });   // ⚡ D197: แท็บกระดานไม่ต้องโหลดรายงาน
-      if(id === 'dashboard-section') loadAdminData();                  // แท็บรายงาน = โหลดครบ
+      // 🆕 D213: แท็บรายงาน = โหลดแค่กระดาน · ตัวเลขรายงานรอให้กดปุ่มเอง
+      if(id === 'dashboard-section') { loadAdminData({ boardOnly: true, silent: true }); _rptSyncBar(); }
       if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); _fetchB2BContracts_(); }
       if(id === 'config-section') loadStoreConfig();
       if(id === 'sales-tracker-section') stInitTab();
@@ -2866,10 +2965,17 @@
       }
 
       // ⚡ PERF v3.0 (D197): จบตรงนี้ถ้าขอแค่กระดาน — ประหยัด 4-5 requests ต่อครั้ง
-      //    ตัวเลขใน dashboard/รายงาน จะรีเฟรชเองตอนสลับไปแท็บนั้น (showSection)
-      if (opts.boardOnly) return;
+      // 🆕 D213 (4/8/2026): **ค่าเริ่มต้นคือไม่โหลดรายงาน** ต้องสั่ง { reports: true } เท่านั้น
+      //   หลักฐาน 4/8 (มือถือ 195 คำขอ): getDashboardSummary 34 + getSegmentSummary 16 +
+      //   getDailyReconciliation 17 + getDailySalesList 16 + getPackageLiability 23 +
+      //   getCustomerTiers 14 = 120 คำขอ = **62% ของทั้งเครื่อง** — ทั้งหมดมาจากแท็บรายงาน
+      //   ยิงรวดเดียว 5-6 ตัว ทุกครั้งที่เปิดแท็บ ⇒ คิวตันทั้งร้าน กระดานพลอยช้าไปด้วย
+      //   ⇒ CEO ตัดสินใจ 4/8: เปิดแท็บแล้วโชว์ค่าล่าสุดที่ค้างจอ + กดปุ่มเองเมื่อจะดูตัวเลขใหม่
+      if (opts.boardOnly || !opts.reports) return;
 
       // 📊 F0.4 Dashboard — โหลดคู่กัน (ไม่ block board) — 🆕 SPEC V.2: ใช้ range
+      window._rptLoadedAt = Date.now();             // 🆕 D213
+      try { _rptSyncBar(); } catch (e) {}
       loadDashboardSummary();
       // 💵 F2.5 Reconciliation — โหลดเฉพาะ single-day; multi-day โหลด sales history แทน
       if (!_currentRange || _currentRange.isSingleDay !== false) {
@@ -4120,6 +4226,18 @@
                    ') ใช้งานอีกสักพักแล้วดูใหม่';
       }
       // สัญญาณข้ามเครื่อง — อันนี้สำคัญกว่าตัวบนอีก
+      // 🆕 D213: แยก "รอคิวในเครื่องเราเอง" ออกจาก "รอเซิร์ฟเวอร์"
+      //   ตั้งแต่ D213 เราส่งทีละ 1-2 คำขอ ⇒ ตัวที่มาทีหลังจะนั่งรอในเครื่องก่อน
+      //   เวลาส่วนนี้ **ไม่นับเป็น timeout** แต่ผู้ใช้ยังรออยู่จริง ⇒ ต้องโชว์ให้เห็น
+      var _wArr = _withQ.filter(function (x) { return typeof x.w === 'number'; });
+      var _waitMsg = '';
+      if (_wArr.length >= 5) {
+        var _wMid = _mid(_wArr.map(function (x) { return x.w; }));
+        var _tMid = _mid(_wArr.map(function (x) { return x.ms; }));
+        _waitMsg = 'จากเวลารวมกลาง ' + _perfSec(_tMid) + ' เป็นการรอคิวในเครื่องนี้เอง ' +
+                   _perfSec(_wMid) + ' · ที่เหลือคือรอเซิร์ฟเวอร์';
+      }
+
       var qCross = '';
       if (_idle.length >= 3 && _idleSlow > 0) {
         qCross = '🔴 มี ' + _idleSlow + ' ครั้งที่ **เครื่องนี้ไม่ได้ยิงอะไรค้างเลยแต่ยังเกิน 8 วิ**' +
@@ -4153,6 +4271,7 @@
           (qCross ? '<p style="margin:4px 0 0;font-size:11px;color:#b91c1c">' + qCross + '</p>' : '') +
           '<p style="margin:4px 0 0;font-size:10px;color:#9ca3af">หมายเหตุ: "คำขอค้าง" นับเฉพาะเครื่องนี้ ' +
           'แต่คิวฝั่งเซิร์ฟเวอร์ใช้ร่วมกันทุกเครื่องในร้าน</p>' +
+          (_waitMsg ? '<p style="margin:4px 0 0;font-size:11px;color:#374151">' + _waitMsg + '</p>' : '') +
           (_hiddenN ? '<p style="margin:4px 0 0;font-size:11px;color:#9ca3af">(ตัดออก ' + _hiddenN +
                       ' ครั้งที่เก็บตอนแท็บถูกซ่อน — เวลาไม่น่าเชื่อถือ)</p>' : '')
         : '';
@@ -6212,7 +6331,9 @@
       try {
         // โหลดคู่ขนาน — booking สดล่าสุด + branch config
         await Promise.all([
-          loadAdminData(),
+          // 🆕 D213: ตัวเลือกเวลาต้องการแค่ "คิวสด" ไม่ต้องการตัวเลขรายงาน
+          //   ของเดิมยิงรายงานพ่วงมาอีก 4-5 คำขอทุกครั้งที่เปิดตัวเลือกเวลา
+          loadAdminData({ boardOnly: true, silent: true }),
           (!configData.branches || configData.branches.length === 0) ? loadStoreConfig() : Promise.resolve()
         ]);
         Swal.close();
@@ -6839,7 +6960,23 @@
     // ═══ ⏱️ D208.6: เติมเวลาให้เอง = ช่องว่างเร็วที่สุด (ลดเวลากรอกของพนักงาน) ═══
     //   ไม่ทับถ้าพนักงานกดเลือกเวลาเองแล้ว (dataset.manual === '1')
     let _wiSlotSeq = 0;
-    async function _wiAutoSlot(force) {
+    // ══════════════════════════════════════════════════════════════
+    // 🆕 D213: หน่วง 400ms + จำคำตอบ 30 วิ
+    // ══════════════════════════════════════════════════════════════
+    //   หลักฐาน 4/8 (แท็บเล็ต 300 คำขอ): getNextFreeSlot **102 ครั้ง** = 34% ของทั้งเครื่อง
+    //   เพราะทุกครั้งที่ติ๊กบริการเพิ่ม/ออก จะยิงหาช่องว่างใหม่ทันที
+    //   ติ๊ก 4 บริการ = ยิง 4 ครั้ง ทั้งที่พนักงานสนใจแค่คำตอบสุดท้าย
+    //   ⇒ หน่วงไว้ 400ms ค่อยยิงตัวเดียว · เงื่อนไขเดิมภายใน 30 วิ ใช้คำตอบเดิม
+    //   ⚠️ กด "เลือกเวลาเอง" (force) ข้ามทั้งหน่วงและคำตอบเดิม — ต้องได้ของสดเสมอ
+    var _wiSlotCache = { key: '', ts: 0, data: null };
+    var _wiSlotTimer = null;
+    function _wiAutoSlot(force) {
+      if (force) { if (_wiSlotTimer) { clearTimeout(_wiSlotTimer); _wiSlotTimer = null; }
+                   return _wiAutoSlotRun(true); }
+      if (_wiSlotTimer) clearTimeout(_wiSlotTimer);
+      _wiSlotTimer = setTimeout(function () { _wiSlotTimer = null; _wiAutoSlotRun(false); }, 400);
+    }
+    async function _wiAutoSlotRun(force) {
       const tEl = document.getElementById('wiTime');
       const dEl = document.getElementById('wiDate');
       const disp = document.getElementById('wiTimeDisplay');
@@ -6859,7 +6996,16 @@
           lineType: (document.getElementById('wiLine') || {}).value || 'LINE1',
           serviceIds: (document.getElementById('wiService') || {}).value || ''
         });
-        const res = await fetch(API_URL, { method: 'POST', body: withAuth(p) }).then(r => r.json());
+        // 🆕 D213: เงื่อนไขเดิม + ยังไม่เกิน 30 วิ → ใช้คำตอบเดิม ไม่ยิงซ้ำ
+        const _ck = branchId + '|' + p.get('lineType') + '|' + p.get('serviceIds');
+        let res;
+        if (!force && _wiSlotCache.data && _wiSlotCache.key === _ck &&
+            (Date.now() - _wiSlotCache.ts) < 30000) {
+          res = _wiSlotCache.data;
+        } else {
+          res = await fetch(API_URL, { method: 'POST', body: withAuth(p) }).then(r => r.json());
+          if (res && res.status === 'success') _wiSlotCache = { key: _ck, ts: Date.now(), data: res };
+        }
         if (seq !== _wiSlotSeq) return;          // มีคำขอใหม่แซงไปแล้ว → ทิ้งอันนี้
         if (!res || res.status !== 'success' || !res.data || !res.data.hhmm) {
           if (hint) hint.textContent = 'กดเพื่อเลือก';
