@@ -1661,7 +1661,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D212.4 · 4 ส.ค. 2026';
+      window.K_BUILD = 'D212.5 · 4 ส.ค. 2026';
 
       var PERF_KEY = 'karshine_perf_v2', PERF_MAX = 300, PERF_SLOW_MS = 8000;
       //   ⚠️ bump key v1→v2 เพราะรูปแบบข้อมูลเพิ่มช่อง q/h — ของเก่าไม่มี จะทำให้ตารางเพี้ยน
@@ -2844,17 +2844,25 @@
       //   ค่ากลางที่เครื่องรอ 5-13 วิ แต่ Executions บอกเซิร์ฟเวอร์รันจริง 2.6 วิ
       //   ⇒ เวลาหายที่ "คิว" ไม่ใช่ที่โค้ด ⇒ ลดจำนวนคำขอคือทางแก้ที่ตรงจุด
       //   ⚠️ ยังเก็บตัวยิงเดี่ยวไว้ — ใช้ตอน backend ยังไม่ deploy + ตอนกดปุ่มรีเฟรชเอง
-      if (_amResult && _amResult.walkinPending !== undefined && _amResult.walkinPending !== null) {
-        window.walkinPendingCache = _amResult.walkinPending || [];
-        try { renderWalkinPending(window.walkinPendingCache); } catch (e) {}
-      } else {
-        loadWalkinPending();          // backend เก่า → ยิงเองเหมือนเดิม
-      }
-      if (_amResult && _amResult.priceMismatch !== undefined && _amResult.priceMismatch !== null) {
-        window.unfixedSvcCache = _amResult.priceMismatch;
-        try { renderUnfixedServices(_amResult.priceMismatch); } catch (e) {}
-      } else {
-        loadUnfixedServices();        // backend เก่า → ยิงเองเหมือนเดิม
+      // 🐛 D212.5 FIX: แยก "backend เก่า" ออกจาก "คำขอล้มเหลว"
+      //   ของเดิมรวมเป็นกรณีเดียว ⇒ พอ getAdminData timeout จะยิงเพิ่มอีก 2 คำขอทันที
+      //   ซึ่งเป็นจังหวะที่คิวตันที่สุดพอดี ⇒ **ซ้ำเติมตัวเอง**
+      //   (เห็นในล็อก 🩺 4/8: getAdminData พลาด 70.9 วิ แล้วตามด้วยคำขอเพิ่ม 2 ตัว)
+      //   ⇒ คำขอล้มเหลว = ไม่ยิงอะไรเพิ่มเลย · กระดานเดิมยังอยู่ รอบหน้าค่อยว่ากัน
+      const _amOk = !!(_amResult && _amResult.status === 'success');
+      if (_amOk) {
+        if (_amResult.walkinPending !== undefined && _amResult.walkinPending !== null) {
+          window.walkinPendingCache = _amResult.walkinPending || [];
+          try { renderWalkinPending(window.walkinPendingCache); } catch (e) {}
+        } else {
+          loadWalkinPending();        // backend เก่าที่ยังไม่ส่งมาด้วย → ยิงเองเหมือนเดิม
+        }
+        if (_amResult.priceMismatch !== undefined && _amResult.priceMismatch !== null) {
+          window.unfixedSvcCache = _amResult.priceMismatch;
+          try { renderUnfixedServices(_amResult.priceMismatch); } catch (e) {}
+        } else {
+          loadUnfixedServices();      // backend เก่า → ยิงเองเหมือนเดิม
+        }
       }
 
       // ⚡ PERF v3.0 (D197): จบตรงนี้ถ้าขอแค่กระดาน — ประหยัด 4-5 requests ต่อครั้ง
@@ -4060,17 +4068,62 @@
         return { k: k, n: m.length, mid: m[Math.floor(m.length / 2)],
                  slow: m.filter(function (v) { return v >= SLOW; }).length };
       });
-      // อ่านคำตอบให้เลย ไม่ต้องให้คนตีความเอง
+      // ══════════════════════════════════════════════════════════════
+      // 🆕 D212.5: ตรรกะคำฟันธงรอบ 2
+      // ══════════════════════════════════════════════════════════════
+      //   ของเดิมเทียบแค่ "แถวแรก vs แถวสุดท้าย" ⇒ 4/8 ให้คำตอบขัดกันเอง 2 เครื่อง
+      //   ทั้งที่ข้อมูลบอกเรื่องเดียวกัน: q=0 เร็ว (~4 วิ) · q≥1 ช้า (8-25 วิ) เหมือนกันทั้งคู่
+      //   ⇒ เทียบ "ว่างจริง" กับ "มีอะไรค้างอยู่" เป็น 2 ก้อน แม่นกว่าและตรงกับสิ่งที่เห็น
+      //
+      //   🔑 ข้อจำกัดที่ต้องบอกผู้ใช้: ตัวเลข q นับได้แค่ **เครื่องนี้เครื่องเดียว**
+      //      แต่คิวของ Apps Script **ใช้ร่วมกันทุกเครื่องในร้าน**
+      //      ⇒ q=0 แล้วยังช้า = เครื่องอื่นกำลังยิงอยู่ (4/8 เจอ 42 วิ ตอน q=0)
+      var _mid = function (arr) {
+        var a = arr.slice().sort(function (x, y) { return x - y; });
+        return a.length ? a[Math.floor(a.length / 2)] : 0;
+      };
+      var _idle    = _withQ.filter(function (x) { return x.q === 0; }).map(function (x) { return x.ms; });
+      var _idleMid = _mid(_idle);
+      var _idleSlow = _idle.filter(function (v) { return v >= SLOW; }).length;
+
+      // 🐛 D212.5b: **ห้ามยุบ q≥1 เป็นก้อนเดียวแล้วหาค่ากลาง**
+      //   ชุดทดสอบจับได้: ถ้ามี "ค้าง 1-4 ตัวแต่เร็ว" หลายครั้ง ปนกับ "ค้าง 5+ ตัวช้า 21 วิ"
+      //   ค่ากลางของก้อนรวมจะตกไปที่ตัวเร็ว ⇒ ฟันธงผิดว่า "ไม่เกี่ยวกับจำนวนคำขอ"
+      //   ทั้งที่ตารางข้างบนเห็นชัดว่า 5+ ตัว = 21 วิ
+      //   ⇒ ถามให้ตรงคำถาม: "มีระดับความค้างไหนไหม ที่ทำให้ช้าขึ้นชัดเจน"
+      //     = หยิบ**ช่วงที่ช้าที่สุด**ในบรรดาช่วงที่มีตัวอย่าง ≥ 3 (ตัวอย่างน้อยกว่านั้นเชื่อไม่ได้)
+      var _busyRows = qRows.filter(function (r) { return r.k !== '0' && r.n >= 3; });
+      var _busyMid = 0, _busyN = 0, _busyLabel = '';
+      if (_busyRows.length) {
+        var _worst = _busyRows.slice().sort(function (a, b) { return b.mid - a.mid; })[0];
+        _busyMid = _worst.mid; _busyN = _worst.n;
+        _busyLabel = 'ค้าง ' + _worst.k + ' ตัว';
+      } else {
+        // ไม่มีช่วงไหนตัวอย่างถึง 3 → รวมทุกช่วงเป็นก้อนเดียวไปก่อน (ดีกว่าไม่ฟันธงเลย)
+        var _pool = _withQ.filter(function (x) { return x.q >= 1; }).map(function (x) { return x.ms; });
+        _busyMid = _mid(_pool); _busyN = _pool.length;
+        _busyLabel = 'ค้างตั้งแต่ 1 ตัวขึ้นไป';
+      }
+
       var qVerdict = '';
-      if (qRows.length >= 2) {
-        var lo = qRows[0], hi = qRows[qRows.length - 1];
-        if (lo.n >= 3 && hi.n >= 3) {
-          qVerdict = (hi.mid >= lo.mid * 2)
-            ? '⇒ ยิ่งมีคำขอค้างเยอะยิ่งช้าชัดเจน — เราแย่งช่องต่อกันเอง ทางแก้คือ "ลดจำนวนคำขอ"'
-            : '⇒ ช้าพอๆ กันไม่ว่าจะค้างกี่ตัว — เป็นที่เซิร์ฟเวอร์ ไม่ใช่ที่จำนวนคำขอ';
+      if (_idle.length >= 3 && _busyN >= 3) {
+        if (_busyMid >= _idleMid * 2) {
+          qVerdict = '⇒ ว่างอยู่ ' + _perfSec(_idleMid) + ' · พอ' + _busyLabel + ' พุ่งเป็น ' +
+                     _perfSec(_busyMid) + ' (' + (_busyMid / Math.max(1, _idleMid)).toFixed(1) + ' เท่า)' +
+                     ' — เราแย่งช่องต่อกันเอง คิวคือคอขวด ทางแก้คือลดจำนวนคำขอ ไม่ใช่ยุบโค้ด';
         } else {
-          qVerdict = '⇒ ตัวอย่างยังน้อยเกินไป ใช้งานอีกสักพักแล้วดูใหม่';
+          qVerdict = '⇒ ว่างอยู่ ' + _perfSec(_idleMid) + ' · ' + _busyLabel + ' ' + _perfSec(_busyMid) +
+                     ' — พอๆ กัน เป็นที่เซิร์ฟเวอร์ ไม่ใช่ที่จำนวนคำขอของเครื่องนี้';
         }
+      } else {
+        qVerdict = '⇒ ตัวอย่างยังน้อยเกินไป (ว่าง ' + _idle.length + ' · ไม่ว่าง ' + _busyN +
+                   ') ใช้งานอีกสักพักแล้วดูใหม่';
+      }
+      // สัญญาณข้ามเครื่อง — อันนี้สำคัญกว่าตัวบนอีก
+      var qCross = '';
+      if (_idle.length >= 3 && _idleSlow > 0) {
+        qCross = '🔴 มี ' + _idleSlow + ' ครั้งที่ **เครื่องนี้ไม่ได้ยิงอะไรค้างเลยแต่ยังเกิน 8 วิ**' +
+                 ' — แปลว่าเครื่องอื่นในร้านกำลังยิงอยู่ (คิวของ Apps Script ใช้ร่วมกันทุกเครื่อง)';
       }
 
       var t1 = '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
@@ -4097,6 +4150,9 @@
               '<td align="center">' + (r.slow || '-') + '</td></tr>';
           }).join('') + '</table>' +
           (qVerdict ? '<p style="margin:6px 0 0;font-size:11px;color:#374151"><b>' + qVerdict + '</b></p>' : '') +
+          (qCross ? '<p style="margin:4px 0 0;font-size:11px;color:#b91c1c">' + qCross + '</p>' : '') +
+          '<p style="margin:4px 0 0;font-size:10px;color:#9ca3af">หมายเหตุ: "คำขอค้าง" นับเฉพาะเครื่องนี้ ' +
+          'แต่คิวฝั่งเซิร์ฟเวอร์ใช้ร่วมกันทุกเครื่องในร้าน</p>' +
           (_hiddenN ? '<p style="margin:4px 0 0;font-size:11px;color:#9ca3af">(ตัดออก ' + _hiddenN +
                       ' ครั้งที่เก็บตอนแท็บถูกซ่อน — เวลาไม่น่าเชื่อถือ)</p>' : '')
         : '';
@@ -4118,6 +4174,7 @@
             qRows.map(function (r) { return (r.k === '0' ? 'ว่าง' : r.k + ' ตัว') +
               '  n=' + r.n + '  กลาง=' + _perfSec(r.mid) + '  เกิน8วิ=' + r.slow; }).join('\n') +
             (qVerdict ? '\n' + qVerdict : '') +
+            (qCross ? '\n' + qCross : '') +
             (_hiddenN ? '\n(ตัดออก ' + _hiddenN + ' ครั้งที่เก็บตอนแท็บถูกซ่อน)' : '')
           : '') +
         '\n--- 15 ครั้งที่ช้าสุด ---\n' +
@@ -6685,6 +6742,7 @@
 
           // 💰 D208: ลงเงินต่อทันที (คิวสร้างแล้ว — ถ้าขั้นนี้พัง ต้องบอกให้ชัดว่าไปกดจ่ายที่การ์ด)
           let _payMsg = '';
+          let _paidOk = false;      // 🆕 D212.5: เงินเข้าจริงไหม (ใช้ตัดสินว่าจะชวนปิดงานไหม)
           if (_payNow) {
             const _bid = result.bookingId || '';
             if (!_bid) {
@@ -6692,14 +6750,57 @@
             } else {
               Swal.update({ title: 'กำลังบันทึกเงิน...' });
               const _pr = await _wiRecordPaymentAfterSubmit(_bid, _payMethod, _payAmount);
+              _paidOk = !!_pr.ok;   // 🆕 D212.5 · timeout = ไม่รู้ผล ⇒ ไม่ถือว่าสำเร็จ ⇒ ไม่ชวนปิดงาน
               _payMsg = _pr.ok
                 ? `<br><br>💰 รับเงินแล้ว <b>${_payAmount.toLocaleString()}.-</b>`
                 : `<br><br><b class="text-red-600">⚠️ คิวสร้างแล้ว แต่ลงเงินไม่สำเร็จ</b><br>${esc(_pr.message || '')}<br>กดจ่ายที่การ์ด <b>${esc(_bid)}</b> ในกระดานแทนครับ`;
             }
           }
 
+          // 🆕 D212.5 (4/8/2026): รับเงินเลย + ล้างเสร็จแล้ว → ปิดงานให้ในคลิกเดียว
+          //   ปัญหาเดิม: คีย์คิว+รับเงินจบแล้ว การ์ดยังไปนั่งอยู่เลน "รถจอดรอคิว"
+          //              ต้องไปหาการ์ดแล้วกด "ล้างเสร็จ" อีกรอบ
+          //   ⚠️ ถามยืนยันก่อนเสมอ (CEO ขอ) — "รับเงินเลย" ไม่ได้แปลว่าล้างเสร็จทุกครั้ง
+          //      บางทีลูกค้าจ่ายก่อนแล้วนั่งรอล้าง
+          //   ⚠️ ถามเฉพาะตอน "ลงเงินสำเร็จจริง" — ถ้าเงินยังไม่เข้า ห้ามชวนปิดงาน
+          let _doneMsg = '';
+          if (_payNow && _paidOk && result.bookingId) {
+            const _ask = await Swal.fire({
+              icon: 'question',
+              title: 'ล้างเสร็จแล้วหรือยัง?',
+              html: 'ถ้าล้างเสร็จแล้ว ระบบจะปิดงานให้เลย<br>' +
+                    'การ์ดจะไปอยู่เลน <b>"เสร็จแล้ววันนี้"</b> — ไม่ต้องกดอัปเดตสถานะอีก<br>' +
+                    '<span style="font-size:12px;color:#6b7280">ถ้ายังไม่ได้ล้าง กด "ยังไม่เสร็จ" ' +
+                    'คิวจะไปรออยู่ที่กระดานตามปกติ</span>',
+              showCancelButton: true,
+              confirmButtonText: '🏁 ล้างเสร็จแล้ว ปิดงานเลย',
+              cancelButtonText: 'ยังไม่เสร็จ',
+              confirmButtonColor: '#16a34a'
+            });
+            if (_ask.isConfirmed) {
+              Swal.fire({ title: 'กำลังปิดงาน...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+              try {
+                const _cp = new URLSearchParams({ action: 'updateBookingStatus',
+                                                  bookingId: result.bookingId, newStatus: 'completed' });
+                const _cr = await fetch(API_URL, { method: 'POST', body: withAuth(_cp) });
+                const _cj = await _cr.json();
+                if (_cj.status !== 'success') throw new Error(_cj.message || 'ปิดงานไม่สำเร็จ');
+                _doneMsg = '<br>🏁 ปิดงานแล้ว — อยู่ในเลน "เสร็จแล้ววันนี้"';
+              } catch (e) {
+                // 🛡️ D212.4 pattern: timeout ≠ ล้มเหลว — ห้ามชวนกดซ้ำ (กดซ้ำ = บวกแต้มซ้ำ)
+                if (e && e.__aborted) {
+                  await _kVerifyStatusAfterTimeout(result.bookingId, 'completed');
+                  _doneMsg = '';   // ตัวตรวจเด้งข้อความของตัวเองแล้ว
+                } else {
+                  _doneMsg = '<br><b class="text-amber-600">⚠️ ปิดงานไม่สำเร็จ</b> — ' +
+                             esc(e.message || '') + '<br>กด "ล้างเสร็จ" ที่การ์ดในกระดานแทนครับ';
+                }
+              }
+            }
+          }
+
           Swal.fire({ icon: 'success', title: 'สำเร็จ!',
-            html: `สร้างคิว Walk-in เรียบร้อย — สถานะ: ${esc(String(result.finalStatus || ''))}` + _payMsg
+            html: `สร้างคิว Walk-in เรียบร้อย — สถานะ: ${esc(String(result.finalStatus || ''))}` + _payMsg + _doneMsg
           }).then(() => {
             document.getElementById('walkInForm').reset();
             document.getElementById('walkInForm').dataset.vid = '';
