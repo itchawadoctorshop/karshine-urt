@@ -1671,9 +1671,12 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D213 · 4 ส.ค. 2026';
+      window.K_BUILD = 'D214 · 4 ส.ค. 2026';
 
-      var PERF_KEY = 'karshine_perf_v2', PERF_MAX = 300, PERF_SLOW_MS = 8000;
+      // 🆕 D214: bump v2 → v3 เพราะ "รูปข้อมูลเปลี่ยน" (เพิ่มช่อง b = เลขเวอร์ชันของแต่ละรายการ)
+      //   ⚠️ ห้ามใช้คีย์เดิม — ของเก่าไม่มีช่อง b จะปนกับของใหม่แล้วสรุปผิดซ้ำรอยเดิม
+      //   PERF_MAX 300 → 500: 4/8 แท็บเล็ตชนเพดาน 300 ภายใน ~1 ชม. ⇒ มองไม่เห็นทั้งกะ
+      var PERF_KEY = 'karshine_perf_v3', PERF_MAX = 500, PERF_SLOW_MS = 8000;
       //   ⚠️ bump key v1→v2 เพราะรูปแบบข้อมูลเพิ่มช่อง q/h — ของเก่าไม่มี จะทำให้ตารางเพี้ยน
       function _perfLoad() {
         try { var a = JSON.parse(localStorage.getItem(PERF_KEY) || '[]'); return Array.isArray(a) ? a : []; }
@@ -1740,7 +1743,12 @@
 
       function _perfAdd(action, ms, res, q, hid, w) {
         var a = _perfLoad();
-        a.push({ t: Date.now(), a: action || '?', ms: ms, r: res, q: q, h: hid ? 1 : 0, w: w || 0 });
+        // 🆕 D214: ติดเลขเวอร์ชันที่ "แต่ละรายการ" ไม่ใช่ที่หัวหน้าจอ
+        //   🐛 บทเรียน 4/8: ป้าย 🩺 เขียนเลข build ของ "หน้าจอตอนกดดู" ⇒ สถิติที่คร่อมช่วงอัป
+        //      ถูกป้ายเป็นเวอร์ชันใหม่ทั้งก้อน ⇒ สรุปไม่ได้เลยว่าเวอร์ชันไหนดีขึ้น (เสียไป 1 วัน)
+        var _kb = '?';
+        try { _kb = (typeof window !== 'undefined' && window.K_BUILD) ? String(window.K_BUILD) : '?'; } catch (e) {}
+        a.push({ t: Date.now(), a: action || '?', ms: ms, r: res, q: q, h: hid ? 1 : 0, w: w || 0, b: _kb });
         try { localStorage.setItem(PERF_KEY, JSON.stringify(a.slice(-PERF_MAX))); } catch (e) {}
         try { _perfBadge(); } catch (e) {}
       }
@@ -4153,6 +4161,27 @@
       var worst = all.slice().sort(function (a, b) { return b.ms - a.ms; }).slice(0, 15);
 
       // ══════════════════════════════════════════════════════════════
+      // 🆕 D214: แยกสถิติตาม "เวอร์ชันหน้าเว็บของแต่ละรายการ"
+      // ══════════════════════════════════════════════════════════════
+      //   ถ้าไม่แยก จะสรุปไม่ได้ว่าเวอร์ชันใหม่ดีขึ้นหรือเปล่า เพราะสถิติสะสมข้ามช่วงอัป
+      var bBy = {};
+      all.forEach(function (x) {
+        var k = x.b || 'ก่อน D214 (ไม่ได้ติดเลขไว้)';
+        var g = bBy[k] || (bBy[k] = { ms: [], slow: 0 });
+        g.ms.push(x.ms);
+        if (x.ms >= SLOW) g.slow++;
+      });
+      var bRows = Object.keys(bBy).map(function (k) {
+        var m = bBy[k].ms.slice().sort(function (a, b) { return a - b; });
+        return { k: k, n: m.length, mid: m[Math.floor(m.length / 2)], slow: bBy[k].slow };
+      }).sort(function (a, b) { return b.n - a.n; });
+      // 🔑 ประตูเดียว — ห้ามกระจายเงื่อนไขนี้ไปเขียนซ้ำหลายที่ (แก้ที่เดียวแล้วอีกที่ค้าง)
+      var bMixed = bRows.length > 1;
+      var bMixWarn = bMixed
+        ? '⚠️ สถิติก้อนนี้ปนกัน ' + bRows.length + ' เวอร์ชัน — ห้ามสรุปว่าเวอร์ชันไหนดีขึ้นจากตัวเลขรวม ให้ดูแยกบรรทัด'
+        : '';
+
+      // ══════════════════════════════════════════════════════════════
       // 🆕 D212.2: ตัวชี้ขาด — ช้าเพราะ "แย่งช่องกันเอง" หรือ "เซิร์ฟเวอร์ช้า"
       // ══════════════════════════════════════════════════════════════
       //   จัดกลุ่มตาม q = จำนวนคำขอที่กำลังวิ่งอยู่ตอนคำขอนี้เริ่ม
@@ -4255,6 +4284,20 @@
             '<td align="center">' + (r.slow || '-') + '</td></tr>';
         }).join('') + '</table>';
 
+      var tB = bMixed
+        ? '<div style="margin-top:14px;font-weight:700;font-size:12px">🏷️ แยกตามเวอร์ชันหน้าเว็บ</div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<tr style="background:#fef3c7"><th style="text-align:left;padding:4px">เวอร์ชัน</th>' +
+          '<th>ครั้ง</th><th>กลาง</th><th>เกิน 8 วิ</th></tr>' +
+          bRows.map(function (r) {
+            return '<tr style="border-top:1px solid #eee"><td style="padding:4px">' + r.k + '</td>' +
+              '<td align="center">' + r.n + '</td>' +
+              '<td align="center">' + _perfSec(r.mid) + '</td>' +
+              '<td align="center">' + (r.slow || '-') + '</td></tr>';
+          }).join('') + '</table>' +
+          '<p style="margin:4px 0 0;font-size:11px;color:#b45309">' + bMixWarn + '</p>'
+        : '';
+
       var t15 = qRows.length
         ? '<div style="margin-top:14px;font-weight:700;font-size:12px">🔬 ช้าเพราะแย่งช่องกันเองหรือเปล่า</div>' +
           '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
@@ -4294,7 +4337,15 @@
               '  n=' + r.n + '  กลาง=' + _perfSec(r.mid) + '  เกิน8วิ=' + r.slow; }).join('\n') +
             (qVerdict ? '\n' + qVerdict : '') +
             (qCross ? '\n' + qCross : '') +
+            // 🐛 D214: บรรทัดนี้เคยโชว์บนจอแต่ "ไม่ถูกคัดลอก" ⇒ ตัวเลขชี้ขาดของ D213 หายไปทั้งดุ้น
+            //   CEO paste มาให้แล้วอ่านไม่เจอ = วินิจฉัยต่อไม่ได้ ⇒ ต้องอยู่ในข้อความคัดลอกเสมอ
+            (_waitMsg ? '\n' + _waitMsg : '') +
             (_hiddenN ? '\n(ตัดออก ' + _hiddenN + ' ครั้งที่เก็บตอนแท็บถูกซ่อน)' : '')
+          : '') +
+        (bMixed
+          ? '\n--- แยกตามเวอร์ชันหน้าเว็บ ---\n' +
+            bRows.map(function (r) { return r.k + '  n=' + r.n + '  กลาง=' + _perfSec(r.mid) +
+              '  เกิน8วิ=' + r.slow; }).join('\n') + '\n' + bMixWarn
           : '') +
         '\n--- 15 ครั้งที่ช้าสุด ---\n' +
         worst.map(function (x) { return _perfClock(x.t) + '  ' + x.a + '  ' + _perfSec(x.ms) + '  ' + x.r +
@@ -4304,7 +4355,7 @@
         title: '🩺 สถิติความเร็ว (เครื่องนี้)',
         html: '<div style="text-align:left">' +
               '<p style="margin:0 0 8px;font-size:11px;color:#6b7280">หน้าเว็บเวอร์ชัน <b>' +
-              (window.K_BUILD || 'ไม่ระบุ') + '</b></p>' + t1 + t15 + t2 +
+              (window.K_BUILD || 'ไม่ระบุ') + '</b></p>' + t1 + tB + t15 + t2 +
               '<p style="margin-top:10px;font-size:11px;color:#6b7280">นี่คือเวลาที่<b>คนรอจริง</b> — เอาไปเทียบกับ Duration ใน Apps Script Executions ' +
               'ถ้าตัวเลขต่างกันมาก แปลว่าเวลาหายไปที่คิว/เน็ต ไม่ใช่ที่โค้ด</p></div>',
         width: 720,
@@ -6937,6 +6988,9 @@
             if (_pa) { _pa.value = ''; _pa.dataset.dirty = '0'; }
             const _pq = document.getElementById('wiPayQR');
             if (_pq) { _pq.classList.add('hidden'); }
+            // 🆕 D214: เปิดคิวสำเร็จ = ช่องว่างเปลี่ยนจริง ⇒ ทิ้งคำตอบเก่าทันที
+            //   นี่คือเหตุผลที่ยืดอายุแคชเป็น 90 วิ ได้อย่างปลอดภัย
+            _wiSlotCache = { key: '', ts: 0, data: null };
             // reset B2B dropdown → "— Walk-in ปกติ —"
             const _b2bSelReset = document.getElementById('b2bContractSel');
             if (_b2bSelReset) _b2bSelReset.selectedIndex = 0;
@@ -6974,7 +7028,16 @@
       if (force) { if (_wiSlotTimer) { clearTimeout(_wiSlotTimer); _wiSlotTimer = null; }
                    return _wiAutoSlotRun(true); }
       if (_wiSlotTimer) clearTimeout(_wiSlotTimer);
-      _wiSlotTimer = setTimeout(function () { _wiSlotTimer = null; _wiAutoSlotRun(false); }, 400);
+      // ══════════════════════════════════════════════════════════════
+      // 🆕 D214: 400ms → 1200ms
+      // ══════════════════════════════════════════════════════════════
+      //   หลักฐาน 4/8 หลัง D213: ยังยิง 90 ครั้ง (30% ของทั้งเครื่อง) ทั้งที่เปิดคิวจริง 15 คิว
+      //   = 6 ครั้งต่อ 1 คิว ⇒ 400ms สั้นเกินไป พนักงานติ๊กบริการห่างกันเกิน 0.4 วิ
+      //   ⚠️ ต้องโชว์ 'กำลังหาช่องว่าง...' ทันทีตอนกด ไม่งั้นจะรู้สึกว่าหน้าค้าง 1.2 วิ
+      var _hEl = document.getElementById('wiTimeHint');
+      var _tElq = document.getElementById('wiTime');
+      if (_hEl && !(_tElq && _tElq.dataset.manual === '1')) _hEl.textContent = 'กำลังหาช่องว่าง...';
+      _wiSlotTimer = setTimeout(function () { _wiSlotTimer = null; _wiAutoSlotRun(false); }, 1200);
     }
     async function _wiAutoSlotRun(force) {
       const tEl = document.getElementById('wiTime');
@@ -6999,8 +7062,10 @@
         // 🆕 D213: เงื่อนไขเดิม + ยังไม่เกิน 30 วิ → ใช้คำตอบเดิม ไม่ยิงซ้ำ
         const _ck = branchId + '|' + p.get('lineType') + '|' + p.get('serviceIds');
         let res;
+        // 🆕 D214: 30 วิ → 90 วิ · แคชถูกล้างทันทีเมื่อเปิดคิวสำเร็จ (ของจริงเปลี่ยนตอนนั้น)
+        //   ⇒ ไม่ต้องยิงถี่เพื่อความสด เพราะสิ่งที่ทำให้ช่องว่างเปลี่ยนคือ "มีคิวใหม่" เท่านั้น
         if (!force && _wiSlotCache.data && _wiSlotCache.key === _ck &&
-            (Date.now() - _wiSlotCache.ts) < 30000) {
+            (Date.now() - _wiSlotCache.ts) < 90000) {
           res = _wiSlotCache.data;
         } else {
           res = await fetch(API_URL, { method: 'POST', body: withAuth(p) }).then(r => r.json());
@@ -9417,7 +9482,24 @@
       showSection('board-section');
       // 🆕 (Bug A3): preload settings (branches/services/closures) — walk-in slot picker จะใช้
       loadStoreConfig();
-      // 🛡️ F2.5e: auto-refresh ทุก 30 วิ — แต่ถ้า modal เปิดอยู่ ข้าม (กัน state หาย)
+      // 🛡️ F2.5e: auto-refresh — แต่ถ้า modal เปิดอยู่ ข้าม (กัน state หาย)
+      // ══════════════════════════════════════════════════════════════
+      // 🆕 D214: กันยิงซ้อน + ยืดรอบเองตอนร้านแน่น
+      // ══════════════════════════════════════════════════════════════
+      //   🐛 ต้นเหตุ (สถิติ 4/8): getAdminData 108 ครั้ง = 36% ของคำขอทั้งเครื่อง
+      //      ตัวจับเวลาเดิมยิงทุก 30 วิ **โดยไม่ดูว่ารอบก่อนจบหรือยัง**
+      //      พอร้านแน่นแล้วรอบหนึ่งใช้ 45-90 วิ ⇒ ยิงซ้อนกัน 2-3 ตัว = ซ้ำเติมคิวตัวเอง
+      //      (dedupe ชั้นเน็ตกลืนให้บางส่วนเพราะ key เหมือนกัน — แต่ไม่ควรพึ่ง)
+      //   ⇒ ① ยังค้างอยู่ = ข้ามรอบนี้เลย
+      //      ② รอบก่อนช้ากว่า 15 วิ = เว้นรอบถัดไปเป็น 60 วิ
+      //      ③ กลับมา 30 วิ เองเมื่อเร็วขึ้น (ไม่ต้องรีเฟรชหน้า)
+      //   🔑 ใช้ตัวจับเวลาถี่ 5 วิ + นาฬิกาปลุก (_adNextAt) แทน setInterval 30 วิ
+      //      เพราะต้องเปลี่ยนระยะห่างระหว่างทางได้ โดยไม่ต้องสร้าง timer ใหม่
+      var AD_TICK = 5000, AD_FAST = 30000, AD_SLOW = 60000, AD_SLOW_TRIGGER = 15000;
+      window._adBusy = false;
+      window._adGap = AD_FAST;
+      window._adSkipped = 0;                       // นับไว้ให้ 🩺/เทสตรวจได้ว่ากันซ้อนทำงานจริง
+      window._adNextAt = Date.now() + AD_FAST;     // showSection() เพิ่งโหลดไปแล้ว → รออีก 30 วิ
       setInterval(() => {
         if (_shouldSkipAutoRefresh()) {
           console.log('[AutoRefresh] skipped — modal open');
@@ -9428,9 +9510,30 @@
         // ⚡ PERF v3.0 (D197): ข้ามถ้าไม่ได้อยู่หน้ากระดาน
         const _bs = document.getElementById('board-section');
         if (!_bs || !_bs.classList.contains('active')) return;
+        // 🆕 D214 ①: รอบก่อนยังไม่จบ → ข้าม (ห้ามยิงซ้อนเด็ดขาด)
+        if (window._adBusy) {
+          window._adSkipped++;
+          console.log('[AutoRefresh] skipped — รอบก่อนยังไม่จบ');
+          return;
+        }
+        // 🆕 D214 ②: ยังไม่ถึงเวลารอบถัดไป
+        if (Date.now() < window._adNextAt) return;
+        window._adBusy = true;
+        const _adT0 = Date.now();
+        const _adDone = () => {
+          const took = Date.now() - _adT0;
+          // 🆕 D214 ③: ช้า → เว้นห่างขึ้น · เร็ว → กลับมาถี่เท่าเดิมเอง
+          window._adGap = (took >= AD_SLOW_TRIGGER) ? AD_SLOW : AD_FAST;
+          window._adNextAt = Date.now() + window._adGap;
+          window._adBusy = false;
+        };
         // ⚡ PERF v3.0 (D197): รีเฟรชเฉพาะกระดาน (เดิมยิง 5-6 requests ทุก 30 วิ)
-        loadAdminData({ boardOnly: true });
-      }, 30000);
+        try {
+          const _adP = loadAdminData({ boardOnly: true });
+          if (_adP && typeof _adP.then === 'function') _adP.then(_adDone, _adDone);
+          else _adDone();
+        } catch (e) { _adDone(); }
+      }, AD_TICK);
     });
     // ══════════════════════════════════════════════════════
     // 📊 SALES TRACKER MODULE — Master Coordinator AI 2/6/2026
