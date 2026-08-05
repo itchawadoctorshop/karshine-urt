@@ -1568,7 +1568,8 @@
         getB2BContracts:1, getPickupConfig:1, getMyCredits:1,
         getQuickAddConfig:1,
         getSalesList:1,                // 🆕 D212-A: ตัวอ่านซ้ำของ sellPackage/voidSale
-        checkBackfillRefs:1            // 🆕 D215: ตัวอ่านซ้ำของ "คีย์เป็นชุด" (อ่านล้วน ปลอดภัยที่จะ retry)
+        checkBackfillRefs:1,           // 🆕 D215: ตัวอ่านซ้ำของ "คีย์เป็นชุด" (อ่านล้วน ปลอดภัยที่จะ retry)
+        getDirectorySnapshot:1         // 🆕 D218: สมุดทะเบียนพกติดเครื่อง (อ่านล้วน)
       };
 
       function readAction(body) {
@@ -1673,7 +1674,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D216 · 5 ส.ค. 2026';
+      window.K_BUILD = 'D218 · 5 ส.ค. 2026';
 
       // 🆕 D214: bump v2 → v3 เพราะ "รูปข้อมูลเปลี่ยน" (เพิ่มช่อง b = เลขเวอร์ชันของแต่ละรายการ)
       //   ⚠️ ห้ามใช้คีย์เดิม — ของเก่าไม่มีช่อง b จะปนกับของใหม่แล้วสรุปผิดซ้ำรอยเดิม
@@ -2952,6 +2953,107 @@
       } catch (x) { return false; }
     }
 
+    /** ดึงเฉพาะเนื้อของที่จำไว้ (ไม่เอาเวลา) */
+    function kMemGetD(key) { var e = kMemGet(key); return e ? e.d : null; }
+
+    /**
+     * 🧠 D217: เปิดแท็บรายงานมา ให้เห็นตัวเลขรอบที่แล้วทันที
+     *   ⚠️ ต้องขึ้นป้ายบอกเวลาเสมอ — ตัวเลขรายงานถ้าคนเข้าใจว่าเป็นของสด จะตัดสินใจผิดได้
+     *   ของสดต้องกดปุ่มรีเฟรชในแถบรายงานเอง (ตั้งใจตั้งแต่ D213 — ไม่ยิงเองแล้ว)
+     */
+    function kMemReplayReports() {
+      var newest = 0, any = false;
+      var pairs = [['dash', loadDashboardSummary], ['seg', loadSegmentSummary]];
+      for (var i = 0; i < pairs.length; i++) {
+        var e = kMemGet(pairs[i][0]);
+        if (!e) continue;
+        try { pairs[i][1](e.d); any = true; if (e.at > newest) newest = e.at; } catch (x) {}
+      }
+      if (any) { try { kMemShowStamp(newest); } catch (x) {} }
+      return any;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 📖 D218 — สมุดทะเบียน/ลูกค้าพกติดเครื่อง: ค้นทะเบียน 0 วินาที
+    // ══════════════════════════════════════════════════════════════════
+    //   รถ ~2,500 คัน + ลูกค้า ~930 คน = ข้อมูลเล็กมาก ⇒ โหลดครั้งเดียวเก็บไว้ในเครื่อง
+    //   🛡️ เป็น "ตัวเร่ง" ไม่ใช่ "ตัวแทน":
+    //      เจอชัดเจน 1 คัน → ใช้เลย (0 วิ)
+    //      เจอ 0 คัน / เจอหลายคัน → ถามเซิร์ฟเวอร์เหมือนเดิม (เซิร์ฟเวอร์คือตัวจริงเสมอ)
+    //   ⇒ ต่อให้สมุดในเครื่องเก่าไปบ้าง ก็ไม่มีทางผูกคิวกับลูกค้าผิดคน
+    //   🔒 ข้อมูลนี้มีชื่อ/เบอร์ลูกค้า — อยู่ในเครื่องร้านเท่านั้น · ล้างด้วย window._kDirClear()
+    var KDIR_KEY = 'karshine_directory_v1';
+    var KDIR_RECHECK_MS = 30 * 60 * 1000;      // เช็คเวอร์ชันใหม่ทุก 30 นาที (ตอบกลับนิดเดียวถ้าไม่เปลี่ยน)
+    var _kDirMem = null, _kDirBusy = false;
+
+    function kDirLoad() {
+      if (_kDirMem) return _kDirMem;
+      try {
+        var raw = localStorage.getItem(KDIR_KEY);
+        _kDirMem = raw ? JSON.parse(raw) : null;
+      } catch (e) { _kDirMem = null; }
+      return _kDirMem;
+    }
+    function kDirSave(o) {
+      _kDirMem = o;
+      try { localStorage.setItem(KDIR_KEY, JSON.stringify(o)); } catch (e) { /* เต็ม = ใช้ในหน่วยความจำต่อไป */ }
+    }
+    window._kDirClear = function () {
+      _kDirMem = null;
+      try { localStorage.removeItem(KDIR_KEY); } catch (e) {}
+    };
+    window._kDirInfo = function () {
+      var d = kDirLoad();
+      return d ? { ver: d.ver, cars: (d.v || []).length, users: Object.keys(d.u || {}).length, at: d.at } : null;
+    };
+
+    /** ล้างทะเบียนให้เทียบกันได้ — ต้องเหมือนฝั่งเซิร์ฟเวอร์เป๊ะ */
+    function kDirCleanPlate(v) {
+      return String(v === null || v === undefined ? '' : v).replace(/[^ก-ฮa-zA-Z0-9]/g, '');
+    }
+
+    /** ค้นในเครื่อง — คืนรูปแบบเดียวกับที่เซิร์ฟเวอร์คืน */
+    function kDirFindPlate(plate) {
+      var d = kDirLoad();
+      if (!d || !d.v || !d.v.length) return null;
+      var q = kDirCleanPlate(plate);
+      if (!q) return [];
+      var out = [];
+      for (var i = 0; i < d.v.length; i++) {
+        var row = d.v[i], p = kDirCleanPlate(row[2]);
+        // เกณฑ์เดียวกับเซิร์ฟเวอร์: ตรงเป๊ะก่อน · ไม่งั้นใช้ "ลงท้ายด้วย" เมื่อพิมพ์ >= 3 ตัว
+        var hit = (p === q) || (q.length >= 3 && p.length >= q.length && p.slice(-q.length) === q);
+        if (!hit) continue;
+        var uid = row[1], usr = (d.u && d.u[uid]) || null;
+        out.push({
+          vehicleId: row[0], lineUid: uid, plate: row[2], province: row[3] || '',
+          brand: row[4] || '', model: row[5] || '', color: row[6] || '', size: row[7] || 'M',
+          ownerName: (usr && usr[0]) || 'ไม่พบชื่อ',
+          ownerPhone: (usr && usr[1]) || 'ไม่พบเบอร์',
+          __local: true
+        });
+      }
+      return out;
+    }
+
+    /** ดาวน์โหลด/อัปเดตสมุด — เงียบๆ เบื้องหลัง ไม่ขวางใคร */
+    async function kDirSync(force) {
+      if (_kDirBusy) return;
+      var cur = kDirLoad();
+      if (!force && cur && cur.at && (Date.now() - cur.at) < KDIR_RECHECK_MS) return;
+      _kDirBusy = true;
+      try {
+        var p = new URLSearchParams({ action: 'getDirectorySnapshot' });
+        if (cur && cur.ver) p.set('ver', cur.ver);
+        var r = await fetch(API_URL, { method: 'POST', body: withAuth(p) });
+        var j = await r.json();
+        if (!j || j.status !== 'success') return;
+        if (j.unchanged) { cur.at = Date.now(); kDirSave(cur); return; }   // แค่ตีตราว่าเช็คแล้ว
+        kDirSave({ ver: j.ver, v: j.v || [], u: j.u || {}, at: Date.now() });
+      } catch (e) { /* เงียบไว้ — ไม่มีสมุดก็ถามเซิร์ฟเวอร์เหมือนเดิม */ }
+      finally { _kDirBusy = false; }
+    }
+
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
@@ -2961,7 +3063,9 @@
       
       if(id === 'board-section') loadAdminData({ boardOnly: true });   // ⚡ D197: แท็บกระดานไม่ต้องโหลดรายงาน
       // 🆕 D213: แท็บรายงาน = โหลดแค่กระดาน · ตัวเลขรายงานรอให้กดปุ่มเอง
-      if(id === 'dashboard-section') { loadAdminData({ boardOnly: true, silent: true }); _rptSyncBar(); }
+      if(id === 'dashboard-section') { loadAdminData({ boardOnly: true, silent: true }); _rptSyncBar();
+        // 🧠 D217: โชว์ตัวเลขรอบที่แล้วทันที (พร้อมป้ายบอกเวลา) แทนที่จะขึ้นขีดกลางเปล่าๆ
+        try { kMemReplayReports(); } catch (e) {} }
       if(id === 'walkin-section') { renderWiServices(); initWalkInForm(); _fetchB2BContracts_(); }
       if(id === 'config-section') loadStoreConfig();
       if(id === 'sales-tracker-section') stInitTab();
@@ -3076,12 +3180,17 @@
 
     // 📊 F0.4 Mini Dashboard (+ 💰 F2.4 Payment breakdown)
     // 🏷️ F1.1 — Segment Summary + List Modal
-    async function loadSegmentSummary() {
+    async function loadSegmentSummary(_replay) {
       try {
         const payload = new URLSearchParams({ action: 'getSegmentSummary', t: Date.now() });
-        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
-        const result = await res.json();
+        let result;
+        if (_replay) { result = _replay; }
+        else {
+          const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+          result = await res.json();
+        }
         if (result.status !== 'success' || !result.data) return;
+        if (!_replay) { try { kMemSet('seg', result); } catch (e) {} }
         const d = result.data;
         const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
         setText('segNew',     d.new || 0);
@@ -3149,15 +3258,18 @@
     //   🚨 ตัวเลขนี้ "ไม่ใช่เงิน" — เป็นจำนวนครั้งที่ขายสิทธิ์ไปแล้วยังไม่ได้ล้างคืน
     //   ยิงแยกจาก getDashboardSummary เพื่อให้แดชบอร์ดไม่ช้าลง/ไม่พังตามกันถ้าอันนี้ล้ม
     // ═══════════════════════════════════════════════════════════════
-    async function loadPackageLiability() {
+    async function loadPackageLiability(_replay) {
       const card = document.getElementById('dsLiabCard');
       if (!card) return;
       const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
       try {
-        const res = await fetch(API_URL, {
+        const res = _replay ? _replay : await fetch(API_URL, {
           method: 'POST',
           body: withAuth(new URLSearchParams({ action: 'getPackageLiability', t: Date.now() }))
         }).then(r => r.json());
+        if (res && res.status === 'success' && res.data && !_replay) {
+          try { kMemSet('liab', res); } catch (e) {}
+        }
         if (!res || res.status !== 'success' || !res.data) {
           setText('dsLiabDays', '-');
           setText('dsLiabNote', 'โหลดไม่สำเร็จ');
@@ -3186,9 +3298,10 @@
       }
     }
 
-    async function loadDashboardSummary() {
+    /** @param _replay ถ้าส่งของที่จำไว้เข้ามา = ไม่ยิงเน็ต แค่วาดใหม่ */
+    async function loadDashboardSummary(_replay) {
       // ไม่ await — ไม่ให้การ์ดนี้ถ่วงแดชบอร์ดที่เหลือ
-      try { loadPackageLiability(); } catch (e) {}
+      try { loadPackageLiability(_replay ? kMemGetD('liab') : null); } catch (e) {}
       try {
         // 🆕 SPEC V.2: ส่ง startDate/endDate ตาม _currentRange (fallback = today ถ้ายังไม่ init)
         const sd = (_currentRange && _currentRange.startDate) ? _currentRange.startDate : '';
@@ -3197,9 +3310,14 @@
         if (sd) params.startDate = sd;
         if (ed) params.endDate   = ed;
         const payload = new URLSearchParams(params);
-        const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
-        const result = await res.json();
+        let result;
+        if (_replay) { result = _replay; }
+        else {
+          const res = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
+          result = await res.json();
+        }
         if (result.status === 'success' && result.data) {
+          if (!_replay) { try { kMemSet('dash', result); } catch (e) {} }   // 🧠 จำเฉพาะของจริง
           const d = result.data;
           const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
           setText('dsQueueToday',        d.queueToday || 0);
@@ -5802,6 +5920,12 @@
 
     document.getElementById('wiPlate').addEventListener('blur', async (e) => {
       const plate = e.target.value; if(plate.length < 3) return;
+      // 📖 D218: ลองค้นในเครื่องก่อน — เจอชัดเจน 1 คัน = ใช้เลย ไม่ยิงเน็ต (0 วินาที)
+      //   🛡️ เจอ 0 หรือเจอหลายคัน ⇒ ตกไปถามเซิร์ฟเวอร์เหมือนเดิม (ตัวจริงอยู่ที่นั่น)
+      try {
+        const _lo = kDirFindPlate(plate);
+        if (_lo && _lo.length === 1) { selectWalkInVehicle(_lo[0]); return; }
+      } catch (_) {}
       Swal.fire({ title: 'กำลังค้นหา...', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500, didOpen: () => Swal.showLoading() });
       try {
         const payload = new URLSearchParams({ action: 'searchWalkInVehicle', plate: plate });
@@ -9562,6 +9686,8 @@
       //   ผลพลอยได้: พอ _lastBoardData มีค่าแล้ว การโหลดครั้งแรกจะกลายเป็น "รีเฟรชเบื้องหลัง"
       //   ⇒ ไม่หรี่จอ ไม่ขึ้น "กำลังโหลด" — พนักงานใช้งานต่อได้ทันทีระหว่างรอ
       try { kMemRestoreBoard(); } catch (e) {}
+      // 📖 D218: ดึงสมุดทะเบียนเบื้องหลัง — หน่วงไว้ก่อน อย่าไปแย่งคิวกับการโหลดกระดาน
+      try { setTimeout(function () { kDirSync(false); }, 12000); } catch (e) {}
       showSection('board-section');
       // 🆕 (Bug A3): preload settings (branches/services/closures) — walk-in slot picker จะใช้
       loadStoreConfig();
