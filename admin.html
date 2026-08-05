@@ -1673,7 +1673,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D215 · 5 ส.ค. 2026';
+      window.K_BUILD = 'D216 · 5 ส.ค. 2026';
 
       // 🆕 D214: bump v2 → v3 เพราะ "รูปข้อมูลเปลี่ยน" (เพิ่มช่อง b = เลขเวอร์ชันของแต่ละรายการ)
       //   ⚠️ ห้ามใช้คีย์เดิม — ของเก่าไม่มีช่อง b จะปนกับของใหม่แล้วสรุปผิดซ้ำรอยเดิม
@@ -2878,6 +2878,80 @@
       w.document.write(html); w.document.close();
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // 🧠 D216 — ความจำหน้าจอ: เปิดมาเห็นข้อมูลทันที ไม่ต้องนั่งรอ
+    // ══════════════════════════════════════════════════════════════════
+    //   🎯 ปัญหา: ทุกครั้งที่เปิด/รีเฟรชหน้า = จอว่าง แล้วรอเซิร์ฟเวอร์ 5-40 วิ
+    //      ทั้งที่ข้อมูลรอบก่อนยังใช้ดูได้อยู่ ไม่มีเหตุผลที่ต้องให้คนนั่งมองจอเปล่า
+    //
+    //   ⚖️ ข้อแลกที่ต้องยอมรับ (และต้องบอกผู้ใช้ตรงๆ):
+    //      ของที่เห็นทันทีคือ "ของรอบที่แล้ว" ⇒ **ต้องมีป้ายบอกเวลาเสมอ ห้ามหลอกตา**
+    //      พอของจริงมาถึง ป้ายจะหายไปเอง
+    //
+    //   🛡️ กติกา:
+    //      · เกิน 6 ชม. ไม่เอามาโชว์ (เก่าเกินจนอันตราย)
+    //      · การกระทำทุกอย่างยังยิงเข้าเซิร์ฟเวอร์ + ตรวจซ้ำเหมือนเดิม — ความจำนี้ใช้ "ดู" อย่างเดียว
+    //      · เก็บในเครื่องนี้เครื่องเดียว · ล้างได้ด้วย window._kMemClear()
+    var KMEM_KEY = 'karshine_screen_memory_v1';
+    var KMEM_MAX_AGE = 6 * 3600 * 1000;
+
+    function kMemAll() {
+      try { var a = JSON.parse(localStorage.getItem(KMEM_KEY) || '{}'); return (a && typeof a === 'object') ? a : {}; }
+      catch (e) { return {}; }
+    }
+    function kMemSet(key, data) {
+      try {
+        var a = kMemAll();
+        a[key] = { at: Date.now(), d: data };
+        localStorage.setItem(KMEM_KEY, JSON.stringify(a));
+      } catch (e) { /* เต็ม/ปิดไว้ = ไม่เป็นไร แค่ไม่มีความจำ */ }
+    }
+    function kMemGet(key, maxAge) {
+      var e = kMemAll()[key];
+      if (!e || e.d === undefined || e.d === null) return null;
+      if (Date.now() - (e.at || 0) > (maxAge || KMEM_MAX_AGE)) return null;
+      return e;
+    }
+    window._kMemClear = function () {
+      try { localStorage.removeItem(KMEM_KEY); } catch (e) {}
+      try { kMemHideStamp(); } catch (e) {}
+    };
+
+    /** ป้าย "ข้อมูลเมื่อ HH:MM" — ต้องโผล่ทุกครั้งที่โชว์ของเก่า */
+    function kMemShowStamp(at) {
+      var el = document.getElementById('kMemStamp');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'kMemStamp';
+        el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99997;' +
+          'background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:9999px;' +
+          'padding:5px 14px;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.12)';
+        document.body.appendChild(el);
+      }
+      var d = new Date(at), p = function (x) { return ('0' + x).slice(-2); };
+      el.textContent = '📌 ข้อมูลเมื่อ ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ' — กำลังอัปเดต...';
+      el.style.display = '';
+    }
+    function kMemHideStamp() {
+      var el = document.getElementById('kMemStamp');
+      if (el) el.style.display = 'none';
+    }
+
+    /** เอากระดานรอบที่แล้วขึ้นจอทันที — คืน true ถ้าโชว์ได้ */
+    function kMemRestoreBoard() {
+      var e = kMemGet('board');
+      if (!e || !e.d || !e.d.data) return false;
+      try {
+        window._lastBoardData = e.d.data;
+        window._completedToday = e.d.completedToday || [];
+        renderBoard(e.d.data);
+        try { _renderCompletedLane(window._completedToday); } catch (x) {}
+        try { if (typeof _cacheAdminBookings === 'function') _cacheAdminBookings(e.d.data); } catch (x) {}
+        kMemShowStamp(e.at);
+        return true;
+      } catch (x) { return false; }
+    }
+
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
@@ -2919,6 +2993,9 @@
         if (result.status === 'success') {
           window._lastBoardData = result.data;      // ⚡ D209: ไว้ให้ optimistic UI ใช้
           window._completedToday = result.completedToday || [];   // 🆕 D212-B เลน "เสร็จแล้ววันนี้"
+          // 🧠 D216: จำไว้ให้รอบหน้าเปิดมาเห็นทันที + ปลดป้าย "ข้อมูลเก่า" ทิ้ง
+          try { kMemSet('board', { data: result.data, completedToday: window._completedToday }); } catch (e) {}
+          try { kMemHideStamp(); } catch (e) {}
           renderBoard(result.data);
           _cacheAdminBookings(result.data);
           if(result.services) {
@@ -9481,6 +9558,10 @@
     document.addEventListener('DOMContentLoaded', () => {
       // 🆕 SPEC V.2: init range selector ก่อน showSection — จะได้ apply กับ Dashboard ทันทีถ้าเปิด
       initRangeSelector();
+      // 🧠 D216: วาดกระดานรอบที่แล้วขึ้นจอ "ก่อน" ยิงคำขอแรก
+      //   ผลพลอยได้: พอ _lastBoardData มีค่าแล้ว การโหลดครั้งแรกจะกลายเป็น "รีเฟรชเบื้องหลัง"
+      //   ⇒ ไม่หรี่จอ ไม่ขึ้น "กำลังโหลด" — พนักงานใช้งานต่อได้ทันทีระหว่างรอ
+      try { kMemRestoreBoard(); } catch (e) {}
       showSection('board-section');
       // 🆕 (Bug A3): preload settings (branches/services/closures) — walk-in slot picker จะใช้
       loadStoreConfig();
