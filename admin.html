@@ -1483,6 +1483,7 @@
   <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-between px-2 pb-6 lg:pb-3 pt-2 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.1)]">
     <button onclick="showSection('board-section')" id="nav-board" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all nav-active"><i class="fa-solid fa-clipboard-list text-xl"></i><span class="text-[9px] font-bold">กระดานคิว</span></button>
     <button onclick="showSection('walkin-section')" id="nav-walkin" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-car-burst text-xl"></i><span class="text-[9px] font-bold">Walk-in</span></button>
+    <button onclick="beOpen()" id="nav-fastentry" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-bolt text-xl"></i><span class="text-[9px] font-bold">คีย์ชุด</span><span id="beNavBadge" class="hidden absolute -mt-6 ml-6 bg-amber-500 text-white text-[9px] font-bold px-1.5 rounded-full">0</span></button>
     <button onclick="showSection('dashboard-section')" id="nav-dashboard" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-chart-line text-xl"></i><span class="text-[9px] font-bold">รายงาน</span></button>
     <button onclick="showSection('settings-section')" id="nav-settings" class="flex-1 flex flex-col items-center gap-1 text-gray-400 transition-all"><i class="fa-solid fa-users text-xl"></i><span class="text-[9px] font-bold">ลูกค้า (CRM)</span></button>
     <!-- 🚚 Pickup & Delivery (5/6/2026 — D122-D129) -->
@@ -1566,7 +1567,8 @@
         getNextFreeSlot:1, searchUser:1, searchWalkInVehicle:1, searchPackageOwner:1,
         getB2BContracts:1, getPickupConfig:1, getMyCredits:1,
         getQuickAddConfig:1,
-        getSalesList:1                 // 🆕 D212-A: ตัวอ่านซ้ำของ sellPackage/voidSale
+        getSalesList:1,                // 🆕 D212-A: ตัวอ่านซ้ำของ sellPackage/voidSale
+        checkBackfillRefs:1            // 🆕 D215: ตัวอ่านซ้ำของ "คีย์เป็นชุด" (อ่านล้วน ปลอดภัยที่จะ retry)
       };
 
       function readAction(body) {
@@ -1671,7 +1673,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D214 · 4 ส.ค. 2026';
+      window.K_BUILD = 'D215 · 5 ส.ค. 2026';
 
       // 🆕 D214: bump v2 → v3 เพราะ "รูปข้อมูลเปลี่ยน" (เพิ่มช่อง b = เลขเวอร์ชันของแต่ละรายการ)
       //   ⚠️ ห้ามใช้คีย์เดิม — ของเก่าไม่มีช่อง b จะปนกับของใหม่แล้วสรุปผิดซ้ำรอยเดิม
@@ -10597,6 +10599,325 @@
     }
     // ══ End POS Quick Sale ══
 
+    // ══════════════════════════════════════════════════════════════════
+    // ⚡ D215 — ถาดคีย์เร็ว: คีย์แล้วขึ้นทันที 0 วิ + ส่งเข้าระบบเป็นชุด
+    // ══════════════════════════════════════════════════════════════════
+    //   🎯 หลักการเดียวที่ยึด: **มือคนคีย์ต้องไม่ถูกผูกกับความเร็วเซิร์ฟเวอร์**
+    //      บันทึกลงเครื่องก่อนเสมอ (0 วิ) แล้วค่อยทยอยส่งเบื้องหลัง
+    //
+    //   🔑 กันคิวซ้ำ: ทุกใบมี clientRef ของตัวเอง — ส่งซ้ำกี่รอบเซิร์ฟเวอร์ก็ข้ามให้
+    //   🚨 timeout ≠ ล้มเหลว: ถ้าส่งแล้วไม่รู้ผล **ต้องอ่านซ้ำก่อนตัดสิน** ห้ามเดา ห้ามส่งซ้ำมั่ว
+    //   🖥️ หลายเครื่อง: แต่ละเครื่องมีถาดของตัวเอง · เซิร์ฟเวอร์เตือนถ้าทะเบียนซ้ำในวันเดียวกัน
+    var BE_KEY = 'karshine_entry_tray_v1';
+    var BE_DEV = 'karshine_device_id';
+    var BE_BATCH = 20;              // ส่งครั้งละไม่เกิน 20 ใบ (เซิร์ฟเวอร์รับได้ 60)
+    var BE_TICK_MS = 8000;          // จังหวะลองส่งเบื้องหลัง
+    var _beSending = false, _beTimer = null, _beBackoff = 0;
+
+    function beDeviceId() {
+      var d = '';
+      try { d = localStorage.getItem(BE_DEV) || ''; } catch (e) {}
+      if (!d) {
+        d = 'DEV' + Math.random().toString(36).slice(2, 7).toUpperCase();
+        try { localStorage.setItem(BE_DEV, d); } catch (e) {}
+      }
+      return d;
+    }
+    function beLoad() {
+      try { var a = JSON.parse(localStorage.getItem(BE_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+      catch (e) { return []; }
+    }
+    function beSave(list) {
+      try { localStorage.setItem(BE_KEY, JSON.stringify(list)); } catch (e) {}
+      beBadge();
+    }
+    function bePendingCount() { return beLoad().filter(function (x) { return !x.bookingId; }).length; }
+    function beBadge() {
+      var el = document.getElementById('beNavBadge');
+      if (!el) return;
+      var n = bePendingCount();
+      if (n > 0) { el.textContent = n; el.classList.remove('hidden'); }
+      else el.classList.add('hidden');
+    }
+
+    function beOpen() {
+      var ov = document.getElementById('beOverlay');
+      if (!ov) return;
+      beFillPickers();
+      var d = document.getElementById('beDate');
+      if (d && !d.value) d.value = new Date().toISOString().split('T')[0];
+      var t = document.getElementById('beTime');
+      if (t && !t.value) { var now = new Date(); t.value = ('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2); }
+      ov.classList.remove('hidden');
+      beRender();
+      setTimeout(function () { var p = document.getElementById('bePlate'); if (p) p.focus(); }, 60);
+    }
+    function beClose() {
+      var ov = document.getElementById('beOverlay');
+      if (ov) ov.classList.add('hidden');
+    }
+
+    function beFillPickers() {
+      var sv = document.getElementById('beSvc');
+      if (sv && !sv.dataset.filled) {
+        var list = (typeof adminServices !== 'undefined' && adminServices) ? adminServices : [];
+        sv.innerHTML = list.map(function (x) {
+          return '<option value="' + (x.service_id || '') + '">' + (x.name || x.service_id) + '</option>';
+        }).join('');
+        if (list.length) sv.dataset.filled = '1';
+        sv.onchange = beAutoPrice;
+      }
+      var pv = document.getElementById('bePay');
+      if (pv && !pv.dataset.filled) {
+        var pays = (typeof configData !== 'undefined' && configData && configData.payments) ? configData.payments : [];
+        pv.innerHTML = pays.map(function (p) {
+          return '<option value="' + (p.pay_id || p.id) + '">' + (p.pay_name || p.name || p.pay_id) + '</option>';
+        }).join('');
+        if (pays.length) pv.dataset.filled = '1';
+      }
+      var sz = document.getElementById('beSize');
+      if (sz) sz.onchange = beAutoPrice;
+      beAutoPrice();
+    }
+
+    // เติมราคาให้เอง ตามบริการ+ขนาด — พนักงานจะได้พิมพ์แค่ทะเบียน
+    function beAutoPrice() {
+      var sv = document.getElementById('beSvc'), sz = document.getElementById('beSize'), amt = document.getElementById('beAmt');
+      if (!sv || !sz || !amt) return;
+      if (amt.dataset.dirty === '1') return;      // พนักงานแก้เองแล้ว ห้ามทับ
+      var list = (typeof adminServices !== 'undefined' && adminServices) ? adminServices : [];
+      var s0 = list.find(function (x) { return String(x.service_id) === String(sv.value); });
+      if (!s0) return;
+      var v = sz.value === 'L' ? s0.price_l : (sz.value === 'XL' ? s0.price_xl : s0.price_m);
+      amt.value = parseFloat(v) || 0;
+    }
+
+    function beAdd() {
+      var plate = (document.getElementById('bePlate') || {}).value || '';
+      var size  = (document.getElementById('beSize')  || {}).value || 'M';
+      var svc   = (document.getElementById('beSvc')   || {}).value || '';
+      var time  = (document.getElementById('beTime')  || {}).value || '';
+      var date  = (document.getElementById('beDate')  || {}).value || '';
+      var amt   = (document.getElementById('beAmt')   || {}).value;
+      var pay   = (document.getElementById('bePay')   || {}).value || '';
+      var hint  = document.getElementById('beHint');
+
+      // ตรวจเท่าที่จำเป็น — อย่าขวางทางคนคีย์
+      if (!String(plate).trim()) { if (hint) hint.textContent = '⚠️ ใส่ทะเบียนก่อน'; return; }
+      if (!svc)  { if (hint) hint.textContent = '⚠️ เลือกบริการก่อน'; return; }
+      if (!pay)  { if (hint) hint.textContent = '⚠️ เลือกวิธีจ่ายก่อน'; return; }
+      if (!date || !time) { if (hint) hint.textContent = '⚠️ ใส่วันและเวลาก่อน'; return; }
+
+      var list = beLoad();
+      var item = {
+        clientRef: beDeviceId() + '-' + Date.now() + '-' + list.length,
+        plate: String(plate).trim(),
+        size: size,
+        serviceId: svc,
+        bookingDate: date + 'T' + time,
+        payMethod: pay,
+        payAmount: parseFloat(amt) || 0,
+        addedAt: Date.now()
+      };
+      list.push(item);
+      beSave(list);
+
+      // 🔑 0 วินาที — เคลียร์ช่องแล้วให้คีย์ใบต่อไปได้ทันที ไม่รออะไรทั้งสิ้น
+      var pEl = document.getElementById('bePlate');
+      if (pEl) { pEl.value = ''; pEl.focus(); }
+      var aEl = document.getElementById('beAmt');
+      if (aEl) { aEl.dataset.dirty = '0'; }
+      beAutoPrice();
+      if (hint) hint.textContent = '✅ เพิ่มแล้ว — คีย์ใบต่อไปได้เลย';
+      beRender();
+      beKick();
+    }
+
+    function beRemove(ref) {
+      beSave(beLoad().filter(function (x) { return x.clientRef !== ref; }));
+      beRender();
+    }
+    function beClearDone() {
+      beSave(beLoad().filter(function (x) { return !x.bookingId; }));
+      beRender();
+    }
+
+    function beRender() {
+      var box = document.getElementById('beList');
+      if (!box) return;
+      var list = beLoad();
+      if (!list.length) {
+        box.innerHTML = '<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px">ยังไม่มีรายการ — พิมพ์ทะเบียนด้านบนแล้วกด Enter</div>';
+      } else {
+        var svcName = function (id) {
+          var l = (typeof adminServices !== 'undefined' && adminServices) ? adminServices : [];
+          var f = l.find(function (x) { return String(x.service_id) === String(id); });
+          return f ? (f.name || id) : id;
+        };
+        box.innerHTML = list.slice().reverse().map(function (x) {
+          var icon = x.bookingId ? '✅' : (x.err ? '⚠️' : '⏳');
+          var bg   = x.bookingId ? '#f0fdf4' : (x.err ? '#fef2f2' : '#fff');
+          var right = x.bookingId
+            ? '<span style="font-size:10px;color:#16a34a;font-weight:700">' + x.bookingId + '</span>'
+            : '<button onclick="beRemove(\'' + x.clientRef + '\')" style="background:none;border:none;color:#dc2626;font-size:11px;cursor:pointer">ลบ</button>';
+          return '<div style="display:flex;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid #f1f5f9;background:' + bg + '">' +
+            '<span style="font-size:14px">' + icon + '</span>' +
+            '<span style="font-weight:700;font-size:13px;min-width:88px">' + x.plate + '</span>' +
+            '<span style="font-size:11px;color:#6b7280;flex:1">' + svcName(x.serviceId) + ' · ' + x.size + ' · ' + String(x.bookingDate).slice(11) + '</span>' +
+            '<span style="font-size:12px;font-weight:700">฿' + (x.payAmount || 0) + '</span>' +
+            right +
+            (x.warn ? '<div style="flex-basis:100%;font-size:10px;color:#b45309">⚠️ ' + x.warn + '</div>' : '') +
+            (x.err  ? '<div style="flex-basis:100%;font-size:10px;color:#b91c1c">' + x.err + '</div>' : '') +
+            '</div>';
+        }).join('');
+      }
+      var pend = list.filter(function (x) { return !x.bookingId; }).length;
+      var done = list.length - pend;
+      var st = document.getElementById('beStat');
+      if (st) st.innerHTML = (pend ? '<span style="color:#b45309">⏳ ยังไม่ส่ง ' + pend + ' ใบ</span>' : '<span style="color:#16a34a">✅ ส่งครบแล้ว</span>') +
+                             (done ? ' <span style="color:#6b7280;font-weight:400">· เข้าระบบแล้ว ' + done + ' ใบ</span>' : '');
+      var cn = document.getElementById('beConn');
+      if (cn) cn.textContent = _beSending ? 'กำลังส่ง...' : '';
+      beBadge();
+    }
+
+    /** ทยอยส่งเบื้องหลัง — ไม่มีอะไรผูกกับการพิมพ์ของพนักงาน */
+    function beKick() {
+      if (_beTimer) return;
+      _beTimer = setInterval(function () {
+        if (bePendingCount() === 0) { clearInterval(_beTimer); _beTimer = null; return; }
+        beSendNow(false);
+      }, BE_TICK_MS);
+    }
+
+    async function beSendNow(manual) {
+      if (_beSending) return;
+      if (!manual && _beBackoff > Date.now()) return;
+      var list = beLoad();
+      var pend = list.filter(function (x) { return !x.bookingId && !x.err; });
+      if (!pend.length) { beRender(); return; }
+      var batch = pend.slice(0, BE_BATCH);
+      _beSending = true; beRender();
+      try {
+        var p = new URLSearchParams({
+          action: 'submitBackfillBatch',
+          adminUid: (typeof currentAdminUid !== 'undefined' ? currentAdminUid : '') || beDeviceId(),
+          items: JSON.stringify(batch)
+        });
+        var res = await fetch(API_URL, { method: 'POST', body: withAuth(p) });
+        var j = await res.json();
+        if (j && j.status === 'success') { beApply(j.results); _beBackoff = 0; }
+        else if (j && j.retryable) { _beBackoff = Date.now() + 15000; }        // ระบบไม่ว่าง → ของยังอยู่ ลองใหม่
+        else beApply(batch.map(function (b) { return { clientRef: b.clientRef, ok: false, message: (j && j.message) || 'ส่งไม่สำเร็จ' }; }));
+      } catch (e) {
+        // 🚨 D211/D212: timeout ≠ ล้มเหลว — Apps Script อาจเขียนไปแล้ว
+        //   ห้ามเดา ห้ามส่งซ้ำทันที ⇒ **อ่านซ้ำก่อนตัดสิน**
+        await beVerify(batch);
+      } finally {
+        _beSending = false;
+        beRender();
+        beKick();
+      }
+    }
+
+    /** อ่านซ้ำว่าใบไหนเข้าระบบไปแล้วบ้าง (ใช้ตอนส่งแล้วไม่รู้ผล) */
+    async function beVerify(batch) {
+      try {
+        var p = new URLSearchParams({
+          action: 'checkBackfillRefs',
+          refs: JSON.stringify(batch.map(function (b) { return b.clientRef; })),
+          _vfy: Date.now()                      // กันไปเกาะคำตอบเก่าที่ค้างใน inflight
+        });
+        var res = await fetch(API_URL, { method: 'POST', body: withAuth(p) });
+        var j = await res.json();
+        if (j && j.status === 'success' && j.found) {
+          var out = [];
+          for (var i = 0; i < batch.length; i++) {
+            var ref = batch[i].clientRef;
+            if (j.found[ref]) out.push({ clientRef: ref, ok: true, bookingId: j.found[ref] });
+          }
+          if (out.length) beApply(out);
+        }
+        // อ่านไม่ได้/ไม่เจอ = ยังไม่รู้ผล ⇒ คงสถานะ "ยังไม่ส่ง" ไว้ แล้วลองใหม่รอบหน้า
+      } catch (e) { /* เงียบไว้ — รอบหน้าค่อยลองใหม่ */ }
+    }
+
+    function beApply(results) {
+      if (!results || !results.length) return;
+      var list = beLoad();
+      var byRef = {};
+      results.forEach(function (r) { byRef[r.clientRef] = r; });
+      list.forEach(function (x) {
+        var r = byRef[x.clientRef];
+        if (!r) return;
+        if (r.ok && r.bookingId) { x.bookingId = r.bookingId; x.err = ''; x.warn = r.warn || x.warn || ''; }
+        else if (!r.ok) { x.err = r.message || 'ส่งไม่สำเร็จ'; }
+      });
+      beSave(list);
+    }
+
+    // Enter ที่ช่องไหนก็ได้ในแถวคีย์ = เพิ่มรายการ
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter') return;
+      var ov = document.getElementById('beOverlay');
+      if (!ov || ov.classList.contains('hidden')) return;
+      var id = (ev.target && ev.target.id) || '';
+      if (['bePlate', 'beSize', 'beSvc', 'beTime', 'beAmt', 'bePay', 'beDate'].indexOf(id) >= 0) {
+        ev.preventDefault(); beAdd();
+      }
+    });
+    document.addEventListener('input', function (ev) {
+      if (ev.target && ev.target.id === 'beAmt') ev.target.dataset.dirty = '1';
+    });
+
+    // เปิดหน้ามาแล้วยังมีของค้าง → ทยอยส่งต่อเอง (ปิดเบราว์เซอร์ไปก็ไม่หาย)
+    document.addEventListener('DOMContentLoaded', function () {
+      try { beBadge(); if (bePendingCount() > 0) beKick(); } catch (e) {}
+    });
   </script>
+<!-- ══════════════════════════════════════════════════════════════
+     ⚡ D215 ถาดคีย์เร็ว — คีย์แล้วขึ้นทันที ไม่ต้องรอเซิร์ฟเวอร์
+     ══════════════════════════════════════════════════════════════ -->
+<div id="beOverlay" class="hidden" style="position:fixed;inset:0;z-index:99990;background:#f8fafc;overflow:auto">
+  <div style="max-width:900px;margin:0 auto;padding:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div style="font-size:16px;font-weight:800">⚡ คีย์คิวย้อนหลัง</div>
+      <div id="beConn" style="font-size:11px;color:#6b7280"></div>
+      <button onclick="beClose()" style="margin-left:auto;background:#e5e7eb;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">ปิด</button>
+    </div>
+
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:8px 10px;font-size:11px;color:#065f46;margin-bottom:10px">
+      พิมพ์แล้วกด <b>Enter</b> ได้เลย — คิวขึ้นทันทีไม่ต้องรอระบบ · ระบบจะทยอยส่งเข้าให้เองเบื้องหลัง
+    </div>
+
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:1.4fr .7fr 2fr .9fr .9fr 1.1fr;gap:6px;font-size:10px;color:#6b7280;font-weight:700;margin-bottom:4px">
+        <div>ทะเบียน</div><div>ขนาด</div><div>บริการ</div><div>เวลา</div><div>ยอด</div><div>จ่ายด้วย</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.4fr .7fr 2fr .9fr .9fr 1.1fr;gap:6px">
+        <input id="bePlate" placeholder="1กก 1234" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;font-size:14px">
+        <select id="beSize" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;font-size:13px"><option>M</option><option>L</option><option>XL</option></select>
+        <select id="beSvc" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;font-size:13px"></select>
+        <input id="beTime" type="time" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;font-size:13px">
+        <input id="beAmt" type="number" inputmode="numeric" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;font-size:13px">
+        <select id="bePay" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;font-size:13px"></select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <input id="beDate" type="date" style="border:1px solid #d1d5db;border-radius:8px;padding:6px 8px;font-size:12px">
+        <button onclick="beAdd()" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:800">+ เพิ่ม (Enter)</button>
+        <div id="beHint" style="font-size:11px;color:#9ca3af"></div>
+      </div>
+    </div>
+
+    <div id="beList" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:10px"></div>
+
+    <div style="position:sticky;bottom:0;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div id="beStat" style="font-size:12px;font-weight:700"></div>
+      <button onclick="beSendNow(true)" id="beSendBtn" style="margin-left:auto;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:800">ส่งเข้าระบบเดี๋ยวนี้</button>
+      <button onclick="beClearDone()" style="background:#e5e7eb;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700">ล้างใบที่เข้าระบบแล้ว</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
