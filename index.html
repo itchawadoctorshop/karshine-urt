@@ -85,6 +85,20 @@
       <i class="fa-solid fa-car-wash text-8xl absolute -right-4 -bottom-4 opacity-20 rotate-12"></i>
     </div>
 
+    <!-- 🛍️ D222 (5/8/2026): ซื้อแพ็กเกจผ่าน LINE -->
+    <div onclick="openPkgShop()"
+         class="bg-gradient-to-r from-emerald-500 to-teal-600 p-5 rounded-3xl text-white shadow-xl relative overflow-hidden cursor-pointer active:scale-95 transition">
+      <div class="relative z-10">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-2xl">🛍️</span>
+          <h3 class="font-bold text-lg">ซื้อแพ็กเกจล้างรถ</h3>
+        </div>
+        <p class="text-xs text-emerald-100 mb-3">ยิ่งซื้อเป็นแพ็ก ยิ่งถูกกว่าล้างครั้งต่อครั้ง · กดซื้อได้เลยในไลน์</p>
+        <span class="bg-white text-emerald-700 font-bold py-2 px-5 rounded-full text-sm shadow inline-block">ดูแพ็กเกจทั้งหมด</span>
+      </div>
+      <i class="fa-solid fa-tags text-7xl absolute -right-2 -bottom-3 opacity-20 rotate-12"></i>
+    </div>
+
     <!-- 🚚 Pickup & Delivery CTA (5/6/2026 — D122-D129) -->
     <div class="bg-gradient-to-r from-purple-600 to-pink-600 p-5 rounded-3xl text-white shadow-xl relative overflow-hidden">
       <div class="relative z-10">
@@ -352,9 +366,31 @@
     <button onclick="liff.closeWindow()" class="w-full text-red-400 font-bold py-4 text-sm"><i class="fa-solid fa-door-open"></i> ปิดแอปพลิเคชัน</button>
   </section>
 
+  <!-- 🛍️ D222 — ซื้อแพ็กเกจผ่าน LINE -->
+  <section id="pkg-section" class="section p-4 space-y-4">
+    <button onclick="showSection('home-section')" class="text-blue-600 mb-1 text-sm font-bold">
+      <i class="fa-solid fa-arrow-left"></i> กลับหน้าหลัก
+    </button>
+    <div>
+      <h2 class="text-xl font-bold text-gray-800">🛍️ แพ็กเกจล้างรถ</h2>
+      <p class="text-xs text-gray-400" id="pkgMonthNote">กำลังโหลด...</p>
+    </div>
+    <div id="pkgPendingBox"></div>
+    <div id="pkgList" class="space-y-3">
+      <div class="text-center py-12 text-gray-400">
+        <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-2 text-emerald-500"></i>
+        <p class="text-sm">กำลังโหลดแพ็กเกจ...</p>
+      </div>
+    </div>
+    <p class="text-[11px] text-gray-400 text-center pb-4">
+      ราคาและจำนวนที่เหลือ อ้างอิงจากระบบหน้าร้านโดยตรง
+    </p>
+  </section>
+
   <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex justify-around p-3 pb-8 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.05)]">
     <button onclick="showSection('home-section')" id="nav-home" class="flex flex-col items-center gap-1 text-gray-300 transition-all nav-active"><i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">หน้าหลัก</span></button>
     <button onclick="navToBooking()" id="nav-booking" class="flex flex-col items-center gap-1 text-gray-300 transition-all"><i class="fa-solid fa-calendar-plus text-xl"></i><span class="text-[10px] font-bold">จองคิว</span></button>
+    <button onclick="openPkgShop()" id="nav-pkg" class="flex flex-col items-center gap-1 text-gray-300 transition-all"><i class="fa-solid fa-tags text-xl"></i><span class="text-[10px] font-bold">แพ็กเกจ</span></button>
     <button onclick="showSection('cars-section')" id="nav-cars" class="flex flex-col items-center gap-1 text-gray-300 transition-all"><i class="fa-solid fa-car text-xl"></i><span class="text-[10px] font-bold">รถของฉัน</span></button>
     <button onclick="showSection('profile-section')" id="nav-profile" class="flex flex-col items-center gap-1 text-gray-300 transition-all"><i class="fa-solid fa-user text-xl"></i><span class="text-[10px] font-bold">สมาชิก</span></button>
   </nav>
@@ -703,11 +739,261 @@
       }, () => { Swal.fire('ข้อผิดพลาด', 'กรุณาเปิดอนุญาตให้เข้าถึง GPS', 'error'); }, { enableHighAccuracy: true, timeout: 10000 });
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // 🛍️ D222 (5/8/2026) — ซื้อแพ็กเกจผ่าน LINE
+    //
+    //   ⚠️ นี่คือปุ่มที่เกี่ยวกับ "เงินจริง" — กฎ 3 ข้อที่ห้ามแหก
+    //     1. หนึ่งครั้งที่กด = หนึ่งใบสั่งซื้อ ไม่ว่าเน็ตจะกระตุกกี่ที
+    //        ⇒ ใช้ clientRef ตัวเดิมตลอดการกดครั้งนั้น เซิร์ฟเวอร์จะกันซ้ำให้เอง
+    //     2. timeout ≠ ล้มเหลว — ยิงซ้ำด้วย ref เดิมคือ "การเช็คสถานะ" ที่ปลอดภัยที่สุด
+    //     3. เช็คโควต้าก่อนให้ลูกค้าโอน ไม่ใช่หลังโอนแล้วมาบอกว่าเต็ม
+    // ═══════════════════════════════════════════════════════════
+    var PKG_PEND_KEY = 'karshine_pkg_pending_v1';
+    var PKG_REF_KEY  = 'karshine_pkg_ref_v1';
+    window._pkgBusy = false;
+    window._pkgCatalog = [];
+
+    function _pkgLoad(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+    function _pkgSave(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+    /** ยิง API พร้อมกำหนดเวลารอ — ไม่รอค้างจนลูกค้าเดินหนี */
+    async function _pkgPost(action, extra, timeoutMs) {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs || 25000);
+      try {
+        var p = new URLSearchParams(Object.assign({ action: action }, extra || {}));
+        var r = await fetch(API_URL, { method: 'POST', body: p, signal: ctrl.signal });
+        return await r.json();
+      } finally { clearTimeout(timer); }
+    }
+
+    /** วันหมดอายุจริง — บอก "180 วัน" อย่างเดียวลูกค้าต้องมานั่งนับเอง */
+    function _pkgExpiryText(days) {
+      var d = Number(days);
+      if (!(d > 0)) return '';
+      var t = new Date(); t.setDate(t.getDate() + d);
+      var M = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      return d + ' วัน (ถึง ' + t.getDate() + ' ' + M[t.getMonth()] + ' ' + (t.getFullYear() + 543) + ')';
+    }
+
+    /** "7,1" = ล้าง 7 + ขัด 1 → บอกยอดรวมให้เข้าใจง่าย แต่ยังโชว์รายละเอียด */
+    function _pkgUsesText(uses) {
+      var parts = String(uses == null ? '' : uses).split(',')
+        .map(function (x) { return parseInt(String(x).trim(), 10); })
+        .filter(function (x) { return x > 0; });
+      if (!parts.length) return '';
+      var sum = parts.reduce(function (a, b) { return a + b; }, 0);
+      return parts.length > 1 ? (sum + ' สิทธิ์ (' + parts.join(' + ') + ')') : (sum + ' ครั้ง');
+    }
+
+    function openPkgShop() { showSection('pkg-section'); loadPkgShop(); }
+
+    async function loadPkgShop() {
+      var box = document.getElementById('pkgList');
+      _renderPkgPending();
+      try {
+        var j = await _pkgPost('getSellableCatalog', {}, 25000);
+        if (!j || j.status !== 'success') throw new Error((j && j.message) || 'โหลดไม่สำเร็จ');
+        window._pkgCatalog = j.items || [];
+        document.getElementById('pkgMonthNote').textContent =
+          'จำนวนที่เปิดขายเดือน ' + (j.month || '') + ' — หมดแล้วหมดเลย';
+        if (!window._pkgCatalog.length) {
+          box.innerHTML = '<div class="bg-white p-6 rounded-2xl text-center text-gray-400 text-sm border border-gray-100">ยังไม่มีแพ็กเกจเปิดขายตอนนี้ครับ</div>';
+          return;
+        }
+        box.innerHTML = window._pkgCatalog.map(_pkgCardHtml).join('');
+      } catch (e) {
+        box.innerHTML = '<div class="bg-red-50 border border-red-200 p-5 rounded-2xl text-center">' +
+          '<p class="text-sm text-red-600 mb-3">โหลดแพ็กเกจไม่สำเร็จ</p>' +
+          '<button onclick="loadPkgShop()" class="bg-red-500 text-white font-bold px-5 py-2 rounded-full text-sm">ลองใหม่</button></div>';
+      }
+    }
+
+    function _pkgCardHtml(it) {
+      var soldOut = !!it.soldOut;
+      var left = Number(it.quotaRemaining);
+      var quotaHtml;
+      if (soldOut) {
+        quotaHtml = '<span class="bg-gray-200 text-gray-500 text-[11px] font-bold px-2 py-1 rounded-full">เต็มแล้วเดือนนี้</span>';
+      } else if (left < 0) {
+        quotaHtml = '<span class="bg-emerald-50 text-emerald-600 text-[11px] font-bold px-2 py-1 rounded-full">พร้อมขาย</span>';
+      } else {
+        var urgent = left <= 3;
+        quotaHtml = '<span class="' + (urgent ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700') +
+                    ' text-[11px] font-bold px-2 py-1 rounded-full">เหลือ ' + left + ' ใบ' +
+                    (Number(it.quotaLimit) > 0 ? ' / ' + it.quotaLimit : '') + '</span>';
+      }
+      var usesTxt = _pkgUsesText(it.uses);
+      var expTxt = _pkgExpiryText(it.validDays);
+      return '<div class="bg-white p-4 rounded-2xl shadow-sm border ' + (soldOut ? 'border-gray-200 opacity-60' : 'border-gray-100') + '">' +
+        '<div class="flex items-start justify-between gap-2 mb-2">' +
+          '<h3 class="font-bold text-gray-800 text-[15px] leading-snug flex-1">' + _pkgEsc(it.name) + '</h3>' +
+          quotaHtml +
+        '</div>' +
+        '<div class="flex items-end gap-1 mb-2">' +
+          '<span class="text-2xl font-extrabold text-emerald-600">฿' + Number(it.price).toLocaleString() + '</span>' +
+        '</div>' +
+        '<div class="text-xs text-gray-500 space-y-1 mb-3">' +
+          (usesTxt ? '<p><i class="fa-solid fa-circle-check text-emerald-400 w-4"></i> ใช้ได้ ' + usesTxt + '</p>' : '') +
+          (expTxt ? '<p><i class="fa-solid fa-calendar-day text-blue-400 w-4"></i> อายุ ' + expTxt + '</p>' : '') +
+        '</div>' +
+        (soldOut
+          ? '<button disabled class="w-full bg-gray-200 text-gray-400 font-bold py-3 rounded-xl text-sm cursor-not-allowed">เต็มโควต้าเดือนนี้แล้ว</button>'
+          : '<button onclick="pkgBuy(\'' + it.pkgId + '\')" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition">ซื้อแพ็กเกจนี้</button>') +
+      '</div>';
+    }
+
+    function _pkgEsc(t) {
+      return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    // ── ใบสั่งซื้อที่ค้างชำระ — กันลูกค้าปิดไลน์ไปแล้วกลับมาไม่เจออะไรเลย ──
+    function _renderPkgPending() {
+      var box = document.getElementById('pkgPendingBox');
+      if (!box) return;
+      var p = _pkgLoad(PKG_PEND_KEY);
+      if (!p || !p.orderId || (Date.now() - (p.ts || 0)) > 7 * 24 * 3600 * 1000) { box.innerHTML = ''; return; }
+      box.innerHTML =
+        '<div class="bg-amber-50 border border-amber-300 p-4 rounded-2xl">' +
+          '<p class="text-sm font-bold text-amber-800 mb-1">⏳ มีคำสั่งซื้อรอชำระเงิน</p>' +
+          '<p class="text-xs text-amber-700 mb-3">' + _pkgEsc(p.pkgName) + ' · ฿' + Number(p.amount).toLocaleString() +
+          '<br><span class="text-amber-600">เลขที่ ' + _pkgEsc(p.orderId) + '</span></p>' +
+          '<div class="flex gap-2">' +
+            '<button onclick="pkgShowQR()" class="flex-1 bg-amber-500 text-white font-bold py-2 rounded-xl text-xs">ดู QR อีกครั้ง</button>' +
+            '<button onclick="pkgForget()" class="px-4 bg-white border border-amber-300 text-amber-700 font-bold py-2 rounded-xl text-xs">ซ่อน</button>' +
+          '</div>' +
+        '</div>';
+    }
+    function pkgForget() { _pkgSave(PKG_PEND_KEY, null); _renderPkgPending(); }
+    function pkgShowQR() {
+      var p = _pkgLoad(PKG_PEND_KEY);
+      if (p && p.orderId) _pkgPayFlow(p.orderId, p.amount, p.pkgName);
+    }
+
+    // ── กดซื้อ ────────────────────────────────────────────────────
+    async function pkgBuy(pkgId) {
+      if (window._pkgBusy) return;
+      // 🛡️ ล็อก "ตั้งแต่วินาทีที่นิ้วแตะ" — ห้ามล็อกหลังกดยืนยัน
+      //    ไม่งั้นแตะรัว 3 ที จะผ่านด่านนี้ทั้ง 3 ครั้ง (ไปค้างที่ popup พร้อมกัน)
+      //    แล้วพอกดยืนยัน = สั่งซื้อ 3 ใบ เรียกเก็บเงิน 3 เด้ง
+      window._pkgBusy = true;
+      try { await _pkgBuyInner(pkgId); } finally { window._pkgBusy = false; }
+    }
+
+    async function _pkgBuyInner(pkgId) {
+      var it = (window._pkgCatalog || []).filter(function (x) { return x.pkgId === pkgId; })[0];
+      if (!it) { Swal.fire('ขออภัย', 'ไม่พบแพ็กเกจนี้ กรุณาโหลดใหม่', 'warning'); return; }
+      if (it.soldOut) { Swal.fire('เต็มแล้ว', 'แพ็กเกจนี้เต็มโควต้าเดือนนี้แล้วครับ', 'info'); loadPkgShop(); return; }
+
+      var usesTxt = _pkgUsesText(it.uses), expTxt = _pkgExpiryText(it.validDays);
+      var leftTxt = Number(it.quotaRemaining) < 0 ? '' :
+        '<p class="text-xs text-amber-700 mt-2">เหลือเดือนนี้อีก ' + it.quotaRemaining + ' ใบ</p>';
+      var ok = await Swal.fire({
+        title: 'ยืนยันการสั่งซื้อ',
+        html: '<div class="text-left text-sm">' +
+              '<p class="font-bold mb-2">' + _pkgEsc(it.name) + '</p>' +
+              '<p>ราคา <b class="text-emerald-600">฿' + Number(it.price).toLocaleString() + '</b></p>' +
+              (usesTxt ? '<p>ใช้ได้ ' + usesTxt + '</p>' : '') +
+              (expTxt ? '<p>อายุ ' + expTxt + '</p>' : '') +
+              leftTxt +
+              '<p class="text-xs text-gray-500 mt-3">กดยืนยันแล้วจะขึ้น QR ให้โอน · แพ็กเกจเข้าบัญชีทันทีที่แอดมินตรวจยอด</p>' +
+              '</div>',
+        showCancelButton: true, confirmButtonText: 'ยืนยัน สั่งซื้อ', cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#10b981', allowOutsideClick: false
+      });
+      if (!ok.isConfirmed) return;
+
+      // 🔑 รหัสอ้างอิงหนึ่งเดียวของการกดครั้งนี้ — ยิงซ้ำกี่รอบก็ได้ใบเดียว
+      var ref = 'LPO-' + (userUid || 'X').slice(-8) + '-' + pkgId + '-' + Date.now();
+      _pkgSave(PKG_REF_KEY, { ref: ref, pkgId: pkgId, ts: Date.now() });
+
+      Swal.fire({ title: 'กำลังสร้างคำสั่งซื้อ...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+      var res = null, lastErr = '';
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        try {
+          res = await _pkgPost('createPackageOrder', { lineUid: userUid, pkgId: pkgId, clientRef: ref }, 25000);
+          if (res && res.status === 'success') break;
+          if (res && res.code === 'QUOTA_FULL') break;          // เต็มจริง ไม่ต้องลองซ้ำ
+          lastErr = (res && res.message) || 'ไม่ทราบสาเหตุ';
+          if (res && res.retryable === false) break;
+        } catch (e) { lastErr = 'เครือข่ายไม่ตอบ'; }             // timeout ≠ ล้มเหลว → ยิง ref เดิมซ้ำ
+        await new Promise(function (r) { setTimeout(r, 1200 * attempt); });
+      }
+
+      if (res && res.code === 'QUOTA_FULL') {
+        Swal.fire('เต็มพอดีเลยครับ', (res.message || 'แพ็กเกจนี้เต็มโควต้าเดือนนี้แล้ว') + '\n\nยังไม่มีการเรียกเก็บเงินใดๆ', 'info');
+        loadPkgShop(); return;
+      }
+      if (!res || res.status !== 'success') {
+        Swal.fire({ icon: 'error', title: 'สั่งซื้อไม่สำเร็จ',
+          html: '<p class="text-sm">' + _pkgEsc(lastErr) + '</p>' +
+                '<p class="text-xs text-gray-500 mt-3">ยังไม่มีการเรียกเก็บเงิน — กดลองใหม่ได้เลยครับ</p>' });
+        return;
+      }
+
+      _pkgSave(PKG_PEND_KEY, { orderId: res.orderId, pkgName: res.pkgName || it.name,
+                               amount: res.amount || it.price, ts: Date.now() });
+      _renderPkgPending();
+      await _pkgPayFlow(res.orderId, res.amount || it.price, res.pkgName || it.name);
+      loadPkgShop();
+    }
+
+    /** หน้าจอโอนเงิน + ปุ่มแจ้งโอน */
+    async function _pkgPayFlow(orderId, amount, pkgName) {
+      var ppId = '';
+      try {
+        if (window._pickupConfig) ppId = String(window._pickupConfig.promptpay_id || window._pickupConfig.default_promptpay_id || '').trim();
+        if (!ppId && masterData && masterData.settings) ppId = String(masterData.settings.promptpay_id || masterData.settings.promptPayId || '').trim();
+      } catch (e) {}
+      var qrHtml = '';
+      if (ppId && typeof renderPromptPayQR === 'function') {
+        try { qrHtml = renderPromptPayQR(ppId, amount) || ''; } catch (e) { qrHtml = ''; }
+      }
+      if (!qrHtml) {
+        qrHtml = '<p class="text-xs text-amber-700">ยังสร้าง QR ไม่ได้ — กรุณาแจ้งแอดมินทางแชทเพื่อขอเลขบัญชีครับ</p>';
+      }
+      var r = await Swal.fire({
+        title: '💰 โอนเงินเพื่อยืนยัน',
+        html: '<div class="text-left">' +
+              '<p class="text-sm mb-1">' + _pkgEsc(pkgName) + '</p>' +
+              '<p class="text-sm mb-3">ยอด <b class="text-emerald-600">฿' + Number(amount).toLocaleString() + '</b>' +
+              (ppId ? ' ไปที่ <b class="text-blue-600">' + _pkgEsc(ppId) + '</b>' : '') + '</p>' +
+              '<div class="bg-white p-3 rounded-lg flex justify-center mb-3">' + qrHtml + '</div>' +
+              '<p class="text-xs text-gray-500">เลขที่คำสั่งซื้อ ' + _pkgEsc(orderId) + '</p>' +
+              '<p class="text-xs text-amber-700 mt-2">โอนแล้วกดปุ่มด้านล่าง แล้วส่งสลิปในแชทไลน์ได้เลยครับ</p>' +
+              '</div>',
+        showCancelButton: true, confirmButtonText: '✅ โอนแล้ว แจ้งชำระเงิน',
+        cancelButtonText: 'ไว้ก่อน', confirmButtonColor: '#10b981', allowOutsideClick: false
+      });
+      if (!r.isConfirmed) return;
+
+      try {
+        var j = await _pkgPost('submitPackageOrderSlip', { orderId: orderId, note: 'ลูกค้าแจ้งโอนผ่าน LINE' }, 25000);
+        if (j && j.status === 'success') {
+          _pkgSave(PKG_PEND_KEY, null); _renderPkgPending();
+          Swal.fire({ icon: 'success', title: 'รับเรื่องแล้วครับ',
+            html: '<p class="text-sm">แอดมินจะตรวจยอดแล้วเปิดแพ็กเกจให้</p>' +
+                  '<p class="text-xs text-gray-500 mt-2">ส่งสลิปในแชทไลน์เพื่อให้ตรวจได้เร็วขึ้นครับ</p>' });
+          return;
+        }
+        throw new Error((j && j.message) || 'แจ้งไม่สำเร็จ');
+      } catch (e) {
+        // ⚠️ ห้ามลบใบค้าง — ลูกค้าอาจโอนไปแล้วจริง ต้องกดแจ้งซ้ำได้
+        Swal.fire({ icon: 'warning', title: 'แจ้งชำระเงินไม่สำเร็จ',
+          html: '<p class="text-sm">คำสั่งซื้อยังอยู่ครบ กดแจ้งซ้ำได้จากกล่องสีเหลืองด้านบน</p>' +
+                '<p class="text-xs text-gray-500 mt-2">หรือส่งสลิปในแชทไลน์ แอดมินตรวจให้ได้เหมือนกันครับ</p>' });
+      }
+    }
+
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
       document.querySelectorAll('nav button').forEach(b => b.classList.remove('nav-active'));
-      document.getElementById('nav-' + id.replace('-section','')).classList.add('nav-active');
+      // 🛡️ D222: บางหน้าไม่มีปุ่มใน nav — เดิมตรงนี้จะโยน แล้วหน้าค้างครึ่งๆ
+      var _nb = document.getElementById('nav-' + id.replace('-section',''));
+      if (_nb) _nb.classList.add('nav-active');
       window.scrollTo(0,0);
       // 💰 Credit-Back v1.0 (9/6/2026): auto-load credit balance when entering Profile tab
       if (id === 'profile-section' && typeof loadMyCredits === 'function') loadMyCredits();
