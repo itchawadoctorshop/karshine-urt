@@ -21,7 +21,7 @@
        ✅ ปลอดภัยเพราะมี HTTP referrer restriction ใน Cloud Console — domain อื่นใช้ไม่ได้
        💡 ถ้าจะเปลี่ยน key ในอนาคต: แก้บรรทัดด้านล่างนี้ + push ขึ้น GitHub -->
   <script>
-    window.K_BUILD = 'D222 · 5 ส.ค. 2026';
+    window.K_BUILD = 'D224 · 6 ส.ค. 2026';
     window._GMAPS_API_KEY = "AIzaSyDX_vMqkDGHglWeUNqPUBXm8EOwSyT4zTE";
     window._gmReady = false;
     function onGoogleMapsReady() { window._gmReady = true; }
@@ -753,6 +753,9 @@
     var PKG_REF_KEY  = 'karshine_pkg_ref_v1';
     window._pkgBusy = false;
     window._pkgCatalog = [];
+    // 💳 D224: เลขพร้อมเพย์ที่หลังบ้านส่งมาให้ — เดิมหน้านี้ไปหาจาก _pickupConfig
+    //          ซึ่งว่างถ้าลูกค้าไม่เคยเปิดโฟลวรับ-ส่งรถ ⇒ QR ไม่ขึ้น
+    window._pkgPromptPay = '';
 
     function _pkgLoad(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
     function _pkgSave(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -796,6 +799,7 @@
         var j = await _pkgPost('getSellableCatalog', {}, 25000);
         if (!j || j.status !== 'success') throw new Error((j && j.message) || 'โหลดไม่สำเร็จ');
         window._pkgCatalog = j.items || [];
+        if (j.promptpayId) window._pkgPromptPay = String(j.promptpayId).trim();   // 💳 D224
         document.getElementById('pkgMonthNote').textContent =
           'จำนวนที่เปิดขายเดือน ' + (j.month || '') + ' — หมดแล้วหมดเลย';
         if (!window._pkgCatalog.length) {
@@ -870,7 +874,7 @@
     function pkgForget() { _pkgSave(PKG_PEND_KEY, null); _renderPkgPending(); }
     function pkgShowQR() {
       var p = _pkgLoad(PKG_PEND_KEY);
-      if (p && p.orderId) _pkgPayFlow(p.orderId, p.amount, p.pkgName);
+      if (p && p.orderId) _pkgPayFlow(p.orderId, p.amount, p.pkgName, p.ppId);
     }
 
     // ── กดซื้อ ────────────────────────────────────────────────────
@@ -934,26 +938,42 @@
         return;
       }
 
+      if (res.promptpayId) window._pkgPromptPay = String(res.promptpayId).trim();   // 💳 D224
       _pkgSave(PKG_PEND_KEY, { orderId: res.orderId, pkgName: res.pkgName || it.name,
-                               amount: res.amount || it.price, ts: Date.now() });
+                               amount: res.amount || it.price, ts: Date.now(),
+                               ppId: window._pkgPromptPay || '' });
       _renderPkgPending();
-      await _pkgPayFlow(res.orderId, res.amount || it.price, res.pkgName || it.name);
+      await _pkgPayFlow(res.orderId, res.amount || it.price, res.pkgName || it.name, res.promptpayId);
       loadPkgShop();
     }
 
     /** หน้าจอโอนเงิน + ปุ่มแจ้งโอน */
-    async function _pkgPayFlow(orderId, amount, pkgName) {
+    async function _pkgPayFlow(orderId, amount, pkgName, ppIdArg) {
+      // 💳 D224 — ลำดับที่มาของเลขพร้อมเพย์ (ตัวบนสุดที่มีค่าชนะ)
+      //   1. ค่าที่มากับใบสั่งซื้อรอบนี้     ← แม่นที่สุด
+      //   2. ค่าที่ได้ตอนโหลดรายการแพ็กเกจ  ← ครอบคลุมเคสกดดู QR ซ้ำจากใบค้าง
+      //   3-4. ของเดิม (เผื่อ backend ยังไม่ได้ deploy) — ห้ามลบ ไม่งั้น rollback แล้วพังทันที
       var ppId = '';
       try {
-        if (window._pickupConfig) ppId = String(window._pickupConfig.promptpay_id || window._pickupConfig.default_promptpay_id || '').trim();
+        if (ppIdArg) ppId = String(ppIdArg).trim();
+        if (!ppId && window._pkgPromptPay) ppId = String(window._pkgPromptPay).trim();
+        if (!ppId && window._pickupConfig) ppId = String(window._pickupConfig.promptpay_id || window._pickupConfig.default_promptpay_id || '').trim();
         if (!ppId && masterData && masterData.settings) ppId = String(masterData.settings.promptpay_id || masterData.settings.promptPayId || '').trim();
       } catch (e) {}
       var qrHtml = '';
       if (ppId && typeof renderPromptPayQR === 'function') {
         try { qrHtml = renderPromptPayQR(ppId, amount) || ''; } catch (e) { qrHtml = ''; }
       }
-      if (!qrHtml) {
-        qrHtml = '<p class="text-xs text-amber-700">ยังสร้าง QR ไม่ได้ — กรุณาแจ้งแอดมินทางแชทเพื่อขอเลขบัญชีครับ</p>';
+      var saveTip = '';
+      if (qrHtml) {
+        // 📸 D224 (CEO สั่ง): บอกวิธีเอา QR ไปสแกน — อยู่ในไลน์ เปิดแอปธนาคารพร้อมกันไม่ได้
+        saveTip = '<p class="text-xs text-gray-600 mt-2 leading-relaxed text-center">' +
+                  '📸 <b>กดค้างที่รูป</b> แล้วเลือก "บันทึกรูปภาพ" (หรือแคปหน้าจอ)<br>' +
+                  'เปิดแอปธนาคาร → สแกน → <b>เลือกรูปจากคลังภาพ</b></p>';
+      } else {
+        qrHtml = '<p class="text-xs text-amber-700 text-center">ยังสร้าง QR ไม่ได้ — ' +
+                 'ทักแอดมินในแชทเพื่อขอเลขบัญชีได้เลยครับ<br>' +
+                 '<b>ยังไม่ต้องโอนนะครับ</b> ใบสั่งซื้อนี้เก็บไว้ให้แล้ว</p>';
       }
       var r = await Swal.fire({
         title: '💰 โอนเงินเพื่อยืนยัน',
@@ -961,8 +981,9 @@
               '<p class="text-sm mb-1">' + _pkgEsc(pkgName) + '</p>' +
               '<p class="text-sm mb-3">ยอด <b class="text-emerald-600">฿' + Number(amount).toLocaleString() + '</b>' +
               (ppId ? ' ไปที่ <b class="text-blue-600">' + _pkgEsc(ppId) + '</b>' : '') + '</p>' +
-              '<div class="bg-white p-3 rounded-lg flex justify-center mb-3">' + qrHtml + '</div>' +
-              '<p class="text-xs text-gray-500">เลขที่คำสั่งซื้อ ' + _pkgEsc(orderId) + '</p>' +
+              '<div class="bg-white p-3 rounded-lg flex justify-center">' + qrHtml + '</div>' +
+              saveTip +
+              '<p class="text-xs text-gray-500 mt-3">เลขที่คำสั่งซื้อ ' + _pkgEsc(orderId) + '</p>' +
               '<p class="text-xs text-amber-700 mt-2">โอนแล้วกดปุ่มด้านล่าง แล้วส่งสลิปในแชทไลน์ได้เลยครับ</p>' +
               '</div>',
         showCancelButton: true, confirmButtonText: '✅ โอนแล้ว แจ้งชำระเงิน',
