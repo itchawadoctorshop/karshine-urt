@@ -1693,7 +1693,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D223 · 5 ส.ค. 2026';
+      window.K_BUILD = 'D224 · 6 ส.ค. 2026';
 
       // 🆕 D214: bump v2 → v3 เพราะ "รูปข้อมูลเปลี่ยน" (เพิ่มช่อง b = เลขเวอร์ชันของแต่ละรายการ)
       //   ⚠️ ห้ามใช้คีย์เดิม — ของเก่าไม่มีช่อง b จะปนกับของใหม่แล้วสรุปผิดซ้ำรอยเดิม
@@ -3163,6 +3163,25 @@
       try { await _poConfirmInner(orderId); } finally { window._poBusy[orderId] = false; }
     }
 
+    /** 💳 D224 — รายการช่องทางรับเงินจากชีตจริง (ห้าม hardcode) */
+    function _poPayOptions() {
+      const list = (typeof configData !== 'undefined' && configData && configData.payments) || [];
+      const o = {};
+      list.forEach(m => { const id = String(m.pay_id || m.id || '').trim(); if (id) o[id] = String(m.pay_name || m.name || id); });
+      return o;
+    }
+    /** ตัวที่ควรเลือกไว้ก่อน = ช่องทางที่แปลว่าเงินโอน/พร้อมเพย์ (ใบนี้มาจากการโอน) */
+    function _poPayDefault() {
+      const o = _poPayOptions(), keys = Object.keys(o);
+      if (!keys.length) return '';
+      const hints = ['พร้อมเพย์', 'promptpay', 'โอน', 'transfer', 'ธนาคาร', 'bank'];
+      for (const h of hints) {
+        const hit = keys.find(k => (k + ' ' + o[k]).toLowerCase().includes(h.toLowerCase()));
+        if (hit) return hit;
+      }
+      return keys[0];
+    }
+
     async function _poConfirmInner(orderId) {
       const o = _poFind(orderId);
       if (!o) { poLoad(); return; }
@@ -3177,14 +3196,24 @@
               '<p class="text-xs text-gray-500">เช็คยอดในแอปธนาคารให้ตรงก่อนกดนะครับ</p>' +
               '</div>',
         input: 'select',
-        inputOptions: { transfer: 'โอนเข้าบัญชี', cash: 'เงินสด', promptpay: 'PromptPay' },
-        inputValue: 'transfer',
+        // 💳 D224 FIX — ต้องเป็น pay_id ที่มีจริงในชีต Payment_Methods
+        //   ของเดิม hardcode ไว้ว่า transfer/cash/promptpay ⇒ หลังบ้านปฏิเสธทุกครั้ง
+        //   "เปิดสิทธิ์ไม่สำเร็จ — ช่องทางรับเงินไม่ถูกต้อง: transfer"
+        //   (เทส D223 ผ่านเพราะยิงใส่หลังบ้านจำลอง ไม่เคยชนของจริง)
+        inputOptions: _poPayOptions(),
+        inputValue: _poPayDefault(),
         inputPlaceholder: 'ช่องทางที่รับเงิน',
         showCancelButton: true, confirmButtonText: 'ยืนยัน เปิดสิทธิ์',
         cancelButtonText: 'ยังไม่ใช่', confirmButtonColor: '#10b981', allowOutsideClick: false
       });
       if (!pick.isConfirmed) return;
-      const payMethod = pick.value || 'transfer';
+      const payMethod = pick.value || _poPayDefault();
+      if (!payMethod) {
+        Swal.fire({ icon: 'error', title: 'ยังเปิดสิทธิ์ไม่ได้',
+          html: '<p class="text-sm">ไม่พบช่องทางรับเงินในชีต <b>Payment_Methods</b></p>' +
+                '<p class="text-xs text-gray-500 mt-2">เงินของลูกค้ายังอยู่ครบ ใบสั่งซื้อยังอยู่ ไม่ได้หายไปไหน</p>' });
+        return;
+      }
 
       Swal.fire({ title: 'กำลังเปิดสิทธิ์...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       try {
