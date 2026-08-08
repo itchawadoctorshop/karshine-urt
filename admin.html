@@ -1693,7 +1693,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D225 · 8 ส.ค. 2026';
+      window.K_BUILD = 'D226 · 8 ส.ค. 2026';
 
       // 🆕 D214: bump v2 → v3 เพราะ "รูปข้อมูลเปลี่ยน" (เพิ่มช่อง b = เลขเวอร์ชันของแต่ละรายการ)
       //   ⚠️ ห้ามใช้คีย์เดิม — ของเก่าไม่มีช่อง b จะปนกับของใหม่แล้วสรุปผิดซ้ำรอยเดิม
@@ -6037,7 +6037,14 @@
       // refresh slot info
       if (typeof updateWiSlotInfo === 'function') updateWiSlotInfo();
       // ⏱️ D208.6: บริการเปลี่ยน = ระยะเวลา/ช่องล้างเปลี่ยน → หาช่องว่างใหม่ให้
-      if (typeof _wiAutoSlot === 'function') _wiAutoSlot();
+      // 🆕 D226 (8/8/2026): ฟอร์ม walk-in ไม่ได้เปิดอยู่ ไม่ต้องไปหาช่องว่าง
+      //   loadAdminData() เรียก renderWiServices() ทุกรอบรีเฟรชกระดาน (บรรทัด ~3355)
+      //   ⇒ ทุกเครื่องที่เปิดหน้าแอดมินค้างไว้ ยิง getNextFreeSlot ทุก 90 วิ ตลอดเวลา
+      //   วัดจริง 8/8: คอมที่ไม่มีคนใช้ ยิง 125 ครั้ง/3.5 ชม. (12,600 วิ ÷ แคช 90 วิ = 140)
+      //   ⚠️ เปิดแท็บ walk-in ยังเติมเวลาให้เองเหมือนเดิม — initWalkInForm() เรียก _wiAutoSlot() ตรงอยู่แล้ว
+      //   ⚠️ ใช้คลาส 'active' (ไม่ใช่ 'hidden') — showSection() สลับด้วย .section.active
+      var _wiSec = document.getElementById('walkin-section');
+      if (typeof _wiAutoSlot === 'function' && _wiSec && _wiSec.classList.contains('active')) _wiAutoSlot();
     }
 
     // ═══ 💰 D208: รับเงินเลยตอนลงคิว walk-in ═══
