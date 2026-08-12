@@ -1693,7 +1693,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D226 · 8 ส.ค. 2026';
+      window.K_BUILD = 'D227 · 12 ส.ค. 2026';
 
       // 🆕 D214: bump v2 → v3 เพราะ "รูปข้อมูลเปลี่ยน" (เพิ่มช่อง b = เลขเวอร์ชันของแต่ละรายการ)
       //   ⚠️ ห้ามใช้คีย์เดิม — ของเก่าไม่มีช่อง b จะปนกับของใหม่แล้วสรุปผิดซ้ำรอยเดิม
@@ -2679,9 +2679,24 @@
       const totalPosBill = groupArr.reduce((s, g) => s + g.posCount, 0);
       const totalPkgSale     = groupArr.reduce((s, g) => s + g.pkgSaleNet, 0);   // 📦 D205
       const totalPkgSaleBill = groupArr.reduce((s, g) => s + g.pkgSaleCount, 0); // 📦 D205
+      // 🆕 D227: เงินเข้าจริง = ล้างรถที่จ่ายแล้ว + ขายสินค้า + ขายแพ็กเกจ (3 ก้อนที่เป็นเงินสดจริง)
+      const grandTotal = totalPaid + totalPos + totalPkgSale;
       const summaryHtml = `
         <div class="mb-3 p-3 bg-gradient-to-r from-emerald-50 via-orange-50 to-red-50 rounded-xl border border-gray-200">
           <p class="text-[10px] font-bold text-gray-500 uppercase mb-2">📊 สรุปรวม (match กับ Dashboard)</p>
+          <!-- 🆕 D227 (12/8/2026): รวมเงินเข้าจริงก้อนเดียว — เดิมต้องบวก 3 ช่องเอง อ่านยอดรายวันยาก
+               ⚠️ ห้ามรวม "หักแพ็กเกจ" (เงินรับไปแล้วรอบก่อน — รวมแล้วจะนับซ้ำ)
+               ⚠️ ห้ามรวม "ค้างจ่าย" (ยังไม่ได้รับเงิน) — ดู karshine_revenue_metric_contamination -->
+          <div class="bg-white rounded-xl p-3 mb-2 border-2 border-emerald-300">
+            <div class="flex items-baseline justify-between flex-wrap gap-1">
+              <p class="text-[11px] font-bold text-gray-600">🧾 รวมเงินเข้าจริง
+                <span class="text-[9px] font-normal text-gray-400">(ล้างรถ + ขายสินค้า + ขายแพ็กเกจ)</span>
+              </p>
+              <p class="font-bold text-emerald-700 text-2xl leading-none" id="shGrandTotal">${grandTotal.toLocaleString()}<span class="text-xs font-normal text-gray-400">.-</span></p>
+            </div>
+            <p class="text-[9px] text-gray-400 mt-1">= ${totalPaid.toLocaleString()} + ${totalPos.toLocaleString()} + ${totalPkgSale.toLocaleString()}</p>
+            <p class="text-[9px] text-gray-400">ไม่รวม · 📦 หักแพ็กเกจ ${totalPkg.toLocaleString()}.- (รับเงินไปแล้วรอบก่อน) · ⏳ ค้างจ่าย ${totalUnpaid.toLocaleString()}.- (ยังไม่ได้รับ)</p>
+          </div>
           <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
             <div class="bg-white rounded-lg p-2 border border-emerald-200">
               <p class="text-[9px] text-gray-500">💵 จ่ายจริง</p>
