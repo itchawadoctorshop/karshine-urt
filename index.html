@@ -21,7 +21,7 @@
        ✅ ปลอดภัยเพราะมี HTTP referrer restriction ใน Cloud Console — domain อื่นใช้ไม่ได้
        💡 ถ้าจะเปลี่ยน key ในอนาคต: แก้บรรทัดด้านล่างนี้ + push ขึ้น GitHub -->
   <script>
-    window.K_BUILD = 'D224 · 6 ส.ค. 2026';
+    window.K_BUILD = 'D229 · 13 ส.ค. 2026';
     window._GMAPS_API_KEY = "AIzaSyDX_vMqkDGHglWeUNqPUBXm8EOwSyT4zTE";
     window._gmReady = false;
     function onGoogleMapsReady() { window._gmReady = true; }
@@ -51,6 +51,10 @@
     .section.active { display: block; animation: fadeIn 0.3s ease-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .checkbox-custom:checked + div { border-color: #2563eb; background-color: #eff6ff; }
+    /* 🔧 D229 (13/8/2026): ไอคอนติ๊กต้องตามสถานะจริงของ checkbox
+       เดิม hardcode class block/hidden ตอน render ⇒ ติ๊กออกแล้วไอคอนยังค้างอยู่ */
+    .svc-check { display: none; }
+    .checkbox-custom:checked + div .svc-check { display: inline-block; }
     /* 🚫 F0.6: วันปิดร้าน — แสดงเป็นพื้นแดงอ่อน */
     .flatpickr-day.closed-day { background-color: #FEE2E2 !important; color: #DC2626 !important; text-decoration: line-through; opacity: 0.7; }
     .flatpickr-day.closed-day:hover { background-color: #FECACA !important; cursor: not-allowed; }
@@ -167,10 +171,11 @@
       <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-calendar-plus text-blue-500"></i> ทำรายการจอง</h2>
       <div class="space-y-3">
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">1. รถยนต์และขนาด</label>
-        <select id="vehicleSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" required></select>
+        <select id="vehicleSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" required onchange="applyVehicleSize()"></select>
         <select id="carSizeSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm font-bold text-blue-700" onchange="renderServices()">
           <option value="M">ขนาด: M (Eco Car / รถเก๋งเล็ก)</option><option value="L">ขนาด: L (SUV / รถเก๋งใหญ่)</option><option value="XL">ขนาด: XL (กระบะ / ตู้ / PPV)</option>
         </select>
+        <p id="carSizeHint" class="text-[10px] text-gray-400 ml-1 hidden"></p>
         <select id="branchSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="renderServices()"></select>
       </div>
       <hr class="my-6 border-dashed">
@@ -706,6 +711,9 @@
         // 🔧 v1.6.0 (10/6/2026): LIFF single-lane — was selectLine('LINE1') which was a legacy bug
         //   (D132 set hidden input default to LINE2 but missed this init call → caused renderServices
         //    to enter LINE1 branch on first load, disabling all normal services until user re-clicked)
+        // 🚗 D229: ตั้งไซส์รถจากคันที่ถูกเลือกไว้เป็นค่าเริ่มต้น ก่อน render บริการ
+        //   ส่ง false เพราะ selectLine('LINE2') บรรทัดถัดไปเรียก renderServices() ให้อยู่แล้ว
+        applyVehicleSize(false);
         selectLine('LINE2');
         document.getElementById('loading').style.display = 'none';
       } catch(e) { Swal.fire('Error', 'ไม่สามารถโหลดข้อมูลได้: ' + e.message, 'error'); }
@@ -1455,6 +1463,31 @@
       }
       renderServices();
     }
+    // 🚗 D229 (13/8/2026): ตั้งไซส์รถตามคันที่ลูกค้าเลือก แทนที่จะค้างที่ M เสมอ
+    //   เดิม #vehicleSelect ไม่มี onchange และไม่มีโค้ดไหน set #carSizeSelect
+    //   ⇒ ลูกค้ากระบะ/ตู้เห็นราคาไซส์ M ทุกครั้ง (159 แทน 189 · 299 แทน 399)
+    //   backend คืน size มาแล้วจริง: getUserVehicles() → { id, plate, ..., size } คอลัมน์ H
+    //   ⚠️ ค่าจากชีตเชื่อไม่ได้ 100% — normalize + whitelist M/L/XL เท่านั้น ค่าอื่นคงของเดิมไว้
+    function applyVehicleSize(rerender) {
+      try {
+        const vSel  = document.getElementById('vehicleSelect');
+        const sizeEl = document.getElementById('carSizeSelect');
+        const hint  = document.getElementById('carSizeHint');
+        if (!vSel || !sizeEl) return;
+        const v = (masterData.vehicles || []).find(x => String(x.id) === String(vSel.value));
+        const raw = v ? String(v.size || '').trim().toUpperCase() : '';
+        if (raw === 'M' || raw === 'L' || raw === 'XL') {
+          sizeEl.value = raw;
+          if (hint) {
+            hint.textContent = 'ขนาดนี้มาจากรถที่คุณลงทะเบียนไว้ — เปลี่ยนได้ถ้าไม่ตรง';
+            hint.classList.remove('hidden');
+          }
+        } else if (hint) {
+          hint.classList.add('hidden');
+        }
+      } catch (e) {}
+      if (rerender !== false) renderServices();
+    }
     function renderServices() {
       if(!masterData.services) return;
       const size = document.getElementById('carSizeSelect').value;
@@ -1479,19 +1512,22 @@
           const price = size === 'M' ? s.price_m : (size === 'L' ? s.price_l : s.price_xl);
           const isQuick = _isQuickName(s.service_name);
           const isNormal = _isNormalName(s.service_name);
-          let auto = false, disabled = false;
+          let auto = false, disabled = false, lockClick = false;
           if (type === 'LINE1') {
-            if (isQuick) auto = true;
+            if (isQuick) { auto = true; lockClick = true; }   // เลนล้างด่วน: บริการหลักบังคับ (ของเดิม ไม่แตะ)
             if (isNormal) disabled = true;
           } else {
             // LINE2 (LIFF) — quick services already filtered out above; no disabled branch needed
+            // 🔧 D229 (13/8/2026): ติ๊กมาให้ = ค่าเริ่มต้น ไม่ใช่คำสั่ง — ลูกค้าติ๊กออกได้แล้ว
+            //   เดิม auto ⇒ onclick="return false;" ⇒ ยกเลิกบริการหลักไม่ได้เลย ได้แค่เพิ่ม add-on
+            //   ขัดกับสเปกของเราเอง (Karshine_LIFF_HOTFIX_v1.6.0_Spec.md "ไม่มี auto-check / ติ๊กออกได้")
             if (isNormal) auto = true;
           }
           html += `<label class="block relative ${disabled && !auto?'opacity-30 cursor-not-allowed':''} mb-2">
-            <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()">
+            <input type="checkbox" class="checkbox-custom hidden" value="${s.service_id}" data-name="${s.service_name}" data-price="${price}" data-time="${s.std_time_mins}" ${auto?'checked':''} ${lockClick?'onclick="return false;"':(disabled?'disabled':'')} onchange="updateSummary()">
             <div class="border-2 border-gray-100 rounded-2xl p-4 flex justify-between items-center bg-white transition active:scale-[0.98]">
               <div><b class="text-sm text-gray-700">${s.service_name}</b><br><span class="text-[10px] text-gray-400"><i class="fa-regular fa-clock"></i> ${s.std_time_mins} นาที</span></div>
-              <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 ${auto?'block':'hidden'}"></i></div>
+              <div class="flex items-center gap-2"><b class="text-blue-600">${price}.-</b><i class="fa-solid fa-circle-check text-blue-500 svc-check"></i></div>
             </div>
           </label>`;
         });
@@ -2010,6 +2046,9 @@
       }
 
       const svcs = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(cb => cb.value).join(',');
+      // 🛡️ D229: ด่านกันจองเปล่า — จำเป็นเพราะตอนนี้ติ๊กบริการหลักออกได้แล้ว
+      //   เดิมไม่มีด่านนี้ แต่ไม่เคยพังเพราะบริการหลักติ๊กออกไม่ได้ (ไม่มีทางเหลือ 0)
+      if (!svcs) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกบริการอย่างน้อย 1 รายการก่อนครับ', 'warning');
       // 🚚 F7 v1.1: send pickup address + distance + source
       const _pickupAddr  = (document.getElementById('pickupSearch')  && document.getElementById('pickupSearch').value)  || '';
       const _dropoffAddr = (document.getElementById('dropoffSearch') && document.getElementById('dropoffSearch').value) || _pickupAddr;
@@ -2056,7 +2095,9 @@
         paymentAmount:     _isUltraFreePickup ? 0 : _grandTotal,
         // 👤 v1.3 Fix #4: needed for admin Flex notify
         customerName: (masterData && masterData.profile) ? (masterData.profile.name || '') : '',
-        plate: (function(){ try { const vSel=document.getElementById('vehicleSelect'); const v=masterData.vehicles && masterData.vehicles.find(x=>String(x.vehicle_id)===String(vSel.value)); return v ? v.plate : ''; } catch(e){ return ''; } })()
+        // 🐛 D229: เดิมหาด้วย x.vehicle_id แต่ getUserVehicles() คืนคีย์ชื่อ `id` ⇒ หาไม่เจอ ส่ง '' ทุกครั้ง
+        //   ผล: คอลัมน์ vehiclePlate ใน PickupBookings_Log ว่างเปล่าทุกแถวที่จองผ่าน LIFF
+        plate: (function(){ try { const vSel=document.getElementById('vehicleSelect'); const v=masterData.vehicles && masterData.vehicles.find(x=>String(x.id)===String(vSel.value)); return v ? v.plate : ''; } catch(e){ return ''; } })()
       });
       Swal.fire({ title: 'กำลังจองคิว...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       let result;
