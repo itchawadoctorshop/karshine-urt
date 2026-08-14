@@ -21,7 +21,7 @@
        ✅ ปลอดภัยเพราะมี HTTP referrer restriction ใน Cloud Console — domain อื่นใช้ไม่ได้
        💡 ถ้าจะเปลี่ยน key ในอนาคต: แก้บรรทัดด้านล่างนี้ + push ขึ้น GitHub -->
   <script>
-    window.K_BUILD = 'D229 · 13 ส.ค. 2026';
+    window.K_BUILD = 'D231 · 14 ส.ค. 2026';
     window._GMAPS_API_KEY = "AIzaSyDX_vMqkDGHglWeUNqPUBXm8EOwSyT4zTE";
     window._gmReady = false;
     function onGoogleMapsReady() { window._gmReady = true; }
@@ -173,7 +173,7 @@
         <label class="block text-[10px] font-bold text-gray-400 uppercase ml-1">1. รถยนต์และขนาด</label>
         <select id="vehicleSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" required onchange="applyVehicleSize()"></select>
         <select id="carSizeSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm font-bold text-blue-700" onchange="renderServices()">
-          <option value="M">ขนาด: M (Eco Car / รถเก๋งเล็ก)</option><option value="L">ขนาด: L (SUV / รถเก๋งใหญ่)</option><option value="XL">ขนาด: XL (กระบะ / ตู้ / PPV)</option>
+          <option value="M">ขนาด: M (Eco Car / เก๋งเล็ก)</option><option value="L">ขนาด: L (เก๋งใหญ่ / SUV / กระบะ / PPV)</option><option value="XL">ขนาด: XL (รถตู้ / MPV คันใหญ่)</option>
         </select>
         <p id="carSizeHint" class="text-[10px] text-gray-400 ml-1 hidden"></p>
         <select id="branchSelect" class="w-full p-3 border border-gray-200 rounded-2xl bg-gray-50 text-sm" onchange="renderServices()"></select>
@@ -329,7 +329,7 @@
              <div class="col-span-2 mt-2">
                 <label class="text-[10px] font-bold text-gray-500 uppercase">ขนาดรถเบื้องต้น (เพื่อประเมินราคา)</label>
                 <select id="vSize" class="w-full p-3 border border-gray-300 rounded-xl text-sm mt-1 font-bold text-blue-600 bg-blue-50" required>
-                  <option value="M">ขนาด M</option><option value="L">ขนาด L</option><option value="XL">ขนาด XL</option>
+                  <option value="M">M — Eco Car / เก๋งเล็ก</option><option value="L">L — เก๋งใหญ่ / SUV / กระบะ / PPV</option><option value="XL">XL — รถตู้ / MPV คันใหญ่ (Alphard, Hiace, Carnival)</option>
                 </select>
              </div>
           </div>
@@ -1465,7 +1465,7 @@
     }
     // 🚗 D229 (13/8/2026): ตั้งไซส์รถตามคันที่ลูกค้าเลือก แทนที่จะค้างที่ M เสมอ
     //   เดิม #vehicleSelect ไม่มี onchange และไม่มีโค้ดไหน set #carSizeSelect
-    //   ⇒ ลูกค้ากระบะ/ตู้เห็นราคาไซส์ M ทุกครั้ง (159 แทน 189 · 299 แทน 399)
+    //   ⇒ ลูกค้ารถคันใหญ่เห็นราคาไซส์ M ทุกครั้ง (รถตู้ 159 แทน 189 · 299 แทน 399)
     //   backend คืน size มาแล้วจริง: getUserVehicles() → { id, plate, ..., size } คอลัมน์ H
     //   ⚠️ ค่าจากชีตเชื่อไม่ได้ 100% — normalize + whitelist M/L/XL เท่านั้น ค่าอื่นคงของเดิมไว้
     function applyVehicleSize(rerender) {
