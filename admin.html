@@ -8,6 +8,31 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <!-- 💰 F2.4b: QR code generator สำหรับ PromptPay -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <!-- ⚡ D233 (14/8/2026): ไลบรารี QR โหลดจากอินเทอร์เน็ตทุกครั้ง
+       เน็ตร้านสะดุดตอนเปิดหน้า = QR ใช้ไม่ได้ทั้งกะ แต่ไม่มีใครรู้จนลูกค้ายืนรออยู่ตรงหน้า
+       ⇒ ลองโหลดซ้ำ 1 รอบจากอีกแหล่ง แล้วถ้ายังไม่ได้ให้ "ป่าวประกาศตั้งแต่เปิดหน้า" -->
+  <script>
+    window._kQrReady = (typeof qrcode !== 'undefined');
+    if (!window._kQrReady) {
+      var _s = document.createElement('script');
+      _s.src = 'https://unpkg.com/qrcode-generator@1.4.4/qrcode.js';
+      _s.onload  = function () { window._kQrReady = (typeof qrcode !== 'undefined'); };
+      _s.onerror = function () { window._kQrReady = false; };
+      document.head.appendChild(_s);
+    }
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        if (typeof qrcode !== 'undefined') { window._kQrReady = true; return; }
+        window._kQrReady = false;
+        var b = document.createElement('div');
+        b.id = 'kQrWarn';
+        b.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#b91c1c;color:#fff;' +
+          'padding:10px 14px;font-weight:700;text-align:center;font-size:14px';
+        b.textContent = '\u26A0\uFE0F QR พร้อมเพย์ใช้ไม่ได้ตอนนี้ (โหลดตัวสร้าง QR ไม่ผ่าน) — เช็คอินเทอร์เน็ต แล้วรีเฟรชหน้า · รับเงินสดได้ตามปกติ';
+        document.body.appendChild(b);
+      }, 3000);
+    });
+  </script>
   <!-- 📊 Sales Tracker: Chart.js for revenue+weather chart -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1692,7 +1717,7 @@
       //   ทำไมต้องมี: 4/8 CEO ส่งสถิติ 🩺 มาให้ดู แต่เป็นของ**หน้าเก่าที่ค้างในแคช**
       //   เกือบสรุปผิดว่า "แก้ไปแล้วไม่ดีขึ้น" ⇒ ต่อไปทุกสถิติต้องติดเลขเวอร์ชันมาด้วย
       //   🔧 แก้เลขนี้ทุกครั้งที่แก้ `admin.html` แล้วจะอัปขึ้น production
-      window.K_BUILD = 'D231 · 14 ส.ค. 2026';
+      window.K_BUILD = 'D233 · 14 ส.ค. 2026';
 
       // 🆕 D214: bump v2 → v3 เพราะ "รูปข้อมูลเปลี่ยน" (เพิ่มช่อง b = เลขเวอร์ชันของแต่ละรายการ)
       //   ⚠️ ห้ามใช้คีย์เดิม — ของเก่าไม่มีช่อง b จะปนกับของใหม่แล้วสรุปผิดซ้ำรอยเดิม
@@ -4216,6 +4241,40 @@
       return '';
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // ⚡ D233: ตัวช่วยกลางของ optimistic UI — ให้ทุกปุ่มใช้ชุดเดียวกัน
+    // ══════════════════════════════════════════════════════════════
+    //   เดิมทางสถานะทั่วไป (D209) เขียน snapshot/revert ไว้ในตัวเอง
+    //   ส่วนทาง "จ่ายแล้ว → ปิดงาน" ไม่มีเลย ⇒ พฤติกรรมไม่เหมือนกัน 2 ทาง
+    //   ⇒ ยกออกมาเป็นตัวกลาง จะได้แก้ที่เดียวและเทสจุดเดียว
+    function _kSnapshotBoard_() {
+      return (window._lastBoardData || []).map(function (x) {
+        return { bookingId: x.bookingId, status: x.status };
+      });
+    }
+    function _kApplyStatusLocal_(bookingId, newStatus) {
+      const it = (window._lastBoardData || []).find(function (x) { return x.bookingId === bookingId; });
+      if (!it) return false;
+      it.status = newStatus;
+      try { renderBoard(window._lastBoardData); } catch (e) {}
+      return true;
+    }
+    function _kRevertBoard_(snapshot) {
+      const cur = window._lastBoardData || [];
+      (snapshot || []).forEach(function (s) {
+        const it = cur.find(function (x) { return x.bookingId === s.bookingId; });
+        if (it) it.status = s.status;
+      });
+      try { renderBoard(cur); } catch (e) {}
+    }
+    /** แจ้งผลแบบไม่บังจอ — ปุ่มที่กดบ่อยไม่ควรมี modal มาขวางทุกครั้ง */
+    function _kToast_(msg) {
+      try {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: msg,
+                    showConfirmButton: false, timer: 1600, timerProgressBar: true });
+      } catch (e) {}
+    }
+
     async function updateStatus(bookingId, newStatus) {
       // 💰 F2.4 / F2.5f: ถ้ากำลังจะ complete
       if (newStatus === 'completed') {
@@ -4234,23 +4293,31 @@
             confirmButtonColor: '#16a34a'
           });
           if (!ok.isConfirmed) return;
-          Swal.fire({ title: 'กำลังอัปเดต...', didOpen: () => Swal.showLoading() });
+          // ⚡ D233 (14/8/2026): ทางนี้คือทางที่ใช้บ่อยที่สุด — ล้างด่วน 80% รับเงินก่อนล้าง
+          //   แล้วมาปิดงานทีหลัง ⇒ มันคือปุ่มที่พนักงานกดมากที่สุดในร้าน
+          //   เดิม: modal "กำลังอัปเดต..." บังจอ → รอเซิร์ฟเวอร์ → **โหลดกระดานใหม่ทั้งใบอีกรอบ**
+          //        = รอ 2 ต่อ (~8 วิ) ทั้งที่ทางสถานะอื่น ๆ ใช้ optimistic มาตั้งแต่ D209
+          //   ใหม่: การ์ดหายจากกระดานทันที · คุยกับเซิร์ฟเวอร์เบื้องหลัง
+          //   🚨 ยังห้าม retry · timeout ยังต้องอ่านซ้ำก่อนตัดสิน (กติกา D211-B/D212.4 คงเดิมทุกข้อ)
+          const _snapPaid = _kSnapshotBoard_();
           try {
+            _kApplyStatusLocal_(bookingId, 'completed');
+            if (typeof kBusy === 'function') kBusy(true);
             const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: 'completed' });
             const r = await fetch(API_URL, { method: 'POST', body: withAuth(payload) });
             const result = await r.json();
-            if (result.status === 'success') {
-              Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ปิดงานเรียบร้อย', timer: 2000 }).then(() => loadAdminData({ boardOnly: true }));
-            } else throw new Error(result.message);
+            if (result.status !== 'success') throw new Error(result.message);
+            _kToast_('ปิดงานเรียบร้อย');
           } catch (e) {
-            // 🆕 D212.4: กดซ้ำที่ปุ่มนี้ = **บวกแต้มซ้ำ** ⇒ ต้องอ่านซ้ำก่อนตัดสิน
+            // 🆕 D212.4: กดซ้ำที่ปุ่มนี้ = **บวกแต้มซ้ำ** ⇒ ต้องอ่านซ้ำก่อนตัดสิน ห้าม revert มั่ว
             if (e && e.__aborted) {
               await _kVerifyStatusAfterTimeout(bookingId, 'completed');
-              try { loadAdminData({ boardOnly: true, silent: true }); } catch (e2) {}
             } else {
-              Swal.fire('Error', e.message, 'error');
+              _kRevertBoard_(_snapPaid);
+              Swal.fire({ icon: 'error', title: 'ปิดงานไม่สำเร็จ', text: e.message,
+                          footer: 'เซิร์ฟเวอร์ปฏิเสธคำสั่ง — การ์ดถูกย้อนกลับที่เดิมแล้ว ข้อมูลในระบบไม่ได้เปลี่ยน' });
             }
-          }
+          } finally { if (typeof kBusy === 'function') kBusy(false); }
           return;
         }
         return openPaymentModal_(bookingId);
@@ -4290,7 +4357,9 @@
           const payload = new URLSearchParams({ action: 'updateBookingStatus', bookingId: bookingId, newStatus: newStatus });
           const response = await fetch(API_URL, { method: 'POST', body: withAuth(payload) }); const result = await response.json();
           if(result.status !== 'success') throw new Error(result.message);
-          loadAdminData({ boardOnly: true, silent: true });
+          // ⚡ D233: ไม่โหลดกระดานทั้งใบซ้ำ — จอแสดงสถานะใหม่ถูกต้องตั้งแต่ก่อนยิงแล้ว
+          //   รอบนี้เคยกินอีก ~4 วิต่อการกด 1 ครั้ง และเป็น 36% ของคำขอทั้งเครื่อง (สถิติ 4/8)
+          //   ตัวจับเวลา auto-refresh 30 วิ จะตามเก็บให้เองอยู่แล้ว
         } catch(e) {
           // 🆕 D211-B: timeout ≠ ล้มเหลว — เซิร์ฟเวอร์อาจเขียนสำเร็จไปแล้ว
           //   เดิม: revert + บอก "ข้อมูลในระบบไม่ได้เปลี่ยน" ⇒ โกหก ⇒ คนกดซ้ำ ⇒ คิวซ้ำ/ตัดแพ็กเกจซ้ำ
@@ -4917,10 +4986,21 @@
     }
 
     // หา PromptPay ID จาก configData.branches[0] (col `promptpay_id` ในชีต Branches)
+    // ⚡ D233 (14/8/2026): จำไว้ในเครื่องด้วย
+    //   เดิม: ถ้า config ยังโหลดไม่เสร็จ → คืน '' → QR ขึ้นว่า "PromptPay ID ไม่ถูกต้อง"
+    //         ⇒ พนักงานต้องรอเซิร์ฟเวอร์ก่อนถึงจะรับเงินได้ ทั้งที่ลูกค้ายืนรออยู่
+    //   ใหม่: ได้ค่ามาเมื่อไหร่ เก็บไว้ · ครั้งต่อไป QR ขึ้นทันทีตั้งแต่ยังไม่ได้คุยกับเซิร์ฟเวอร์
+    //   🚨 เก็บแค่เลขพร้อมเพย์ของ "ร้าน" — ไม่ใช่ข้อมูลลูกค้า ไม่เข้าข่าย PDPA
+    //   📌 ค่าจากเซิร์ฟเวอร์ชนะเสมอ — ของในเครื่องเป็นแค่ตัวสำรองตอนยังโหลดไม่เสร็จ
+    var _KPP_KEY = 'k_promptpay_id_v1';
     function _getPromptPayId() {
       const b = (configData.branches || [])[0];
-      if (!b) return '';
-      return b.promptpay_id || b.promptpayid || b.promptpay || '';
+      const fresh = b ? (b.promptpay_id || b.promptpayid || b.promptpay || '') : '';
+      if (fresh) {
+        try { localStorage.setItem(_KPP_KEY, fresh); } catch (e) {}
+        return fresh;
+      }
+      try { return localStorage.getItem(_KPP_KEY) || ''; } catch (e) { return ''; }
     }
 
     // 🆕 F1.5b: toggle discount fields + คำนวน net ใหม่
